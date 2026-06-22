@@ -11,21 +11,13 @@ test_patterns = [
   "**/*_test.py",
 ]
 
-exclude_patterns = [
-  ".venv/**",
-  "**/__pycache__/**",
-  "build/**",
-  "dist/**",
-]
-
 [[analyzers]]
 name = "python"
 enabled = true
 
   [analyzers.meta]
-  runtime_version = "3.12.x"
-  max_line_length = 100
-  skip_doc_coverage = ["module", "magic"]
+  runtime_version = "3.12.3"
+  max_line_length = 88
 
 [[analyzers]]
 name = "secrets"
