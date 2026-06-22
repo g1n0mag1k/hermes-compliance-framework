@@ -1,0 +1,15 @@
+# Hermes Compliance Framework — runtime dependencies
+#
+# Pin policy: range specifiers below are PROVISIONAL — taken from the
+# original architecture brief. For compliance defensibility, replace with
+# exact (==) pins after first clean install. Loose ranges are acceptable
+# only at this phase because no production customer is consuming this
+# build yet. They are not acceptable post-pilot.
+
+spacy>=3.7.0
+streamlit>=1.30.0
+pydantic>=2.0.0
+
+# Open decision before classifier.py work begins:
+# spaCy NER model — en_core_web_sm vs en_core_web_lg vs scispaCy.
+# Model declaration lives below this line once decided.

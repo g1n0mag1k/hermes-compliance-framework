@@ -1,0 +1,32 @@
+# DeepSource configuration for hermes-compliance-framework
+# Audit anchor: this file is the version-controlled source of truth for
+# what static analysis ran at each commit. All overrides go through PR
+# review; the DeepSource dashboard is never the authoritative source.
+
+version = 1
+
+test_patterns = [
+  "tests/**",
+  "**/test_*.py",
+  "**/*_test.py",
+]
+
+exclude_patterns = [
+  ".venv/**",
+  "**/__pycache__/**",
+  "build/**",
+  "dist/**",
+]
+
+[[analyzers]]
+name = "python"
+enabled = true
+
+  [analyzers.meta]
+  runtime_version = "3.12.x"
+  max_line_length = 100
+  skip_doc_coverage = ["module", "magic"]
+
+[[analyzers]]
+name = "secrets"
+enabled = true
