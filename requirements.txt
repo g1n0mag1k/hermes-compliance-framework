@@ -6,7 +6,7 @@
 # only at this phase because no production customer is consuming this
 # build yet. They are not acceptable post-pilot.
 
-spacy>=3.7.0
+spacy>=3.8.14
 streamlit>=1.30.0
 pydantic>=2.0.0
 
