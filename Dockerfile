@@ -15,5 +15,5 @@ COPY hermes/ ./hermes/
 RUN chown -R hermes:hermes /app
 USER hermes
 EXPOSE 8000
-ENV PYTHONPATH=/usr/local/lib/python3.12/site-packages
+ENV PYTHONPATH=/usr/local
 ENTRYPOINT ["uvicorn", "hermes.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
