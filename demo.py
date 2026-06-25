@@ -34,4 +34,12 @@ if st.button("Execute Deterministic Redaction", type="primary"):
     
     m1, m2 = st.columns(2)
     m1.metric(label="Total Rule Hits", value=sum(result.audit_log.flags_triggered.values()))
-    m2.metric(label="Characters Redacted", value=result.audit_log.original_char_count - result.audit_log.redacted_char_count)
+    
+    # Calculate token shift for downstream LLM ingestion
+    length_delta = result.audit_log.redacted_char_count - result.audit_log.original_char_count
+    m2.metric(
+        label="Final Payload Length (Chars)", 
+        value=result.audit_log.redacted_char_count, 
+        delta=f"{length_delta} bytes shifted",
+        delta_color="inverse"
+    )
