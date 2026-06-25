@@ -9,7 +9,3 @@
 spacy>=3.7.0
 streamlit>=1.30.0
 pydantic>=2.0.0
-
-# Open decision before classifier.py work begins:
-# spaCy NER model — en_core_web_sm vs en_core_web_lg vs scispaCy.
-# Model declaration lives below this line once decided.

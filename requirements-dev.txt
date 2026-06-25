@@ -1,0 +1,8 @@
+# Hermes Compliance Framework — development dependencies
+# Kept separate from runtime requirements.txt so production/Docker
+# builds don't pull test infrastructure into the deployed image.
+# Verify latest patch on pypi.org before bumping; below are
+# known-stable starting points.
+
+pytest==8.3.4
+pytest-cov==6.0.0
