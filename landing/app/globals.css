@@ -94,13 +94,16 @@
 }
 
 /* Keyframes are declared at the top level so Tailwind v4 picks them up for
- * the animate-ticker utility. */
+ * the animate-ticker utility. The hero ticker stream is rendered as two
+ * back-to-back copies of the same line list; translating the inner track
+ * from 0 to -50% on the Y-axis loops seamlessly because at -50% the second
+ * copy occupies the position the first copy started from. */
 @keyframes ticker {
   from {
     transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translate3d(-50%, 0, 0);
+    transform: translate3d(0, -50%, 0);
   }
 }
 
