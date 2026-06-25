@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.11-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
@@ -8,27 +8,14 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /build
-COPY requirements.txt .
-
-# Install to system site-packages so spacy CLI works for model download
-RUN pip install -r requirements.txt
-
-# Download model to a known location
-RUN python -m spacy download en_core_web_sm
-
-# Copy everything to /install for runtime stage
-RUN cp -r /usr/local/lib/python3.11/site-packages /install
-
-FROM python:3.11-slim-bookworm AS runtime
-
 RUN groupadd --gid 10001 hermes && \
     useradd --uid 10001 --gid hermes --no-create-home --shell /sbin/nologin hermes
 
-COPY --from=builder /install /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
 WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+RUN python -m spacy download en_core_web_sm
+
 COPY hermes/ ./hermes/
 COPY demo.py .
 COPY assets/ ./assets/
