@@ -144,7 +144,7 @@ export function Hero() {
           </div>
 
           <p className="font-mono text-caption text-verify mt-4">
-            ✓ Chain integrity verified — tamper-evident since block #000001
+            ✓ Chain integrity verified — <br />tamper-evident since block #000001
           </p>
         </div>
       </div>
