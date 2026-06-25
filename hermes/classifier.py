@@ -61,15 +61,15 @@ _PIPELINE_LOCK = threading.Lock()
 
 def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     original_char_count = len(text)
-    flags = {}
+    flags: Dict[str, int] = {}
     clean_text = text
 
     # 1. REGEX PASSES
-    def ssn_replacer(match):
+    def ssn_replacer(_match):
         flags['HIPAA_SSN'] = flags.get('HIPAA_SSN', 0) + 1
         return "[REDACTED_SSN]"
     
-    clean_text, ssn_count = REGEX_SSN.subn(ssn_replacer, clean_text)
+    clean_text = REGEX_SSN.sub(ssn_replacer, clean_text)
 
     def pan_replacer(match):
         candidate = match.group(0)
