@@ -7,5 +7,5 @@
 # build yet. They are not acceptable post-pilot.
 
 spacy>=3.8.14
-streamlit>=1.30.0
+streamlit>=1.58.0
 pydantic>=2.13.4
