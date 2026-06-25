@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: hermes-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: HERMES_API_KEY
+        generateValue: true
+    healthCheckPath: /health
+
+  - type: web
+    name: hermes-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: streamlit run demo.py --server.port $PORT --server.address 0.0.0.0 --server.headless true --server.enableCORS false
+    envVars:
+      - key: HERMES_API_KEY
+        sync: false
+      - key: HERMES_API_BASE
+        sync: false
