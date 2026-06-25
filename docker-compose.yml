@@ -1,0 +1,80 @@
+name: hermes-relay
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  hermes-net:
+    driver: bridge
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  caddy_data:     # Let's Encrypt certs + ACME state — persist across restarts
+  caddy_config:   # Caddy runtime config
+
+# ── Services ──────────────────────────────────────────────────────────────────
+services:
+
+  # ── Hermes API (2 replicas) ────────────────────────────────────────────────
+  # Scale: docker compose up -d --scale hermes-api=2
+  hermes-api:
+    image: ghcr.io/g1n0mag1k/hermes-compliance:1.0.0
+    restart: unless-stopped
+    env_file: .env.hermes
+    tmpfs:
+      - /tmp
+    networks:
+      - hermes-net
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout:  5s
+      retries:  3
+      start_period: 15s
+    # No ports exposed — Caddy is the only ingress
+    expose:
+      - "8000"
+
+  # ── Streamlit Investor Demo ────────────────────────────────────────────────
+  hermes-demo:
+    image: ghcr.io/g1n0mag1k/hermes-compliance:1.0.0
+    entrypoint: [
+      "streamlit", "run", "demo.py",
+      "--server.port",       "8501",
+      "--server.address",    "0.0.0.0",
+      "--server.headless",   "true",
+      "--server.enableCORS", "false",
+      "--server.enableXsrfProtection", "false"
+    ]
+    restart: unless-stopped
+    env_file: .env.hermes
+    environment:
+      HERMES_API_BASE: "http://hermes-api:8000"
+    volumes:
+      - ./demo.py:/app/demo.py:ro
+      - ./assets:/app/assets:ro
+    working_dir: /app
+    networks:
+      - hermes-net
+    depends_on:
+      hermes-api:
+        condition: service_healthy
+    expose:
+      - "8501"
+
+  # ── Caddy Reverse Proxy ────────────────────────────────────────────────────
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"        # HTTP → redirects to HTTPS automatically
+      - "443:443"      # HTTPS (TLS)
+      - "443:443/udp"  # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - hermes-net
+    depends_on:
+      - hermes-api
+      - hermes-demo

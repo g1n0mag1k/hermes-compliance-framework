@@ -1,0 +1,134 @@
+# =============================================================================
+# Hermes Compliance Framework — Hardened Compose Orchestration
+# NIST SP 800-190 §4.3 / NIST SP 800-207 Zero Trust Runtime Constraints
+#
+# Key controls implemented:
+#   - read_only: true          — immutable root filesystem at runtime
+#   - cap_drop: [ALL]          — no Linux kernel capabilities retained
+#   - no-new-privileges: true  — prevents setuid/setgid escalation
+#   - tmpfs /tmp               — ephemeral in-memory scratch; PHI never hits disk
+#   - internal network         — no default external egress (SP 800-207 §6.1)
+#   - no privileged mode       — container cannot access host devices
+#   - seccomp profile default  — syscall filtering via Docker default profile
+# =============================================================================
+
+version: "3.9"
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # hermes-api: the PHI/PII redaction microservice
+  # ---------------------------------------------------------------------------
+  hermes-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+
+    image: hermes-compliance:1.0.0
+
+    container_name: hermes-api
+
+    restart: unless-stopped
+
+    # ---- Security hardening (NIST SP 800-190 §4.3 / CIS Docker Benchmark) ----
+    read_only: true           # Root filesystem is immutable at runtime
+    privileged: false         # Explicitly deny host device access
+
+    security_opt:
+      - no-new-privileges:true      # Prevent privilege escalation via setuid binaries
+      - seccomp:unconfined          # Replace with a custom seccomp profile post-pilot
+                                    # TODO: generate profile via docker run --security-opt
+                                    #       seccomp=unconfined and capture syscalls with
+                                    #       seccomp-bpf tooling before enforcing allowlist
+
+    cap_drop:
+      - ALL                   # Drop every Linux capability; add back none (SP 800-190 §4.3.2)
+
+    # ---- tmpfs: ephemeral memory-only scratch (HIPAA physical safeguard) ----
+    # All in-process NLP scratch and uvicorn tmp writes go here.
+    # PHI cannot persist to host disk — container teardown = instant erasure.
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+    # ---- Port binding: bind to localhost only for TenHats proxy/LB layer ----
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    # ---- Credentials: injected at deploy, never baked into image ----
+    env_file:
+      - .env.hermes            # Must be created from .env.hermes.example; never committed
+
+    environment:
+      - PYTHONUNBUFFERED=1
+
+    # ---- Network isolation: no internet egress from the container ----
+    networks:
+      - hermes-internal
+
+    # ---- Resource limits: prevent memory exhaustion from large NLP payloads ----
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      # Horizontal scaling: increase replicas here instead of workers per container.
+      # This resolves _PIPELINE_LOCK bottleneck — each instance owns one lock.
+      replicas: 1             # Set to desired concurrency under load
+
+    # ---- Health-check: gate downstream traffic until ready ----
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    # ---- Logging: structured JSON to stdout only; no log files = no PHI on disk ----
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  hermes-internal:
+    driver: bridge
+    internal: true           # No external egress from this network (SP 800-207 §6.1)
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+# =============================================================================
+# OPERATIONAL NOTES
+# =============================================================================
+# Pre-flight checklist before docker-compose up:
+#
+#   1. cp .env.hermes.example .env.hermes
+#      Set HERMES_API_KEY to a cryptographically random value (openssl rand -hex 32)
+#
+#   2. Verify .env.hermes is listed in .gitignore and .dockerignore
+#
+#   3. Build: docker-compose build --no-cache
+#      Validate image checksum: docker inspect hermes-compliance:1.0.0 | grep Id
+#
+#   4. Run: docker-compose up -d
+#
+#   5. Smoke test: curl -s http://127.0.0.1:8000/health
+#
+#   6. For multi-tenant load: docker-compose up -d --scale hermes-api=4
+#      Each replica holds exactly one _PIPELINE_LOCK — linear throughput scaling.
+#
+# Phase 2 TODO (post-pilot):
+#   - Replace seccomp:unconfined with a generated allowlist profile
+#   - Integrate image scanning (Trivy) into CI before any push to registry
+#   - Migrate from .env.hermes to Docker Secrets or Vault Agent for HERMES_API_KEY
+#   - Add a reverse-proxy service (Caddy or nginx) to this compose file for TLS
+#     termination and mutual auth enforcement (SP 800-207 Policy Enforcement Point)

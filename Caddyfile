@@ -1,0 +1,61 @@
+# Caddyfile — Hermes Relay
+#
+# Domain:  hermesrelay.dev  (Let's Encrypt auto-TLS)
+# Demo:    demo.hermesrelay.dev → Streamlit UI
+# API:     hermesrelay.dev/v1/* → Hermes FastAPI
+#
+# DNS required before this works:
+#   A  hermesrelay.dev        → <your server IP>
+#   A  demo.hermesrelay.dev   → <your server IP>
+
+# ── API endpoint ─────────────────────────────────────────────────────────────
+hermesrelay.dev {
+
+    # Let's Encrypt handles TLS automatically for a real FQDN.
+    # No tls directive needed — Caddy auto-provisions on first request.
+
+    # ── Security headers ─────────────────────────────────────────────────────
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        -Server
+    }
+
+    # ── Reverse proxy to Hermes FastAPI ──────────────────────────────────────
+    reverse_proxy hermes-api:8000 {
+        health_uri    /health
+        health_interval 10s
+        health_timeout  5s
+    }
+
+    log {
+        output stderr
+        format json
+        level  INFO
+    }
+}
+
+# ── Investor demo UI ─────────────────────────────────────────────────────────
+demo.hermesrelay.dev {
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        -Server
+    }
+
+    # Streamlit default port is 8501
+    reverse_proxy hermes-demo:8501 {
+        health_uri    /_stcore/health
+        health_interval 15s
+        health_timeout  5s
+    }
+
+    log {
+        output stderr
+        format json
+        level  INFO
+    }
+}

@@ -1,4 +1,75 @@
-__pycache__/
-audit_logs/
+# ─── SECRETS — NEVER COMMIT ───────────────────────────────────────────────────
 .env
+.env.*
+!.env.*.example
+*.env
+.env.hermes
+
+# ─── PYTHON ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ─── VIRTUAL ENVIRONMENTS ─────────────────────────────────────────────────────
+venv/
 .venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# ─── TESTING & COVERAGE ───────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+nosetests.xml
+test-results/
+junit*.xml
+
+# ─── DOCKER ───────────────────────────────────────────────────────────────────
+# Never commit registry credentials or compose overrides with secrets
+docker-compose.override.yml
+
+# ─── IDE / EDITOR ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── LOGS & TEMP ──────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+/tmp/
+
+# ─── DIST / BUILD ARTIFACTS ───────────────────────────────────────────────────
+*.whl
+*.tar.gz
+site/

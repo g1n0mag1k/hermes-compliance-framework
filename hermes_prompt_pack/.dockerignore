@@ -1,0 +1,76 @@
+# =============================================================================
+# Hermes Compliance Framework — Docker Build Context Exclusions
+# NIST SP 800-190 §4.1.4: Prevent sensitive data leakage into image layers
+# =============================================================================
+
+# ---- Credentials and environment files (never in image) --------------------
+.env*
+*.env
+.env.hermes
+.env.hermes.example
+secrets/
+
+# ---- Version control history (can contain prior credentials) ---------------
+.git/
+.gitignore
+.github/
+
+# ---- Developer tooling and local artifacts ---------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ---- Virtual environments --------------------------------------------------
+.venv/
+venv/
+env/
+.env/
+
+# ---- IDE and editor artifacts ----------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Documentation and CI/CD configs (not needed at runtime) ---------------
+docs/
+*.md
+*.rst
+.readthedocs.yml
+Makefile
+
+# ---- Test suite (not part of runtime image) --------------------------------
+tests/
+test_*.py
+*_test.py
+conftest.py
+
+# ---- Docker files (avoid recursive context issues) -------------------------
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# ---- Jupyter and data science artifacts ------------------------------------
+*.ipynb
+.ipynb_checkpoints/
+*.csv
+*.json
+!hermes/
+
+# ---- Compiled C extensions that should be rebuilt in the image -------------
+*.so
+*.pyd
