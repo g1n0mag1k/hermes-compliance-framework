@@ -10,16 +10,24 @@ RUN apt-get update -qq && \
 
 WORKDIR /build
 COPY requirements.txt .
-RUN pip install --prefix=/install -r requirements.txt
-RUN PYTHONPATH=/install/lib/python3.11/site-packages \
-    python -m spacy download en_core_web_sm --target /install/lib/python3.11/site-packages
+
+# Install to system site-packages so spacy CLI works for model download
+RUN pip install -r requirements.txt
+
+# Download model to a known location
+RUN python -m spacy download en_core_web_sm
+
+# Copy everything to /install for runtime stage
+RUN cp -r /usr/local/lib/python3.11/site-packages /install
 
 FROM python:3.11-slim-bookworm AS runtime
 
 RUN groupadd --gid 10001 hermes && \
     useradd --uid 10001 --gid hermes --no-create-home --shell /sbin/nologin hermes
 
-COPY --from=builder /install /usr/local
+COPY --from=builder /install /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
 WORKDIR /app
 COPY hermes/ ./hermes/
 COPY demo.py .
