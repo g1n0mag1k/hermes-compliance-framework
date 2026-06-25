@@ -283,7 +283,7 @@ st.markdown("""
 
 # ── Config ────────────────────────────────────────────────────────────────────
 API_BASE = os.getenv("HERMES_API_BASE", "http://hermes-api:8000")
-API_KEY  = os.getenv("HERMES_API_KEY", "")
+API_KEY  = os.getenv("HERMES_API_KEY", "a4d71d6384aa35a6e5da9fee6e2e82c41804cf40fbd7ad17f840cb83aaff97f2")
 
 # ── Session state ─────────────────────────────────────────────────────────────
 for k, v in [("audit_log", []), ("last_result", None), ("api_healthy", None)]:
