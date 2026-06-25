@@ -1,14 +1,6 @@
-# Hermes Compliance Framework — runtime dependencies
-#
-# Pin policy: range specifiers below are PROVISIONAL — taken from the
-# original architecture brief. For compliance defensibility, replace with
-# exact (==) pins after first clean install. Loose ranges are acceptable
-# only at this phase because no production customer is consuming this
-# build yet. They are not acceptable post-pilot.
-
-spacy>=3.8.14
-streamlit>=1.58.0
-pydantic>=2.13.4
-fastapi>=0.115.4
-uvicorn>=0.30.0
+spacy==3.8.14
+streamlit==1.58.0
+pydantic==2.13.4
+fastapi==0.115.4
+uvicorn==0.30.0
 httpx==0.27.0
