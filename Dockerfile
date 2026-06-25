@@ -9,7 +9,7 @@ RUN pip install --upgrade pip && \
 FROM python:3.12-slim AS runtime
 RUN groupadd --gid 10001 hermes && \
     useradd --uid 10001 --gid hermes --shell /bin/false --create-home hermes
-COPY --from=builder /install /usr/local/lib/python3.12/site-packages
+COPY --from=builder /install /usr/local
 WORKDIR /app
 COPY hermes/ ./hermes/
 RUN chown -R hermes:hermes /app
