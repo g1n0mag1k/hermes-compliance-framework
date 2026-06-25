@@ -299,7 +299,7 @@ def scrub_text(text: str) -> dict | None:
     try:
         r = httpx.post(
             f"{API_BASE}/v1/scrub",
-            json={"text": text},
+            json={"payload": text},
             headers={"X-API-Key": API_KEY},
             timeout=10.0,
         )
