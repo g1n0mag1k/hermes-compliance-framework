@@ -1,1 +1,153 @@
 @import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * hermesrelay.dev design system
+ *
+ * Tailwind CSS v4 — all theme configuration lives here via the @theme
+ * directive. There is no tailwind.config.ts. Tokens declared inside @theme
+ * are emitted as CSS custom properties on :root *and* registered as Tailwind
+ * theme values that drive utility classes (bg-void, text-ink, font-display,
+ * text-hero, border-border, animate-ticker, …).
+ *
+ * Visual direction: serious, technical, trustworthy, precise. Compliance
+ * infrastructure aesthetic — not a SaaS dashboard.
+ * ------------------------------------------------------------------------- */
+
+@theme {
+  /* ---------- color palette --------------------------------------------- */
+  --color-void: #080c10;         /* near-black page background */
+  --color-surface: #0d1117;      /* card / section background */
+  --color-border: #1c2a3a;       /* subtle borders (always 2px) */
+  --color-ink: #e8edf2;          /* primary text */
+  --color-muted: #6b7e8f;        /* secondary / caption text */
+  --color-signal: #00b4d8;       /* primary accent — clinical blue */
+  --color-signal-dim: #0a2540;   /* accent background tint */
+  --color-verify: #00c896;       /* hash chain / audit success green */
+  --color-warn: #f4a028;         /* used sparingly — compliance urgency */
+
+  /* ---------- typography: families -------------------------------------- */
+  /* The actual font files are loaded by next/font in app/layout.tsx, which
+   * exposes them as the --font-space-grotesk, --font-inter, and
+   * --font-jetbrains-mono CSS variables. These aliases give them semantic
+   * names and wire them into Tailwind's font-* utilities. */
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Default sans = body, default mono = JetBrains Mono. */
+  --font-sans: var(--font-body);
+
+  /* ---------- typography: scale ----------------------------------------- *
+   * Each step pairs size + line-height + tracking + weight so the utility
+   * (text-hero, text-h2, …) carries the full headline treatment. */
+  --text-hero: 4.5rem;
+  --text-hero--line-height: 5rem;
+  --text-hero--letter-spacing: -0.03em;
+  --text-hero--font-weight: 700;
+
+  --text-h2: 2.25rem;
+  --text-h2--line-height: 1.1;
+  --text-h2--letter-spacing: -0.02em;
+  --text-h2--font-weight: 700;
+
+  --text-h3: 1.375rem;
+  --text-h3--line-height: 1.375;
+  --text-h3--letter-spacing: -0.01em;
+  --text-h3--font-weight: 600;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.75;
+
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.4;
+  --text-caption--letter-spacing: 0.01em;
+
+  --text-mono: 0.8125rem;
+  --text-mono--line-height: 1.5;
+
+  /* ---------- layout ---------------------------------------------------- */
+  /* Centered max content width — drives max-w-content. */
+  --container-content: 1100px;
+
+  /* Vertical section padding token — drives py-section / pt-section / etc. */
+  --spacing-section: 6rem;
+
+  /* Sharp corners signal precision: no rounded-* by default. */
+  --radius-none: 0px;
+
+  /* Borders are always exactly 2px on structural elements. */
+  --border-width: 2px;
+
+  /* ---------- breakpoints ----------------------------------------------- */
+  /* Mobile-first; sm/md/lg map to standard Tailwind defaults but declared
+   * explicitly here so the design system owns them. */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+
+  /* ---------- animation ------------------------------------------------- */
+  /* The lone animated element on the page: the live audit-chain ticker in
+   * the hero. Slow, continuous, monospace — communicates the entire
+   * technical proposition (hash-chained scrubbing events) in 3 seconds. */
+  --animate-ticker: ticker 60s linear infinite;
+}
+
+/* Keyframes are declared at the top level so Tailwind v4 picks them up for
+ * the animate-ticker utility. */
+@keyframes ticker {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Base layer — site-wide defaults that bake the design system into the page
+ * before any utility classes are applied.
+ * ------------------------------------------------------------------------- */
+@layer base {
+  html {
+    background-color: var(--color-void);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    /* Slight optical text rendering tweaks for the dark, technical look. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-void);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    line-height: 1.75;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+
+  ::selection {
+    background-color: var(--color-signal);
+    color: var(--color-void);
+  }
+}
