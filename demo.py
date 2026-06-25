@@ -13,7 +13,15 @@ import os
 import re
 import base64
 from pathlib import Path
+from dotenv import load_dotenv, dotenv_values
+import os
 from datetime import datetime, timezone
+
+# Load env from multiple locations
+for _env_path in [".env.hermes", "/etc/secrets/.env.hermes", "/app/.env.hermes"]:
+    if Path(_env_path).exists():
+        load_dotenv(_env_path)
+        break
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
