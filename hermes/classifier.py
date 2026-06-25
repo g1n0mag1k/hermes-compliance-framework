@@ -88,7 +88,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     spans_to_redact = []
     for ent in doc.ents:
         # Prevent NER from re-classifying previously injected redaction tags
-        if ent.label_ in {"PERSON", "DATE"} and "[REDACTED" not in ent.text:
+        if ent.label_ in {"PERSON", "DATE", "ORG"} and "REDACTED" not in ent.text:
             spans_to_redact.append((ent.start_char, ent.end_char, ent.label_))
     
     spans_to_redact.sort(key=lambda x: x[0], reverse=True)
