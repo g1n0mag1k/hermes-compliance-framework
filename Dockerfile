@@ -11,7 +11,8 @@ RUN apt-get update -qq && \
 WORKDIR /build
 COPY requirements.txt .
 RUN pip install --prefix=/install -r requirements.txt
-RUN python -m spacy download en_core_web_sm --target /install/lib/python3.11/site-packages
+RUN PYTHONPATH=/install/lib/python3.11/site-packages \
+    python -m spacy download en_core_web_sm --target /install/lib/python3.11/site-packages
 
 FROM python:3.11-slim-bookworm AS runtime
 
