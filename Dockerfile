@@ -21,6 +21,7 @@ COPY demo.py .
 COPY assets/ ./assets/
 RUN chown -R hermes:hermes /app
 
+ENV HOME=/tmp
 USER hermes
 EXPOSE 8000
 
