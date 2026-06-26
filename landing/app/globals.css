@@ -39,13 +39,15 @@
 
   /* ---------- typography: scale ----------------------------------------- *
    * Each step pairs size + line-height + tracking + weight so the utility
-   * (text-hero, text-h2, …) carries the full headline treatment. */
-  --text-hero: 4.5rem;
-  --text-hero--line-height: 5rem;
+   * (text-hero, text-h2, …) carries the full headline treatment. The hero
+   * and h2 sizes use clamp() so they scale fluidly between 375px-wide
+   * mobile viewports and 1280px+ desktops without overflowing. */
+  --text-hero: clamp(2.5rem, 8vw, 4.5rem);
+  --text-hero--line-height: 1.05;
   --text-hero--letter-spacing: -0.03em;
   --text-hero--font-weight: 700;
 
-  --text-h2: 2.25rem;
+  --text-h2: clamp(1.625rem, 4.5vw, 2.25rem);
   --text-h2--line-height: 1.1;
   --text-h2--letter-spacing: -0.02em;
   --text-h2--font-weight: 700;
@@ -107,6 +109,22 @@
   }
 }
 
+/* Accessibility — users with prefers-reduced-motion: reduce see the audit
+ * stream as a static stack instead of a continuous vertical scroll. Tailwind
+ * v4's motion-reduce: variant is already applied at the component level, but
+ * we double up with a media query here so the pause is enforced even if the
+ * utility ever gets purged or overridden. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ---------------------------------------------------------------------------
  * Base layer — site-wide defaults that bake the design system into the page
  * before any utility classes are applied.
@@ -120,6 +138,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* Belt-and-braces: prevent any rogue element from giving the document
+     * itself a horizontal scrollbar on mobile. Intentional horizontal
+     * scroll inside nested containers (e.g. the hero audit ticker) is
+     * unaffected — overflow-x:hidden does not bubble down. */
+    overflow-x: hidden;
   }
 
   body {
@@ -128,6 +151,7 @@
     font-family: var(--font-body);
     font-size: var(--text-body);
     line-height: 1.75;
+    overflow-x: hidden;
   }
 
   h1,
