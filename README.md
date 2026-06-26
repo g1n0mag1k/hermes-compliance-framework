@@ -1,42 +1,150 @@
-# Hermes Compliance Framework
+# Hermes — PHI Compliance Infrastructure
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)]()
-[![Compliance](https://img.shields.io/badge/HIPAA-Ready-success.svg)]()
-[![DSCSA](https://img.shields.io/badge/DSCSA-Compliant-success.svg)]()
+**Deterministic, zero-egress PHI/PII/PCI scrubbing 
+with SHA-256 hash-chained compliance evidence records.**
 
-**Hermes** is an enterprise-grade compliance and deterministic redaction layer built for healthcare organizations and Managed Service Providers (MSPs). It allows organizations to safely deploy AI, Copilot, and LLM-driven workflows by ensuring Protected Health Information (PHI) never leaves the client tenant.
+Built for MSPs serving HIPAA-covered entities.
 
-By sitting between local endpoints and external AI APIs, Hermes intercepts, evaluates, and deterministically redacts sensitive data to maintain strict HIPAA and DSCSA supply chain compliance.
+hermesrelay.dev
 
-## Core Capabilities
+---
 
-*   **Deterministic PHI Redaction:** Utilizes strict, rule-based logic and localized NLP models to identify and strip PHI *before* it hits the transport layer. 
-*   **Zero-Data-Retention Architecture:** Operates strictly in-memory during the redaction phase. No prompts, queries, or PHI are logged or stored on disk. What happens in the tenant, stays in the tenant.
-*   **DSCSA Supply Chain Validation:** Built to handle the specific regulatory tracking requirements of the pharmaceutical supply chain.
-*   **MSP-Friendly Integration:** API-first design that drops cleanly into existing security stacks and RMM tools. 
+## The Problem
 
-## System Architecture
+When OCR investigates a business associate, they do 
+not ask whether you had a scrubbing tool. They ask 
+you to produce the evidence — exactly what was found, 
+under which regulation, by which method, in an 
+unbroken chain from scan to audit.
 
-Hermes is built on a lightweight Python backend optimized for Linux environments (Ubuntu/Zorin OS). It acts as a reverse proxy/middleware layer.
+Cloud-based competitors detect PHI. None of them 
+can prove what they did with it. Their ML models 
+are black boxes. Their architecture makes honest 
+attestation impossible.
 
-1.  **Ingress:** User submits a query via Copilot, custom UI (Streamlit/HTML), or internal app.
-2.  **Redaction Engine:** Hermes intercepts the payload and applies deterministic regex, checksums, and local NER (Named Entity Recognition) to sanitize PHI.
-3.  **Forwarding:** The sanitized prompt is forwarded to the intended LLM provider.
-4.  **Re-hydration (Optional):** The LLM response is returned and dynamically re-associated with local context before being delivered back to the user.
+---
 
-## Prerequisites
+## What Hermes Produces
 
-*   Python 3.10+
-*   Linux environment (Ubuntu 22.04 LTS or Zorin OS recommended)
-*   Redis (for fast, ephemeral session state management without disk writing)
+Every scan generates a **Compliance Evidence Record** — 
+a per-token, CFR-cited, SHA-256 hash-chained artifact 
+that documents:
 
-## Quick Start / Installation
+- Which of the 18 HIPAA Safe Harbor identifiers 
+  was found (45 CFR §164.514(b)(2)(i))
+- Which detection method fired 
+  (spaCy NER / regex / Luhn checksum)
+- What action was taken 
+  (reversible redaction / permanent redaction)
+- The cryptographic link to every prior record 
+  in the audit chain
 
-Clone the repository and set up your virtual environment:
+This record is what your OCR investigator reads. 
+No other tool produces it.
 
-```bash
-git clone [https://github.com/g1n0mag1k/hermes.git](https://github.com/g1n0mag1k/hermes.git)
-cd hermes
-python3 -m venv venv
-source venv/bin/activate
+---
+
+## Architecture
+
+**Zero-egress.** Hermes runs entirely inside the 
+customer environment. PHI never transits external 
+infrastructure — making compliance attestations 
+technically accurate, not aspirational.
+
+**Deterministic.** Rule-based hybrid engine: 
+spaCy NER + regex + Luhn checksum. Every 
+classification decision is explainable to the 
+token level. No ML black box. No confidence 
+score an auditor cannot verify.
+
+**Hash-chained.** Every scrubbing event is 
+cryptographically linked to the previous one 
+via SHA-256. The chain is independently 
+verifiable with any SHA-256 implementation — 
+no Hermes dependency required to prove integrity.
+
+**Reversible.** Redacted tokens are replaced 
+with typed placeholders and restorable via 
+key-controlled restoration. PHI can be 
+recovered by authorized parties without 
+re-processing the original document.
+
+**Multi-tenant.** Auditor isolation per tenant. 
+Different audit views per role. MSP and covered 
+entity see only what they are authorized to see.
+
+---
+
+## Compliance Coverage
+
+- HIPAA Safe Harbor de-identification 
+  45 CFR §164.514(b)
+- HIPAA Security Rule technical safeguards 
+  45 CFR §164.312
+- DSCSA pharmaceutical supply chain 
+  21 CFR Part 11 / EPCIS 1.2
+- PCI DSS — Luhn-validated card number detection
+- ALCOA+ data integrity principles
+
+---
+
+## Key Artifacts
+
+**Compliance Evidence Record (CER)**
+Per-scan, per-token, CFR-cited evidence artifact. 
+Structured for OCR audit response and legal review.
+
+**BA Technical Safeguard Verification Report (BAVR)**
+Annual written verification of technical safeguards 
+for covered entity clients. Satisfies the proposed 
+2026 HIPAA Security Rule BA verification mandate. 
+Only producible by a zero-egress architecture — 
+cloud-ML vendors cannot make this attestation 
+honestly.
+
+**Cyber Insurance Underwriting Attestation 
+Package (CUAP)**
+Machine-generated evidence mapped to Coalition, 
+At-Bay, and Travelers underwriting control 
+categories. Prevents policy rescission on 
+PHI-handling attestations.
+
+---
+
+## Tech Stack
+
+- Python 3.12 / FastAPI
+- spaCy NER (local, no external API calls)
+- SHA-256 hash chain (stdlib, no dependencies)
+- Docker / GHCR
+- Deployed via zero-egress on-premise or 
+  private cloud
+
+---
+
+## Deployment
+
+Hermes is designed for on-premise or 
+private cloud deployment inside the 
+customer environment.
+
+**The sensitive workload never runs on 
+Sui-Generis LLC infrastructure.**
+
+For deployment documentation and pilot 
+program inquiries:
+andrew@hermesrelay.dev
+hermesrelay.dev
+
+---
+
+## Legal
+
+Built and maintained by Sui-Generis LLC  
+Rocky Top, Tennessee  
+UEI: YK4VNG1STBA1
+
+This software is intended for deployment 
+by qualified MSPs serving HIPAA-covered 
+entities. A Business Associate Agreement 
+is required prior to production deployment.
