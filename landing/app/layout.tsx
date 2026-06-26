@@ -23,9 +23,38 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "500", "600"],
 });
 
+const TITLE =
+  "Hermes — PHI Compliance Infrastructure for Healthcare MSPs";
+const DESCRIPTION =
+  "Zero-egress, deterministic PHI scrubbing with SHA-256 hash-chained audit records. Built for MSPs serving HIPAA-covered entities.";
+const SITE_URL = "https://hermesrelay.dev";
+
 export const metadata: Metadata = {
-  title: "Hermes Relay",
-  description: "Landing page for hermesrelay.dev",
+  title: TITLE,
+  description: DESCRIPTION,
+  metadataBase: new URL(SITE_URL),
+  alternates: {
+    canonical: SITE_URL,
+  },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: SITE_URL,
+    siteName: "Hermes",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  icons: {
+    icon: "/icon.svg",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
