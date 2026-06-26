@@ -37,12 +37,12 @@ export function CTA() {
 
         <a
           href="mailto:andrew@hermesrelay.dev"
-          className="mt-10 inline-block bg-signal text-void font-display font-bold text-h3 px-10 py-5 border-2 border-signal hover:bg-ink hover:border-ink transition-colors"
+          className="mt-10 inline-block max-w-full break-words bg-signal text-void font-display font-bold text-body sm:text-h3 px-6 sm:px-10 py-4 sm:py-5 border-2 border-signal hover:bg-ink hover:border-ink transition-colors"
         >
           Request the Pilot Program
         </a>
 
-        <p className="font-mono text-caption text-muted mt-10">
+        <p className="font-mono text-caption text-muted mt-10 break-words max-w-full">
           {TRUST_SIGNALS.join("  ·  ")}
         </p>
       </div>
