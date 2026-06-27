@@ -442,7 +442,7 @@ with col_r:
     result = st.session_state.last_result
 
     if result and "error" not in result:
-        highlighted = highlight_redactions(result.get("redacted_text", ""))
+        highlighted = highlight_redactions(result.get("clean_text", ""))
         st.markdown(f'<div class="output-card">{highlighted}</div>', unsafe_allow_html=True)
 
         flags   = result.get("flags", {})
@@ -450,7 +450,7 @@ with col_r:
         n_pci   = flags.get("PCI_PAN",   0)
         cin     = result.get("char_count_in",  0)
         cout    = result.get("char_count_out", 0)
-        removed = cin - cout
+        removed = cout - cin
         total_flags = n_hipaa + n_pci
 
         hipaa_cls = "stat-value flagged" if n_hipaa else "stat-value"
