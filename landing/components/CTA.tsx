@@ -1,11 +1,6 @@
-/* ---------------------------------------------------------------------------
- * CTA — single focused conversion section.
- *
- * Full-width void background, centered content, one anchor-tag CTA pointing
- * at the founder's mailto. Trust-signal row sits below the button, mono
- * caption scale, dot-separated, communicating the four most important
- * compliance properties at a glance.
- * ------------------------------------------------------------------------- */
+"use client";
+
+import { useState } from "react";
 
 const TRUST_SIGNALS: readonly string[] = [
   "Zero-egress architecture",
@@ -15,6 +10,23 @@ const TRUST_SIGNALS: readonly string[] = [
 ];
 
 export function CTA() {
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    await fetch("https://formspree.io/f/xnjkdrar", {
+      method: "POST",
+      body: data,
+      headers: { Accept: "application/json" },
+    });
+    setLoading(false);
+    setSubmitted(true);
+  }
+
   return (
     <section
       data-section="cta"
@@ -28,19 +40,69 @@ export function CTA() {
           <br />
           Your audit chain.
         </h2>
-
         <p className="font-body text-body text-muted mt-8 max-w-[500px]">
           Hermes is currently accepting one design partner in the East
           Tennessee market. 30-day pilot, your infrastructure, full
           compliance evidence record output from day one.
         </p>
 
-        <a
-          href="mailto:andrew@hermesrelay.dev"
-          className="mt-10 inline-block max-w-full break-words bg-signal text-void font-display font-bold text-body sm:text-h3 px-6 sm:px-10 py-4 sm:py-5 border-2 border-signal hover:bg-ink hover:border-ink transition-colors"
-        >
-          Request the Pilot Program
-        </a>
+        {submitted ? (
+          <div className="mt-10 border border-signal px-8 py-6 max-w-[500px] w-full text-left">
+            <p className="font-display text-h3 text-signal">Request received.</p>
+            <p className="font-body text-body text-muted mt-2">
+              Andrew will follow up at your email within 24 hours.
+            </p>
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="mt-10 w-full max-w-[500px] flex flex-col gap-4 text-left"
+          >
+            <div className="flex flex-col gap-1">
+              <label className="font-mono text-caption text-muted uppercase tracking-widest">
+                Name
+              </label>
+              <input
+                type="text"
+                name="name"
+                required
+                placeholder="Jane Smith"
+                className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-mono text-caption text-muted uppercase tracking-widest">
+                Company
+              </label>
+              <input
+                type="text"
+                name="company"
+                required
+                placeholder="Acme MSP"
+                className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-mono text-caption text-muted uppercase tracking-widest">
+                Work Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="jane@acmemsp.com"
+                className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-2 bg-signal text-void font-display font-bold text-body sm:text-h3 px-6 sm:px-10 py-4 sm:py-5 border-2 border-signal hover:bg-ink hover:border-ink transition-colors disabled:opacity-50"
+            >
+              {loading ? "Sending…" : "Request the Pilot Program"}
+            </button>
+          </form>
+        )}
 
         <p className="font-mono text-caption text-muted mt-10 break-words max-w-full">
           {TRUST_SIGNALS.join("  ·  ")}
