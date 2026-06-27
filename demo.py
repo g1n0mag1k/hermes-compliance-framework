@@ -497,6 +497,13 @@ if scrub_clicked:
     else:
         with st.spinner("Relaying through compliance engine…"):
             result = scrub_text(input_text)
+        if result and "error" not in result and "audit_log" in result:
+            al = result.pop("audit_log")
+            result["flags"] = al.get("flags_triggered", {})
+            result["char_count_in"] = al.get("original_char_count", 0)
+            result["char_count_out"] = al.get("redacted_char_count", 0)
+            result["transaction_id"] = al.get("transaction_id", "N/A")
+            result["audit_hash"] = al.get("audit_hash", "N/A")
         if result and "error" not in result:
             if "timestamp" not in result:
                 result["timestamp"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
