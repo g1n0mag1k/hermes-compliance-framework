@@ -29,7 +29,7 @@ export function CTA() {
 
   return (
     <section
-      data-section="cta"
+      data-section="cta" id="pilot"
       className="bg-void px-6 sm:px-8 lg:px-10 py-section"
     >
       <div className="w-full max-w-content mx-auto flex flex-col items-center text-center">
