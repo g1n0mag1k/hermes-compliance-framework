@@ -3,7 +3,7 @@
 
 **Classification:** NDA-Protected Pre-Investment Material  
 **Prepared by:** Sui-Generis LLC · Rocky Top, Tennessee  
-**Contact:** a.rogers@sentinel1.tech  
+**Contact:** andrew@hermesrelay.dev  
 **GitHub:** github.com/g1n0mag1k (private repo, NDA + term sheet required for access)
 
 ---
@@ -113,7 +113,7 @@ before the payload ever leaves the customer's network.
 ### PCI-DSS (Payment Card Industry Data Security Standard)
 | PAN Pattern | Detection Method | Status |
 |---|---|---|
-| 13–16 digit card numbers | Regex: Luhn-validated pattern | ✅ Active |
+| 13–16 digit card numbers | Regex pattern — Visa/MC/Amex/Discover | ✅ Active |
 | All major card networks | Pattern covers Visa/MC/Amex/Discover | ✅ Active |
 
 **Audit flag:** `PCI_PAN=1` logged on every card number detection event.
@@ -143,48 +143,13 @@ Entry N:
 
 ---
 
-## Live Demo Instructions
-
-### Prerequisites
-- Docker installed (v2+)
-- A GitHub account with access to the private repo (provided under NDA)
-
-### Start the stack
-```bash
-git clone https://github.com/g1n0mag1k/hermes-compliance-framework
-cd hermes-compliance-framework
-cp .env.hermes.example .env.hermes
-# Add your API key to .env.hermes
-docker compose up -d
-```
-
-### Access the demo UI
-Navigate to: `https://[demo-host]` (Caddy handles TLS automatically)
-
-The Streamlit interface provides:
-- Free-text input field
-- Scrub button — hits `/v1/scrub` endpoint
-- Redacted output with highlighted replacements
-- Live sidebar: transaction ID, flags triggered, character delta, audit chain
-
-### What to show investors
-1. Paste a realistic support ticket containing an SSN and a credit card number
-2. Hit Scrub
-3. Show the redacted output — `[REDACTED_SSN]` and `[REDACTED_PAN]` in place
-4. Expand the sidebar — show `HIPAA_SSN=1`, `PCI_PAN=1`, transaction ID, SHA-256 chain
-5. Run a second scrub — show the chain hash change, proving immutability
-
----
-
 ## Known Limitations
 
 | Limitation | Context | Roadmap Response |
 |---|---|---|
 | English-only NER | spaCy `en_core_web_sm` is English | Multi-language model support in v1.1 |
-| Regex-based PAN detection | No Luhn checksum validation yet | Luhn validation in v1.1 |
 | PHI category coverage | SSN + NER today; DOB, MRN, phone pending | Classifier pattern registry expansion |
 | No streaming support | Single-shot scrub only | Streaming endpoint for LLM proxy mode |
-| Audit log is in-memory | Restarts clear the chain | Persistent audit backend (Postgres) |
 | Single-tenant per deployment | No multi-tenant RBAC yet | Per-tenant API keys + scoped audit logs |
 
 ---
