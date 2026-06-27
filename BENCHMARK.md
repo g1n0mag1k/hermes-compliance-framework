@@ -38,4 +38,4 @@ _Generated: 2026-06-25 12:28 UTC_
 
 ---
 _Hermes Relay — Zero-Trust Compliance Infrastructure for MSPs_
-_hermesrelay.dev | systems@sentinel1.tech_
+_hermesrelay.dev | andrew@hermesrelay.dev_
