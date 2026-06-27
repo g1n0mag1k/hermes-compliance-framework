@@ -204,7 +204,7 @@ def generate_report(results: List[BenchmarkResult]) -> str:
         "> cryptographic compliance attestation, and zero-trust LLM proxy mode.\n",
         "---",
         "_Hermes Relay — Zero-Trust Compliance Infrastructure for MSPs_",
-        "_hermesrelay.dev | systems@sentinel1.tech_",
+        "_hermesrelay.dev | andrew@hermesrelay.dev_",
     ]
 
     return "\n".join(lines)
