@@ -1,10 +1,10 @@
 /* ---------------------------------------------------------------------------
- * Differentiators — three structural advantages framed as an argument, not
+ * Differentiators -- three structural advantages framed as an argument, not
  * a feature list. Each differentiator is a full-width block with:
  *
  *   - A terminal-style index prefix (01 / 02 / 03) in text-signal
  *   - A bold category label naming the advantage
- *   - A one-line verdict in text-ink — the claim in its sharpest form
+ *   - A one-line verdict in text-ink -- the claim in its sharpest form
  *   - Body copy that makes the argument precisely
  *   - A left border in border-signal (Hermes side) vs border-border
  *     (competitor framing embedded in copy)
@@ -30,21 +30,21 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
     label: "Zero-Egress Architecture",
     verdict: "Your PHI never leaves your environment. Every competitor's does.",
     body:
-      "Nightfall, Strac, Private AI, AWS Comprehend Medical, Azure Text Analytics — all transit PHI through external infrastructure to classify it. That transit is the violation. Their compliance attestation is technically a false statement: data left the environment to produce it. Hermes runs entirely inside the customer's environment. No external classifier. No data in transit. Every attestation Hermes produces is legally accurate in a way no cloud-ML competitor can match.",
+      "Nightfall, Strac, Private AI, AWS Comprehend Medical, Azure Text Analytics -- all transit PHI through external infrastructure to classify it. That transit is the violation. Their compliance attestation is technically a false statement: data left the environment to produce it. Hermes runs entirely inside the customer's environment. No external classifier. No data in transit. Every attestation Hermes produces is legally accurate in a way no cloud-ML competitor can match.",
   },
   {
     index: "02",
     label: "Deterministic, CFR-Cited Audit Trail",
     verdict: "Every token. Every citation. Every block. Cryptographically sealed.",
     body:
-      "ML classifiers are powerful and non-deterministic. The same input can produce different outputs on different runs. There is no per-token record. There is no CFR citation attached to each decision. There is no cryptographic proof the log was not tampered with after the fact. Hermes produces a SHA-256 hash-chained, per-token, CFR-cited record of every single scrubbing decision. An OCR investigator can verify it byte-by-byte. No competitor — open-source or commercial — can make that statement.",
+      "ML classifiers are powerful and non-deterministic. The same input can produce different outputs on different runs. There is no per-token record. There is no CFR citation attached to each decision. There is no cryptographic proof the log was not tampered with after the fact. Hermes produces a SHA-256 hash-chained, per-token, CFR-cited record of every single scrubbing decision. An OCR investigator can verify it byte-by-byte. No competitor -- open-source or commercial -- can make that statement.",
   },
   {
     index: "03",
     label: "Built for MSPs and SMB Healthcare",
     verdict: "The customers who need this most are the ones no competitor serves.",
     body:
-      "Nightfall costs $20,000–$60,000 per year and requires enterprise procurement, a security team, and a multi-month sales cycle. The 10-person billing company in Knoxville, the regional clinic, the MSP managing 15 HIPAA-covered clients — i�ne of them will ever see a Nightfall contract. Hermes is priced, packaged, and deployed for exactly those customers. Self-hostable. Operational in a week. No enterprise contract, no security team required.",
+      "Nightfall costs $20,000-$60,000 per year and requires enterprise procurement, a security team, and a multi-month sales cycle. The 10-person billing company in Knoxville, the regional clinic, the MSP managing 15 HIPAA-covered clients -- none of them will ever see a Nightfall contract. Hermes is priced, packaged, and deployed for exactly those customers. Self-hostable. Operational in a week. No enterprise contract, no security team required.",
   },
 ];
 
@@ -106,7 +106,7 @@ export function Differentiators() {
         {/* ---- Closing statement ---- */}
         <div className="border-t-2 border-border pt-10 mt-2">
           <p className="font-mono text-mono text-muted max-w-[72ch]">
-            <span className="text-signal">→</span>{" "}
+            <span className="text-signal">-></span>{" "}
             No funded competitor produces token-level, CFR-cited,
             cryptographically-signed scrubbing decision records.
             That is not a roadmap gap. It is an architectural one.

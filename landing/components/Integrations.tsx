@@ -1,15 +1,15 @@
 /* ---------------------------------------------------------------------------
- * Integrations — vendor-agnostic positioning section.
+ * Integrations -- vendor-agnostic positioning section.
  *
  * The argument: Hermes is not a competitor to your existing DLP or SIEM.
  * It is the deterministic PHI layer none of them can provide internally.
  * It exports clean, hash-chained evidence into whatever the customer already
- * runs — Splunk, Sentinel, Purview, Datadog, or any webhook-capable platform.
+ * runs -- Splunk, Sentinel, Purview, Datadog, or any webhook-capable platform.
  *
  * Layout: eyebrow + headline + subhead, then a two-column grid of integration
  * targets, then a closing note on the architecture. Each integration block
  * shows the platform category, a one-line role description, and a mono
- * status badge showing the integration method. No logos — no licensing
+ * status badge showing the integration method. No logos -- no licensing
  * surface, no maintenance burden, and logos would soften the technical tone.
  * --------------------------------------------------------------------------- */
 
@@ -23,25 +23,25 @@ type Integration = {
 const INTEGRATIONS: readonly Integration[] = [
   {
     category: "Enterprise DLP",
-    platforms: "Microsoft Purview · Netskope · Zscaler · Cyberhaven",
+    platforms: "Microsoft Purview - Netskope - Zscaler - Cyberhaven",
     role: "Hermes pushes synthetic PHI detection events into your existing DLP policy engine. Your analysts see the event in their dashboard. The cryptographic proof stays on your node.",
     method: "REST webhook / synthetic alert",
   },
   {
     category: "SIEM",
-    platforms: "Splunk · Datadog · CrowdStrike · Azure Sentinel",
-    role: "Every scrubbing decision exports as a structured JSON event — CFR citation, field type, hash chain ID, timestamp. Ingests directly into your existing SIEM without a custom parser.",
+    platforms: "Splunk - Datadog - CrowdStrike - Azure Sentinel",
+    role: "Every scrubbing decision exports as a structured JSON event -- CFR citation, field type, hash chain ID, timestamp. Ingests directly into your existing SIEM without a custom parser.",
     method: "JSON event export / HTTP ingest",
   },
   {
     category: "Cloud DLP",
-    platforms: "AWS Macie · Google Cloud DLP · Azure Text Analytics",
-    role: "Hermes runs before the cloud classifier, not instead of it. PHI is scrubbed locally first. What reaches the cloud is already clean — no PHI in transit, no attestation problem.",
+    platforms: "AWS Macie - Google Cloud DLP - Azure Text Analytics",
+    role: "Hermes runs before the cloud classifier, not instead of it. PHI is scrubbed locally first. What reaches the cloud is already clean -- no PHI in transit, no attestation problem.",
     method: "Pre-filter / zero-egress proxy",
   },
   {
     category: "AI Pipelines",
-    platforms: "OpenAI �7Azure OpenAI �7Anthropic · Any LLM endpoint",
+    platforms: "OpenAI - Azure OpenAI - Anthropic - Any LLM endpoint",
     role: "Drop Hermes inline between your data source and your LLM API call. Payloads are scrubbed and the audit record is sealed before a single token reaches the model.",
     method: "Inline proxy / API gateway",
   },
@@ -63,7 +63,7 @@ function IntegrationBlock({ integration }: { integration: Integration }) {
       </p>
       <div className="border-t border-border pt-4">
         <span className="font-mono text-caption text-verify">
-          ↻ {integration.method}
+          -> {integration.method}
         </span>
       </div>
     </div>
@@ -90,7 +90,7 @@ export function Integrations() {
           your stack cannot provide.
         </h2>
         <p className="font-body text-body text-muted mt-6 max-w-[60ch]">
-          No DLP platform — Purview, Netskope, Nightfall — can produce a
+          No DLP platform -- Purview, Netskope, Nightfall -- can produce a
           zero-egress, deterministic, CFR-cited audit record. That is an
           architectural constraint, not a roadmap gap. Hermes fills it and
           exports clean evidence into whatever you already run.
@@ -123,7 +123,7 @@ export function Integrations() {
               timestamp. That event is platform-agnostic. A lightweight
               connector translates it into the format your SIEM or DLP expects.
               If you run Splunk today and move to Sentinel next year, the
-              Hermes node does not change — only the connector does.
+              Hermes node does not change -- only the connector does.
             </p>
           </div>
         </div>
