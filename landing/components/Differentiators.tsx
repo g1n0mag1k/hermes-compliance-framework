@@ -106,7 +106,7 @@ export function Differentiators() {
         {/* ---- Closing statement ---- */}
         <div className="border-t-2 border-border pt-10 mt-2">
           <p className="font-mono text-mono text-muted max-w-[72ch]">
-            <span className="text-signal">-></span>{" "}
+            <span className="text-signal">{"->"}</span>{" "}
             No funded competitor produces token-level, CFR-cited,
             cryptographically-signed scrubbing decision records.
             That is not a roadmap gap. It is an architectural one.

@@ -63,7 +63,7 @@ function IntegrationBlock({ integration }: { integration: Integration }) {
       </p>
       <div className="border-t border-border pt-4">
         <span className="font-mono text-caption text-verify">
-          -> {integration.method}
+          {"-> "}{integration.method}
         </span>
       </div>
     </div>
