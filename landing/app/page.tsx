@@ -1,6 +1,7 @@
 import { Hero } from "@/components/Hero";
 import { Problem } from "@/components/Problem";
 import { Solution } from "@/components/Solution";
+import { AuditChain } from "@/components/AuditChain";
 import { Architecture } from "@/components/Architecture";
 import { Differentiators } from "@/components/Differentiators";
 import { SocialProof } from "@/components/SocialProof";
@@ -13,6 +14,7 @@ export default function Page() {
       <Hero />
       <Problem />
       <Solution />
+      <AuditChain />
       <Architecture />
       <Differentiators />
       <SocialProof />
