@@ -85,10 +85,11 @@ export function Problem() {
 
         <div className="mt-12 bg-signal-dim border-l-2 border-signal px-8 py-7">
           <p className="font-body text-body text-ink">
-            The Travelers v. ICS ruling voided a $1M policy because
-            attestations did not match reality. For MSPs serving healthcare
-            clients, the documentation gap is not a compliance problem. It is
-            an existential liability.
+            OCR issued seven resolution agreements against business associates
+            in 2025 alone — the highest enforcement total against business
+            associates since 2013. For MSPs serving healthcare clients, the
+            documentation gap is not a hypothetical compliance problem. It is
+            an active enforcement trend.
           </p>
         </div>
       </div>
