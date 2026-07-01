@@ -72,9 +72,11 @@ def _issue_scrub_attestation(
 ) -> ComplianceReceipt:
     """Issue a hash-chained compliance receipt for a /v1/scrub call via the shared AttestationChain. Not a detection change."""
     flags = _flags_to_counts(result.audit_log.flags_triggered)
+    redacted = _flags_to_counts(result.audit_log.flags_redacted)
     return ATTESTATION_CHAIN.issue(
         transaction_id=transaction_id,
         flags_triggered=flags,
+        flags_redacted=redacted,
         char_count_in=result.audit_log.original_char_count,
         char_count_out=result.audit_log.redacted_char_count,
         downstream_target=None,

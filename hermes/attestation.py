@@ -62,12 +62,13 @@ class AttestationChain:
         self,
         transaction_id: str,
         flags_triggered: Dict[str, int],
+        flags_redacted: Dict[str, int],
         char_count_in: int,
         char_count_out: int,
         downstream_target: Optional[str] = None,
     ) -> ComplianceReceipt:
         pii_detected = list(flags_triggered.keys())
-        pii_redacted = pii_detected
+        pii_redacted = list(flags_redacted.keys())
         zero_egress = set(pii_detected) == set(pii_redacted)
 
         with self._lock:
