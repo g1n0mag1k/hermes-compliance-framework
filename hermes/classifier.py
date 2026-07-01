@@ -110,15 +110,17 @@ def validate_luhn_checksum(pan_candidate: str) -> bool:
 # -------------------------------------------------------------------------
 # PRESIDIO DETECTION
 # -------------------------------------------------------------------------
-_presidio_analyzer: Optional[AnalyzerEngine] = None
+class _PresidioAnalyzerCache:
+    engine: Optional[AnalyzerEngine] = None
+
+
 _PIPELINE_LOCK = threading.Lock()
 
 
 def _get_presidio_analyzer() -> AnalyzerEngine:
-    global _presidio_analyzer
-    if _presidio_analyzer is None:
-        _presidio_analyzer = AnalyzerEngine()
-    return _presidio_analyzer
+    if _PresidioAnalyzerCache.engine is None:
+        _PresidioAnalyzerCache.engine = AnalyzerEngine()
+    return _PresidioAnalyzerCache.engine
 
 
 def detect_with_presidio(text: str) -> List[Dict]:
