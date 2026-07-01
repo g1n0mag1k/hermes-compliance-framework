@@ -36,13 +36,13 @@ const INTEGRATIONS: readonly Integration[] = [
   {
     category: "Cloud DLP",
     platforms: "AWS Macie - Google Cloud DLP - Azure Text Analytics",
-    role: "Hermes runs before the cloud classifier, not instead of it. PHI is scrubbed locally first. What reaches the cloud is already clean -- no PHI in transit, no attestation problem.",
+    role: "Hermes runs before the cloud classifier, not instead of it. Core PHI identifiers are scrubbed locally first. What reaches the cloud has passed through deterministic, zero-egress redaction — with per-category coverage expanding.",
     method: "Pre-filter / zero-egress proxy",
   },
   {
     category: "AI Pipelines",
     platforms: "OpenAI - Azure OpenAI - Anthropic - Any LLM endpoint",
-    role: "Drop Hermes inline between your data source and your LLM API call. Payloads are scrubbed and the audit record is sealed before a single token reaches the model.",
+    role: "Drop Hermes inline between your data source and your LLM API call. Core identifiers are scrubbed and the audit record is sealed before payload content reaches the model.",
     method: "Inline proxy / API gateway",
   },
 ];

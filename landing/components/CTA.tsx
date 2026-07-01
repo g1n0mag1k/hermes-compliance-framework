@@ -6,7 +6,7 @@ const TRUST_SIGNALS: readonly string[] = [
   "Zero-egress architecture",
   "Data never leaves your environment",
   "SHA-256 independently verifiable",
-  "HIPAA Safe Harbor 45 CFR §164.514(b)",
+  "Safe Harbor-aligned — building toward 45 CFR §164.514(b)",
 ];
 
 export function CTA() {
@@ -43,7 +43,7 @@ export function CTA() {
         <p className="font-body text-body text-muted mt-8 max-w-[500px]">
           Hermes is currently accepting one design partner in the East
           Tennessee market. 30-day pilot, your infrastructure, full
-          compliance evidence record output from day one.
+          hash-chained audit evidence record from day one.
         </p>
 
         {submitted ? (

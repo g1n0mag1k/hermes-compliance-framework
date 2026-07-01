@@ -34,7 +34,7 @@ const COLUMNS: readonly Column[] = [
   {
     label: "What MSPs cannot produce",
     content:
-      "A per-token, CFR-cited, cryptographically signed record that proves Safe Harbor compliance was actively maintained — not just assumed.",
+      "A per-token, CFR-cited, cryptographically signed record that documents Safe Harbor-aligned de-identification — with core identifier coverage today and full Safe Harbor coverage actively expanding.",
     source: "OCR Risk Analysis Initiative — 2026",
   },
 ];

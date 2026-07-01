@@ -124,6 +124,9 @@ export function Hero() {
          * Full-bleed on mobile (no horizontal padding so it spans the
          * viewport), constrained back into the column on desktop. */}
         <div className="flex flex-col">
+          <p className="font-mono text-caption text-muted mb-3 px-6 sm:px-8 lg:px-0">
+            Illustrative output — sample audit stream (CFR citations shown are demo format)
+          </p>
           <div className="bg-surface border-y-2 lg:border-2 border-signal">
             {/* window chrome */}
             <div className="flex items-center gap-3 border-b-2 border-border px-4 py-3">
@@ -167,7 +170,7 @@ export function Hero() {
           </div>
 
           <p className="font-mono text-caption text-verify mt-4 px-6 sm:px-8 lg:px-0">
-            ✓ Chain integrity verified — tamper-evident since block #000001
+            ✓ Illustrative chain — tamper-evident format shown for demo purposes
           </p>
         </div>
       </div>

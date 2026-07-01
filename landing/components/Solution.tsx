@@ -34,7 +34,7 @@ const PILLARS: readonly Pillar[] = [
     label: "METHOD",
     headline: "Deterministic",
     body:
-      "Every classification is driven by rule-based regex and a fixed-version spaCy model — never a hosted LLM. The same input produces the same output, every run, with the same CFR citation attached.",
+      "Regex and a fixed-version spaCy model detect core PHI identifiers — SSN, payment cards, and names, dates, and organizations — with Safe Harbor coverage actively expanding. Never a hosted LLM: the same input produces the same output, every run.",
   },
   {
     label: "EVIDENCE",
