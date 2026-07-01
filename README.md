@@ -32,19 +32,20 @@ receipts in LLM proxy mode (expanding to all endpoints)
 that documents:
 
 - Which **core PHI identifiers** were found today: SSN 
-  (regex), payment card numbers (regex + Luhn), and 
-  PERSON / DATE / ORG entities (spaCy `en_core_web_sm` NER)
+  (regex), payment card numbers (regex + Luhn), names and 
+  dates (spaCy `en_core_web_sm` NER), and phone, email, URL, 
+  IP, and address (Presidio AnalyzerEngine) — **8 of 18** 
+  HIPAA Safe Harbor categories covered today
 - Safe Harbor coverage across all 18 HIPAA identifier 
   categories is **actively expanding** — not complete
 - Which detection method fired 
-  (spaCy NER / regex / Luhn checksum)
+  (spaCy NER / Presidio / regex / Luhn checksum)
 - What action was taken 
   (redaction to typed placeholders)
 - The cryptographic link between compliance receipts 
   in the attestation chain (proxy mode today)
-
-Per-token CFR citations are on the roadmap. The audit 
-log records classification flags and counts today.
+- Per-flag CFR citations in the audit log 
+  (`45 CFR §164.514(b)(2)(i)` letters per detection type)
 
 This record is what your OCR investigator reads. 
 No other tool in this category produces it at 
@@ -60,7 +61,7 @@ infrastructure — making compliance attestations
 technically accurate, not aspirational.
 
 **Deterministic.** Rule-based hybrid engine: 
-spaCy NER + regex + Luhn checksum. Every 
+spaCy NER + Presidio + regex + Luhn checksum. Every 
 classification decision is explainable to the 
 token level. No ML black box. No confidence 
 score an auditor cannot verify.
@@ -86,28 +87,45 @@ isolation are on the roadmap.
 
 ## Compliance Coverage
 
-**Active today**
-- SSN detection (regex) and PCI PAN detection 
-  (regex + Luhn checksum)
-- PERSON, DATE, and ORG entity redaction via 
-  spaCy `en_core_web_sm` NER
-- Zero-egress local execution (HIPAA Security Rule 
-  technical safeguard alignment)
+Hermes covers **8 of 18** HIPAA Safe Harbor identifier categories today.
+Detection is not exhaustive — partial coverage is intentional and documented.
 
-**Safe Harbor-aligned — building toward full coverage**
-- HIPAA Safe Harbor de-identification 
-  45 CFR §164.514(b) — core identifiers today; 
-  remaining Safe Harbor categories in active development
-- HIPAA Security Rule technical safeguards 
-  45 CFR §164.312
-- PCI DSS — Luhn-validated card number detection
+**Active today (8 of 18 Safe Harbor categories)**
+- Names (spaCy NER `PERSON`)
+- Dates (spaCy NER `DATE`)
+- Social Security numbers (regex)
+- Phone numbers (Presidio `PHONE_NUMBER`)
+- Email addresses (Presidio `EMAIL_ADDRESS`)
+- Web URLs (Presidio `URL`)
+- IP addresses (Presidio `IP_ADDRESS`)
+- Geographic locations / addresses (Presidio `LOCATION`)
+- PCI payment card numbers (regex + Luhn checksum; not a Safe Harbor category)
+- Zero-egress local execution (HIPAA Security Rule technical safeguard alignment)
+- Per-flag CFR citations in audit log output (`45 CFR §164.514(b)(2)(i)` letters)
 
-**Roadmap**
+**Detection methods**
+- Regex + Luhn checksum (SSN, PCI PAN)
+- spaCy `en_core_web_sm` NER (PERSON, DATE, ORG)
+- Microsoft Presidio AnalyzerEngine (phone, email, URL, IP, location, US bank number)
+
+**Roadmap (remaining Safe Harbor categories — 10 of 18)**
+- Fax numbers
+- Medical record numbers (MRN)
+- Health plan beneficiary numbers
+- Account numbers
+- Certificate / license numbers
+- Vehicle identifiers
+- Device identifiers
+- Biometric identifiers
+- Full-face photographic images
 - Full 18-category Safe Harbor identifier coverage
-- Per-token CFR citations
-- DSCSA pharmaceutical supply chain 
-  21 CFR Part 11 / EPCIS 1.2
+- DSCSA pharmaceutical supply chain (21 CFR Part 11 / EPCIS 1.2)
 - ALCOA+ data integrity principles (formal attestation)
+
+**Safe Harbor-aligned — building toward fuller coverage**
+- HIPAA Safe Harbor de-identification 45 CFR §164.514(b) — 8 of 18 categories today
+- HIPAA Security Rule technical safeguards 45 CFR §164.312
+- PCI DSS — Luhn-validated card number detection
 
 ---
 

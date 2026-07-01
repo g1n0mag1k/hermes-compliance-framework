@@ -7,7 +7,7 @@ import os
 import uuid
 from typing import Any, Dict, Optional, Tuple
 
-from hermes.classifier import scrub_payload
+from hermes.classifier import scrub_payload, FlagEntry
 from hermes.attestation import ATTESTATION_CHAIN
 
 PROXY_TARGETS: Dict[str, str] = {
@@ -22,8 +22,9 @@ _TEXT_FIELDS = {"content", "text", "prompt", "input", "query", "message", "instr
 
 def _scrub_str(text: str, transaction_id: str, flags: Dict[str, int]) -> str:
     result = scrub_payload(transaction_id=transaction_id, text=text)
-    for k, v in result.audit_log.flags_triggered.items():
-        flags[k] = flags.get(k, 0) + v
+    for k, entry in result.audit_log.flags_triggered.items():
+        count = entry.count if isinstance(entry, FlagEntry) else entry["count"]
+        flags[k] = flags.get(k, 0) + count
     return result.clean_text
 
 
@@ -77,7 +78,10 @@ class ProxyRelay:
                 text = body.decode("utf-8", errors="replace")
                 result = scrub_payload(transaction_id=transaction_id, text=text)
                 scrubbed_body = result.clean_text.encode("utf-8")
-                flags = result.audit_log.flags_triggered
+                flags = {
+                    k: v.count if isinstance(v, FlagEntry) else v["count"]
+                    for k, v in result.audit_log.flags_triggered.items()
+                }
 
         scrubbed_size = len(scrubbed_body) if scrubbed_body else 0
 

@@ -6,7 +6,9 @@
 # only at this phase because no production customer is consuming this
 # build yet. They are not acceptable post-pilot.
 
-spacy>=3.8.14
+spacy==3.8.13
+presidio-analyzer==2.2.363
+presidio-anonymizer==2.2.363
 streamlit>=1.58.0
 pydantic>=2.13.4
 fastapi>=0.115.4

@@ -40,5 +40,8 @@ def test_successful_payload_scrub():
     assert "123-45-6789" not in data["clean_text"]
     
     assert "audit_log" in data
-    assert data["audit_log"]["flags_triggered"]["HIPAA_SSN"] == 1
-    assert data["audit_log"]["flags_triggered"]["PCI_PAN"] == 1
+    assert data["audit_log"]["flags_triggered"]["HIPAA_SSN"]["count"] == 1
+    assert data["audit_log"]["flags_triggered"]["PCI_PAN"]["count"] == 1
+    assert data["audit_log"]["flags_triggered"]["HIPAA_SSN"]["cfr_citation"] == (
+        "45 CFR §164.514(b)(2)(i)(G)"
+    )
