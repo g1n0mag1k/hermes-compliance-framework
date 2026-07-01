@@ -9,11 +9,11 @@
       "false_negatives": 0,
       "detection_rate": 1.0,
       "false_positive_rate": 0.0,
-      "p50_latency_ms": 16.237,
-      "p95_latency_ms": 25.653,
-      "p99_latency_ms": 25.653,
+      "p50_latency_ms": 2.609,
+      "p95_latency_ms": 3.475,
+      "p99_latency_ms": 3.475,
       "test_cases_run": 5,
-      "timestamp": "2026-06-25T12:28:39.536701+00:00"
+      "timestamp": "2026-07-01T02:02:09.999202+00:00"
     },
     {
       "tool": "Hermes Relay v1.0.0",
@@ -24,11 +24,11 @@
       "false_negatives": 0,
       "detection_rate": 1.0,
       "false_positive_rate": 0.0,
-      "p50_latency_ms": 16.237,
-      "p95_latency_ms": 25.653,
-      "p99_latency_ms": 25.653,
+      "p50_latency_ms": 2.609,
+      "p95_latency_ms": 3.475,
+      "p99_latency_ms": 3.475,
       "test_cases_run": 5,
-      "timestamp": "2026-06-25T12:28:39.592006+00:00"
+      "timestamp": "2026-07-01T02:02:10.010493+00:00"
     },
     {
       "tool": "Hermes Relay v1.0.0",
@@ -39,11 +39,11 @@
       "false_negatives": 0,
       "detection_rate": 1.0,
       "false_positive_rate": 0.0,
-      "p50_latency_ms": 16.237,
-      "p95_latency_ms": 25.653,
-      "p99_latency_ms": 25.653,
+      "p50_latency_ms": 2.609,
+      "p95_latency_ms": 3.475,
+      "p99_latency_ms": 3.475,
       "test_cases_run": 2,
-      "timestamp": "2026-06-25T12:28:39.617734+00:00"
+      "timestamp": "2026-07-01T02:02:10.015967+00:00"
     }
   ],
   "competitor_baselines": {
@@ -113,13 +113,13 @@
     }
   },
   "hermes_capabilities": {
-    "reversible_redaction": true,
-    "compliance_receipts": true,
+    "reversible_redaction": false,
+    "compliance_receipts": "proxy_mode",
     "llm_proxy_mode": true,
     "zero_egress": true,
-    "hash_chained_audit": true,
+    "hash_chained_audit": "proxy_mode",
     "open_source": true,
     "self_hostable": true
   },
-  "generated_at": "2026-06-25T12:28:39.618002+00:00"
+  "generated_at": "2026-07-01T02:02:10.016000+00:00"
 }

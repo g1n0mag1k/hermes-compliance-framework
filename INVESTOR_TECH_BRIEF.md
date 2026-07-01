@@ -45,9 +45,9 @@ before the payload ever leaves the customer's network.
 │                          ┌────────────────────────┼──────────────┐  │
 │                          │                        │              │  │
 │               ┌──────────▼──────┐   ┌─────────────▼──────┐      │  │
-│               │   Classifier    │   │      Auditor        │      │  │
-│               │  spaCy NER +    │   │  SHA-256 Chained    │      │  │
-│               │  Regex Patterns │   │  Immutable Log      │      │  │
+│               │   Classifier    │   │   Attestation       │      │  │
+│               │  spaCy NER +    │   │  HMAC-SHA256 chain  │      │  │
+│               │  Regex Patterns │   │  (proxy mode today) │      │  │
 │               └─────────────────┘   └────────────────────┘      │  │
 │                                                                   │  │
 │                    tmpfs /tmp · UID 10001 · no internet           │  │
@@ -65,9 +65,13 @@ before the payload ever leaves the customer's network.
 
 **Data flow in plain terms:**
 1. Client sends raw text payload to Hermes API (authenticated)
-2. Classifier identifies PHI/PII/PAN using spaCy NER + regex
-3. Sensitive tokens are replaced with typed placeholders (`[REDACTED_SSN]`, `[REDACTED_PAN]`, etc.)
-4. Auditor writes an immutable, SHA-256 chained log entry
+2. Classifier identifies core PHI/PII: SSN and PAN via regex 
+   (+ Luhn for cards); PERSON, DATE, and ORG via spaCy NER
+3. Sensitive tokens are replaced with typed placeholders 
+   (`[REDACTED_SSN]`, `[REDACTED_PAN]`, `[REDACTED_PERSON]`, etc.)
+4. `/v1/scrub` returns structured audit flags and counts; 
+   LLM proxy mode additionally issues HMAC-SHA256 chained 
+   compliance receipts via the attestation module
 5. Redacted payload is returned — this is what reaches the AI pipeline
 6. No sensitive data ever touches an external network
 
@@ -101,14 +105,24 @@ before the payload ever leaves the customer's network.
 ## Compliance Coverage
 
 ### HIPAA (Health Insurance Portability and Accountability Act)
+
+**Current detection scope** — core identifiers only. Full 
+18-category Safe Harbor coverage is in active development.
+
 | PHI Category | Detection Method | Status |
 |---|---|---|
-| SSN (Social Security Number) | Regex: `\d{3}-\d{2}-\d{4}` | ✅ Active |
-| Named entities (person names) | spaCy `en_core_web_sm` NER | ✅ Active |
-| Addresses | spaCy location NER | ✅ Active |
-| Extensible to: DOB, MRN, Phone | Classifier pattern registry | 🔜 Roadmap |
+| SSN (Social Security Number) | Regex with invalid-range guards | ✅ Active |
+| Person names | spaCy `en_core_web_sm` NER (`PERSON`) | ✅ Active |
+| Dates | spaCy `en_core_web_sm` NER (`DATE`) | ✅ Active |
+| Organization names | spaCy `en_core_web_sm` NER (`ORG`) | ✅ Active |
+| Phone, email, fax, addresses, MRN, IP, URLs, and remaining Safe Harbor categories | Classifier pattern registry | 🔜 Roadmap |
 
-**Audit flag:** `HIPAA_SSN=1` logged on every SSN detection event.
+**Not detected today:** phone numbers, email addresses, 
+medical record numbers, street addresses, IP addresses, 
+URLs, and other Safe Harbor identifier categories.
+
+**Audit flag:** `HIPAA_SSN`, `HIPAA_PHI_PERSON`, 
+`HIPAA_PHI_DATE`, `HIPAA_PHI_ORG` logged per detection event.
 
 ### PCI-DSS (Payment Card Industry Data Security Standard)
 | PAN Pattern | Detection Method | Status |
@@ -122,24 +136,29 @@ before the payload ever leaves the customer's network.
 
 ## Audit Trail Methodology
 
-Every scrub operation produces a tamper-evident log entry. The chain is
-implemented as follows:
+`/v1/scrub` returns a `RedactionAuditLog` with transaction ID, 
+character counts, and per-class flag counts. LLM proxy mode 
+additionally issues tamper-evident compliance receipts chained 
+via HMAC-SHA256:
 
 ```
-Entry N:
-  transaction_id : UUID4
-  timestamp      : ISO-8601 UTC
-  flags          : { HIPAA_SSN: int, PCI_PAN: int }
-  char_count_in  : int
-  char_count_out : int
-  hash           : SHA-256(previous_hash + current_entry_json)
+Receipt N:
+  receipt_id           : rcpt_{transaction_id}_{position}
+  transaction_id       : UUID
+  issued_at            : ISO-8601 UTC
+  pii_classes_detected : [HIPAA_SSN, PCI_PAN, HIPAA_PHI_PERSON, ...]
+  previous_receipt_hash: HMAC chain link
+  receipt_hash         : HMAC-SHA256(canonical JSON payload)
 ```
 
 **Why this matters for compliance:**
 - Demonstrates to auditors that the system was operating at a specific moment
-- Chain linkage means retroactive log modification is cryptographically detectable
-- Supports both HIPAA audit trail requirements and PCI-DSS Requirement 10 (log monitoring)
+- Chain linkage in proxy mode means retroactive receipt modification is cryptographically detectable
+- Supports HIPAA audit trail requirements and PCI-DSS Requirement 10 (log monitoring)
 - Fully local — no dependency on a third-party SIEM
+
+Hash-chained receipts on every scrub endpoint (not just proxy 
+mode) are on the roadmap.
 
 ---
 
@@ -148,9 +167,11 @@ Entry N:
 | Limitation | Context | Roadmap Response |
 |---|---|---|
 | English-only NER | spaCy `en_core_web_sm` is English | Multi-language model support in v1.1 |
-| PHI category coverage | SSN + NER today; DOB, MRN, phone pending | Classifier pattern registry expansion |
+| PHI category coverage | SSN, PAN, PERSON/DATE/ORG today; phone, email, MRN, addresses, and remaining Safe Harbor categories pending | Classifier pattern registry expansion toward full 18-category Safe Harbor |
 | No streaming support | Single-shot scrub only | Streaming endpoint for LLM proxy mode |
 | Single-tenant per deployment | No multi-tenant RBAC yet | Per-tenant API keys + scoped audit logs |
+| Reversible redaction | Token vault module exists; not wired to `/v1/scrub` | Vault integration with scrub pipeline |
+| Hash-chained audit on all endpoints | Attestation chain active in LLM proxy mode only | Extend HMAC receipt chain to `/v1/scrub` |
 
 ---
 

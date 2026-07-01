@@ -82,11 +82,11 @@ COMPETITOR_BASELINES = {
 }
 
 HERMES_CAPABILITIES = {
-    "reversible_redaction": True,
-    "compliance_receipts": True,
+    "reversible_redaction": False,  # vault module exists; not wired to /v1/scrub yet
+    "compliance_receipts": "proxy_mode",  # attestation chain in LLM proxy mode
     "llm_proxy_mode": True,
     "zero_egress": True,
-    "hash_chained_audit": True,
+    "hash_chained_audit": "proxy_mode",  # HMAC receipt chain in proxy mode
     "open_source": True,
     "self_hostable": True,
 }
@@ -155,10 +155,14 @@ def generate_report(results: List[BenchmarkResult]) -> str:
         f"\n_Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}_\n",
         "## Methodology",
         "- Synthetic test corpus: 17 cases across SSN, PAN, and combined PHI+PAN",
+        "- **Scope note:** rates below measure SSN and PAN detection only on this corpus — not full Safe Harbor coverage",
         "- Adversarial negatives included (invalid SSN ranges, Luhn-failing PANs)",
         "- Hermes run locally; competitor figures from published vendor sources",
-        "- Latency: median of all test case executions\n",
-        "## Detection Rate Comparison\n",
+        "- Latency: median of all test case executions",
+        "- NER detection (PERSON/DATE/ORG) is not included in this benchmark\n",
+        "## Current Detection Scope\n",
+        "Hermes v1.0.0 actively detects: **SSN** (regex), **payment card numbers** (regex + Luhn), and **PERSON / DATE / ORG** entities via spaCy `en_core_web_sm`. Phone numbers, email addresses, medical record numbers, addresses, IP addresses, URLs, and other Safe Harbor categories are **not yet detected** — full 18-category coverage is in active development.\n",
+        "## Detection Rate Comparison (SSN + PAN corpus only)\n",
         "| Tool | SSN Detection | PAN Detection | p50 Latency | Zero-Egress | Reversible | Attestation |",
         "|------|--------------|---------------|-------------|-------------|------------|-------------|",
     ]
@@ -166,10 +170,10 @@ def generate_report(results: List[BenchmarkResult]) -> str:
     if hermes_ssn and hermes_pan:
         lines.append(
             f"| **Hermes Relay v1.0.0** | "
-            f"**{hermes_ssn.detection_rate:.0%}** | "
-            f"**{hermes_pan.detection_rate:.0%}** | "
+            f"**{hermes_ssn.detection_rate:.0%}*** | "
+            f"**{hermes_pan.detection_rate:.0%}*** | "
             f"**{hermes_ssn.p50_latency_ms:.1f}ms** | "
-            f"**✅ Yes** | **✅ Yes** | **✅ Yes** |"
+            f"**✅ Yes** | **🔜 Roadmap** | **✅ Proxy mode** |"
         )
 
     for tool, data in COMPETITOR_BASELINES.items():
@@ -186,22 +190,29 @@ def generate_report(results: List[BenchmarkResult]) -> str:
             f"{egress} | {rev} | {att} |"
         )
 
+    if hermes_ssn and hermes_pan:
+        lines.append(
+            "\n*\\*Hermes SSN/PAN rates are 100% on this 17-case synthetic corpus only — "
+            "not a claim of universal or full Safe Harbor detection.*\n"
+        )
+
     lines += [
         "\n## Hermes Unique Capabilities\n",
         "| Capability | Hermes | Presidio | AWS | Azure | Nightfall |",
         "|-----------|--------|----------|-----|-------|-----------|",
-        "| Reversible redaction (token vault) | ✅ | ❌ | ❌ | ❌ | ❌ |",
-        "| Cryptographic compliance receipts  | ✅ | ❌ | ❌ | ❌ | ❌ |",
+        "| Reversible redaction (token vault) | 🔜 Roadmap | ❌ | ❌ | ❌ | ❌ |",
+        "| Cryptographic compliance receipts  | ✅ Proxy | ❌ | ❌ | ❌ | ❌ |",
         "| Zero-trust LLM proxy mode          | ✅ | ❌ | ❌ | ❌ | ❌ |",
-        "| Hash-chained immutable audit log   | ✅ | ❌ | ❌ | ❌ | ❌ |",
+        "| Hash-chained immutable audit log   | ✅ Proxy | ❌ | ❌ | ❌ | ❌ |",
         "| Zero data egress (fully local)     | ✅ | ✅ | ❌ | ❌ | ❌ |",
         "| Open source + self-hostable        | ✅ | ✅ | ❌ | ❌ | ❌ |",
         "| Luhn checksum PAN validation       | ✅ | ❌ | ✅ | ✅ | ✅ |",
         "\n## Key Finding",
-        "> Hermes matches or exceeds cloud competitors on detection rate while delivering",
-        "> **10-100x lower latency** through local execution, **zero data egress**, and",
-        "> **three capabilities unavailable in any competing product**: reversible redaction,",
-        "> cryptographic compliance attestation, and zero-trust LLM proxy mode.\n",
+        "> On the SSN/PAN synthetic corpus, Hermes achieves high-recall detection",
+        "> with **10-100x lower latency** than cloud competitors through local execution",
+        "> and **zero data egress**. Architectural differentiators in active or partial",
+        "> deployment: zero-trust LLM proxy mode, cryptographic compliance receipts",
+        "> (proxy mode), and a token vault for reversible redaction (roadmap).\n",
         "---",
         "_Hermes Relay — Zero-Trust Compliance Infrastructure for MSPs_",
         "_hermesrelay.dev | andrew@hermesrelay.dev_",
