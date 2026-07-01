@@ -1,8 +1,18 @@
 import os
 import uuid
+from dataclasses import asdict
+from typing import Dict, List, Optional
+
 from fastapi import FastAPI, Header, HTTPException, Depends
 from pydantic import BaseModel
-from hermes.classifier import scrub_payload, ScrubberResult
+
+from hermes.attestation import ATTESTATION_CHAIN, ComplianceReceipt
+from hermes.classifier import (
+    FlagEntry,
+    RedactionAuditLog,
+    ScrubberResult,
+    scrub_payload,
+)
 
 # -------------------------------------------------------------------------
 # API APPLICATION & CONFIGURATION
@@ -23,6 +33,54 @@ API_KEY_ENV_VAR = "HERMES_API_KEY"
 class ScrubRequest(BaseModel):
     payload: str
 
+
+class ComplianceReceiptOut(BaseModel):
+    receipt_id: str
+    transaction_id: str
+    issued_at: str
+    issuer: str
+    compliance_frameworks: List[str]
+    pii_classes_detected: List[str]
+    pii_classes_redacted: List[str]
+    payload_char_count_in: int
+    payload_char_count_out: int
+    chars_removed: int
+    zero_pii_egress_confirmed: bool
+    downstream_target: Optional[str]
+    previous_receipt_hash: str
+    receipt_hash: str
+    chain_position: int
+
+
+class ScrubResponse(BaseModel):
+    clean_text: str
+    audit_log: RedactionAuditLog
+    compliance_receipt: ComplianceReceiptOut
+
+
+def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
+    """Map audit-log flag entries to per-flag counts for attestation issuance. Not a detection change."""
+    return {
+        k: v.count if isinstance(v, FlagEntry) else v["count"]
+        for k, v in flags_triggered.items()
+    }
+
+
+def _issue_scrub_attestation(
+    transaction_id: str,
+    result: ScrubberResult,
+) -> ComplianceReceipt:
+    """Issue a hash-chained compliance receipt for a /v1/scrub call via the shared AttestationChain. Not a detection change."""
+    flags = _flags_to_counts(result.audit_log.flags_triggered)
+    return ATTESTATION_CHAIN.issue(
+        transaction_id=transaction_id,
+        flags_triggered=flags,
+        char_count_in=result.audit_log.original_char_count,
+        char_count_out=result.audit_log.redacted_char_count,
+        downstream_target=None,
+    )
+
+
 def verify_api_key(x_api_key: str = Header(...)):
     """Simulates multi-tenant RMM authentication for the TenHats pilot."""
     expected_key = os.environ.get(API_KEY_ENV_VAR)
@@ -40,15 +98,20 @@ def health_check():
 
 @app.post(
     "/v1/scrub",
-    response_model=ScrubberResult,
+    response_model=ScrubResponse,
     tags=["Pipeline"],
     dependencies=[Depends(verify_api_key)],
 )
 def scrub_endpoint(request: ScrubRequest):
     """
-    Synchronous endpoint execution. FastAPI delegates this to a 
+    Synchronous endpoint execution. FastAPI delegates this to a
     background threadpool to cleanly respect our _PIPELINE_LOCK.
     """
     txn_id = f"txn_api_{uuid.uuid4().hex[:12]}"
     result = scrub_payload(transaction_id=txn_id, text=request.payload)
-    return result
+    receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result)
+    return ScrubResponse(
+        clean_text=result.clean_text,
+        audit_log=result.audit_log,
+        compliance_receipt=ComplianceReceiptOut.model_validate(asdict(receipt)),
+    )
