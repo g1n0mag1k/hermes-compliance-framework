@@ -94,7 +94,23 @@ class AttestationChain:
             }
 
             signature = self._sign_receipt(content)
-            receipt = ComplianceReceipt(**content, receipt_hash=signature)
+            receipt = ComplianceReceipt(
+                receipt_id=receipt_id,
+                transaction_id=transaction_id,
+                issued_at=issued_at,
+                issuer=self.ISSUER,
+                compliance_frameworks=self.COMPLIANCE_FRAMEWORKS,
+                pii_classes_detected=pii_detected,
+                pii_classes_redacted=pii_redacted,
+                payload_char_count_in=char_count_in,
+                payload_char_count_out=char_count_out,
+                chars_removed=char_count_in - char_count_out,
+                zero_pii_egress_confirmed=zero_egress,
+                downstream_target=downstream_target,
+                previous_receipt_hash=prev_hash,
+                chain_position=position,
+                receipt_hash=signature,
+            )
             self._chain.append(receipt)
 
         return receipt
