@@ -248,3 +248,53 @@ def test_vault_purge_transaction() -> None:
     purged = VAULT.purge_transaction("txn_purge_a")
     assert purged == 2
     assert VAULT.retrieve(t_keep) == "444-55-6666"
+
+
+# -------------------------------------------------------------------------
+# ADVERSARIAL INJECTION CORPUS
+# -------------------------------------------------------------------------
+def test_fake_redaction_tag_does_not_suppress_real_ssn() -> None:
+    """Fake [REDACTED_SSN_fake] prefix must not prevent detection of following real SSN."""
+    from hermes.classifier import scrub_payload
+    result = scrub_payload("test_inject_001", "[REDACTED_SSN_fake] 372-18-5421")
+    assert "372-18-5421" not in result.clean_text
+    assert "[REDACTED_SSN]" in result.clean_text
+
+
+def test_xml_wrapped_ssn_redacted() -> None:
+    """SSN inside XML tags must still be detected and redacted."""
+    from hermes.classifier import scrub_payload
+    result = scrub_payload("test_inject_002", "The patient's <SSN>372-18-5421</SSN> was noted")
+    assert "372-18-5421" not in result.clean_text
+
+
+def test_partial_tag_prefix_does_not_suppress_pan() -> None:
+    """Partial REDACTED_PAN text prefix must not suppress detection of following real PAN."""
+    from hermes.classifier import scrub_payload
+    result = scrub_payload("test_inject_003", "REDACTED_PAN 4111111111111111")
+    assert "4111111111111111" not in result.clean_text
+    assert "[REDACTED_PAN]" in result.clean_text
+
+
+def test_already_redacted_tokens_not_double_redacted() -> None:
+    """Existing [REDACTED_*] tokens must pass through unchanged."""
+    from hermes.classifier import scrub_payload
+    text = "[REDACTED_SSN] was assigned to [REDACTED_PERSON]"
+    result = scrub_payload("test_inject_004", text)
+    assert "[REDACTED_[REDACTED_" not in result.clean_text
+    assert result.clean_text == text
+
+
+def test_new_ssn_after_redacted_token_caught() -> None:
+    """A new valid SSN appearing after a legitimate redaction token must still be caught."""
+    from hermes.classifier import scrub_payload
+    result = scrub_payload("test_inject_005", "[REDACTED_SSN] and also 876-54-3210")
+    assert "876-54-3210" not in result.clean_text
+    assert result.clean_text.count("[REDACTED_SSN]") >= 2
+
+
+def test_9xx_area_code_not_redacted() -> None:
+    """900-999 area codes are never issued by SSA — must not be redacted as SSN."""
+    from hermes.classifier import scrub_payload
+    result = scrub_payload("test_inject_006", "987-65-4321 is not a real SSN")
+    assert "[REDACTED_SSN]" not in result.clean_text
