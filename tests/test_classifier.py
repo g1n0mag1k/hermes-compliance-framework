@@ -123,3 +123,43 @@ def test_overlapping_spacy_and_presidio_spans_redacted_once(txn_id: str) -> None
     assert result.clean_text.count("[REDACTED_") >= 1
     assert "jane.doe@example.com" not in result.clean_text
     assert "][REDACTED_" not in result.clean_text
+
+
+def test_ssn_dot_notation_redacted() -> None:
+    """SSN with dot separators must be caught — confirmed live leak before fix."""
+    from hermes.classifier import scrub_payload
+    result = scrub_payload('test_ssn_dot', 'SSN: 372.18.5421')
+    assert '[REDACTED_SSN]' in result.clean_text
+    assert '372.18.5421' not in result.clean_text
+
+
+def test_ssn_space_notation_redacted() -> None:
+    """SSN with space separators must be caught — confirmed live leak before fix."""
+    from hermes.classifier import scrub_payload
+    result = scrub_payload('test_ssn_space', 'social 372 18 5421')
+    assert '[REDACTED_SSN]' in result.clean_text
+    assert '372 18 5421' not in result.clean_text
+
+
+def test_ssn_mixed_separator_not_redacted() -> None:
+    """Mixed separators (372-18.5421) must NOT match — not a valid SSN format."""
+    from hermes.classifier import scrub_payload
+    result = scrub_payload('test_ssn_mixed', '372-18.5421')
+    assert '[REDACTED_SSN]' not in result.clean_text
+
+
+def test_ssn_invalid_ranges_not_redacted() -> None:
+    """000/666/9xx area, 00 group, 0000 serial must never be redacted."""
+    from hermes.classifier import scrub_payload
+    non_ssns = [
+        ('000 area', '000-12-3456'),
+        ('666 area', '666-12-3456'),
+        ('900 area', '900-12-3456'),
+        ('00 group', '123-00-6789'),
+        ('0000 serial', '123-45-0000'),
+    ]
+    for label, text in non_ssns:
+        result = scrub_payload(f'test_ssn_invalid_{label}', text)
+        assert '[REDACTED_SSN]' not in result.clean_text, (
+            f'False positive on {label}: {text}'
+        )
