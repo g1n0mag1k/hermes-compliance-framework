@@ -80,6 +80,10 @@ class RedactionAuditLog(BaseModel):
         default_factory=dict,
         description="Per-flag detection counts with regulatory citations",
     )
+    flags_redacted: Dict[str, FlagEntry] = Field(
+        default_factory=dict,
+        description="Per-flag redaction counts — must equal flags_triggered for zero-egress confirmation",
+    )
 
 
 class ScrubberResult(BaseModel):
@@ -286,6 +290,7 @@ def _apply_span_redactions(
     text: str,
     spans: List[Tuple[int, int, Set[str], str]],
     flags: Dict[str, FlagEntry],
+    redacted_flags: Dict[str, FlagEntry],
 ) -> str:
     merged_spans = _merge_overlapping_spans(spans)
     merged_spans.sort(key=lambda item: item[0], reverse=True)
@@ -295,6 +300,8 @@ def _apply_span_redactions(
         for flag_name in flag_names:
             _increment_flag(flags, flag_name)
         clean_text = clean_text[:start] + f"[REDACTED_{placeholder}]" + clean_text[end:]
+        for flag_name in flag_names:
+            _increment_flag(redacted_flags, flag_name)
 
     return clean_text
 
@@ -305,11 +312,13 @@ def _apply_span_redactions(
 def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     original_char_count = len(text)
     flags: Dict[str, FlagEntry] = {}
+    redacted_flags: Dict[str, FlagEntry] = {}
     clean_text = text
 
     # 1. REGEX PASSES
     def ssn_replacer(_match):
         _increment_flag(flags, "HIPAA_SSN")
+        _increment_flag(redacted_flags, "HIPAA_SSN")
         return "[REDACTED_SSN]"
 
     clean_text = REGEX_SSN.sub(ssn_replacer, clean_text)
@@ -319,6 +328,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         clean_candidate = "".join(c for c in candidate if c.isdigit())
         if validate_luhn_checksum(clean_candidate):
             _increment_flag(flags, "PCI_PAN")
+            _increment_flag(redacted_flags, "PCI_PAN")
             return "[REDACTED_PAN]"
         return candidate
 
@@ -327,7 +337,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     # 2. NER + PRESIDIO PASSES (merged span redaction — no duplicate overlaps)
     entity_spans = _collect_spacy_spans(clean_text)
     entity_spans.extend(_collect_presidio_spans(clean_text))
-    clean_text = _apply_span_redactions(clean_text, entity_spans, flags)
+    clean_text = _apply_span_redactions(clean_text, entity_spans, flags, redacted_flags)
 
     # 3. AUDIT PAYLOAD
     audit_log = RedactionAuditLog(
@@ -335,6 +345,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         original_char_count=original_char_count,
         redacted_char_count=len(clean_text),
         flags_triggered=flags,
+        flags_redacted=redacted_flags,
     )
 
     return ScrubberResult(clean_text=clean_text, audit_log=audit_log)
