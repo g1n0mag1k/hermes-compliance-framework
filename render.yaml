@@ -6,8 +6,11 @@ services:
     envVars:
       - key: HERMES_API_KEY
         generateValue: true
+      - key: HERMES_VAULT_KEY
+        generateValue: true
+      - key: HERMES_VAULT_DB_PATH
+        value: /tmp/hermes_vault.db
     healthCheckPath: /health
-
   - type: web
     name: hermes-demo
     runtime: docker
