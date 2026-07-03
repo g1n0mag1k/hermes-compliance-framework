@@ -117,13 +117,37 @@ class AttestationChain:
         return receipt
 
     def verify_chain(self) -> bool:
+        """
+        Full chain verification — three invariants must hold:
+
+        1. Every receipt signature is valid (HMAC matches signed content)
+        2. Every receipt.previous_receipt_hash equals the prior receipt.receipt_hash
+        3. chain_position values are strictly sequential with no gaps or duplicates
+
+        A chain that passes only invariant 1 is forgeable by deleting receipts
+        and re-signing the survivors. Invariants 2 and 3 close that attack vector.
+        """
         with self._lock:
-            for receipt in self._chain:
+            expected_prev = self._genesis_hash
+
+            for i, receipt in enumerate(self._chain):
+                # Invariant 1: signature valid
                 content = asdict(receipt)
                 stored_hash = content.pop("receipt_hash")
-                expected = self._sign_receipt(content)
-                if not hmac.compare_digest(stored_hash, expected):
+                expected_sig = self._sign_receipt(content)
+                if not hmac.compare_digest(stored_hash, expected_sig):
                     return False
+
+                # Invariant 2: previous_receipt_hash links to prior receipt
+                if not hmac.compare_digest(receipt.previous_receipt_hash, expected_prev):
+                    return False
+
+                # Invariant 3: chain_position is strictly sequential
+                if receipt.chain_position != i:
+                    return False
+
+                expected_prev = receipt.receipt_hash
+
         return True
 
     def get_receipt(self, transaction_id: str) -> Optional[ComplianceReceipt]:
