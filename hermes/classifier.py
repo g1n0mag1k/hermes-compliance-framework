@@ -110,15 +110,17 @@ def validate_luhn_checksum(pan_candidate: str) -> bool:
 # -------------------------------------------------------------------------
 # PRESIDIO DETECTION
 # -------------------------------------------------------------------------
-_presidio_analyzer: Optional[AnalyzerEngine] = None
+class _PresidioAnalyzerCache:
+    engine: Optional[AnalyzerEngine] = None
+
+
 _PIPELINE_LOCK = threading.Lock()
 
 
 def _get_presidio_analyzer() -> AnalyzerEngine:
-    global _presidio_analyzer
-    if _presidio_analyzer is None:
-        _presidio_analyzer = AnalyzerEngine()
-    return _presidio_analyzer
+    if _PresidioAnalyzerCache.engine is None:
+        _PresidioAnalyzerCache.engine = AnalyzerEngine()
+    return _PresidioAnalyzerCache.engine
 
 
 def detect_with_presidio(text: str) -> List[Dict]:
@@ -189,6 +191,44 @@ def _spans_overlap(start_a: int, end_a: int, start_b: int, end_b: int) -> bool:
     return start_a < end_b and start_b < end_a
 
 
+def _span_fully_contains(
+    outer_start: int,
+    outer_end: int,
+    inner_start: int,
+    inner_end: int,
+) -> bool:
+    return outer_start <= inner_start and inner_end <= outer_end
+
+
+def _merge_flag_sets(
+    prev_start: int,
+    prev_end: int,
+    prev_flags: Set[str],
+    start: int,
+    end: int,
+    flag_names: Set[str],
+) -> Set[str]:
+    """Union overlapping span flags, suppressing URL hits inside email spans."""
+    merged_flags = prev_flags | flag_names
+    if "HIPAA_PHI_EMAIL" not in merged_flags or "HIPAA_PHI_URL" not in merged_flags:
+        return merged_flags
+
+    if (
+        "HIPAA_PHI_EMAIL" in prev_flags
+        and "HIPAA_PHI_URL" in flag_names
+        and _span_fully_contains(prev_start, prev_end, start, end)
+    ):
+        merged_flags.discard("HIPAA_PHI_URL")
+    elif (
+        "HIPAA_PHI_EMAIL" in flag_names
+        and "HIPAA_PHI_URL" in prev_flags
+        and _span_fully_contains(start, end, prev_start, prev_end)
+    ):
+        merged_flags.discard("HIPAA_PHI_URL")
+
+    return merged_flags
+
+
 def _merge_overlapping_spans(
     spans: List[Tuple[int, int, Set[str], str]],
 ) -> List[Tuple[int, int, Set[str], str]]:
@@ -205,7 +245,7 @@ def _merge_overlapping_spans(
             merged[-1] = (
                 min(prev_start, start),
                 max(prev_end, end),
-                prev_flags | flag_names,
+                _merge_flag_sets(prev_start, prev_end, prev_flags, start, end, flag_names),
                 _preferred_placeholder(prev_placeholder, placeholder),
             )
         else:

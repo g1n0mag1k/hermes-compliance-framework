@@ -115,6 +115,30 @@ def test_combined_phi_payload_redaction(txn_id: str) -> None:
     assert flags["HIPAA_PHI_EMAIL"].cfr_citation == CFR_CITATION_MAP["HIPAA_PHI_EMAIL"]
 
 
+def test_email_domain_url_not_double_counted(txn_id: str) -> None:
+    """Presidio URL hits on an email domain must not inflate flags_triggered."""
+    text = "Send results to patient@email.com by Friday."
+    result = scrub_payload(transaction_id=txn_id, text=text)
+
+    assert "patient@email.com" not in result.clean_text
+    assert "[REDACTED_EMAIL]" in result.clean_text
+    flags = result.audit_log.flags_triggered
+    assert flags["HIPAA_PHI_EMAIL"].count == 1
+    assert "HIPAA_PHI_URL" not in flags
+
+
+def test_standalone_url_still_detected(txn_id: str) -> None:
+    """Real URLs outside email addresses must still trigger HIPAA_PHI_URL."""
+    text = "Review the chart at https://example.com/page before discharge."
+    result = scrub_payload(transaction_id=txn_id, text=text)
+
+    assert "https://example.com/page" not in result.clean_text
+    assert "[REDACTED_URL]" in result.clean_text
+    flags = result.audit_log.flags_triggered
+    assert flags["HIPAA_PHI_URL"].count >= 1
+    assert flags["HIPAA_PHI_URL"].cfr_citation == CFR_CITATION_MAP["HIPAA_PHI_URL"]
+
+
 def test_overlapping_spacy_and_presidio_spans_redacted_once(txn_id: str) -> None:
     """Overlapping detections must produce one placeholder, not nested redactions."""
     text = "Contact Jane Doe at jane.doe@example.com."
