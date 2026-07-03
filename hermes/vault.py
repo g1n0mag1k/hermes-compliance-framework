@@ -12,6 +12,7 @@ Regulatory alignment:
 - PCI-DSS v4.0 Req 3.5.1 — protection of stored account data
 """
 import hashlib
+import sqlite3
 import hmac
 import os
 import threading
@@ -84,10 +85,52 @@ class VaultEntry:
     )
 
 
+# -------------------------------------------------------------------------
+# SQLITE BACKEND
+# -------------------------------------------------------------------------
+def _get_db_path() -> str:
+    return os.environ.get("HERMES_VAULT_DB_PATH", "hermes_vault.db")
+
+
+def _init_db(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS vault_entries (
+            token             TEXT PRIMARY KEY,
+            pii_type          TEXT NOT NULL,
+            encrypted_value   TEXT NOT NULL,
+            transaction_id    TEXT NOT NULL,
+            created_at        TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+
+
+def _load_all_entries(conn: sqlite3.Connection) -> Dict[str, VaultEntry]:
+    rows = conn.execute(
+        "SELECT token, pii_type, encrypted_value, transaction_id, created_at "
+        "FROM vault_entries"
+    ).fetchall()
+    return {
+        row[0]: VaultEntry(
+            token=row[0],
+            pii_type=row[1],
+            encrypted_value=row[2],
+            transaction_id=row[3],
+            created_at=row[4],
+        )
+        for row in rows
+    }
+
+
 class TokenVault:
-    def __init__(self) -> None:
-        self._store: Dict[str, VaultEntry] = {}
+    def __init__(self, db_path: Optional[str] = None) -> None:
+        self._db_path = db_path or _get_db_path()
         self._lock = threading.Lock()
+
+        conn = sqlite3.connect(self._db_path)
+        _init_db(conn)
+        self._store: Dict[str, VaultEntry] = _load_all_entries(conn)
+        conn.close()
 
     def store(self, pii_type: str, original_value: str, transaction_id: str) -> str:
         token = _generate_token(pii_type, original_value)
