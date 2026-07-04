@@ -41,9 +41,7 @@ export function CTA() {
           Your audit chain.
         </h2>
         <p className="font-body text-body text-muted mt-8 max-w-[500px]">
-          Hermes is currently accepting one design partner in the East
-          Tennessee market. 30-day pilot, your infrastructure, full
-          hash-chained audit evidence record from day one.
+          Hermes is currently accepting design partners for remote pilots. 30-day engagement, your infrastructure, full hash-chained audit evidence record from day one.
         </p>
 
         {submitted ? (

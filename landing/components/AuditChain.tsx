@@ -44,7 +44,7 @@ function ChainRow({ entry, isLast }: { entry: ChainEntry; isLast: boolean }) {
 }
 
 export function AuditChain() {
-  const rawInput = `Patient: Sarah Mitchell, DOB 03/14/1978, SSN 412-55-8901\nPhone: (865) 402-7733\nDiagnosis: Type 2 Diabetes, ICD-10 E11.9\nReferring physician requested AI-assisted prior auth summary.`;
+  const rawInput = `Patient: Sarah Mitchell, DOB 03/14/1978, SSN 412-55-8901\nPhone: (555) 000-0000\nDiagnosis: Type 2 Diabetes, ICD-10 E11.9\nReferring physician requested AI-assisted prior auth summary.`;
   const scrubbedOutput = `Patient: [PATIENT_NAME_A], DOB [DATE_C], SSN [SSN_J]\nPhone: [PHONE_REDACTED]\nDiagnosis: Type 2 Diabetes, ICD-10 E11.9\nReferring physician requested AI-assisted prior auth summary.`;
 
   return (
