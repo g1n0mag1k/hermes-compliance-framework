@@ -73,3 +73,9 @@ Thumbs.db
 *.whl
 *.tar.gz
 site/
+
+# ─── LOCAL DATA & BACKUP FILES — NEVER COMMIT ────────────────────────────────
+*.db
+*.bak
+*.save
+zorin-code
