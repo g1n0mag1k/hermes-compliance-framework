@@ -15,12 +15,11 @@ export function Footer() {
       <div className="w-full max-w-content mx-auto flex flex-col md:flex-row md:justify-between items-center gap-3 md:gap-6 font-mono text-caption text-muted">
         <span>© 2026 Sui-Generis LLC</span>
         <span>Hermes — hermesrelay.dev</span>
-        <a
-          href="mailto:andrew@hermesrelay.dev"
-          className="hover:text-signal transition-colors"
-        >
-          andrew@hermesrelay.dev
-        </a>
+        <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">
+          <a href="/privacy" className="hover:text-signal transition-colors">Privacy Policy</a>
+          <a href="https://github.com/g1n0mag1k/hermes-compliance-framework/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer" className="hover:text-signal transition-colors">Security</a>
+          <a href="mailto:andrew@hermesrelay.dev" className="hover:text-signal transition-colors">andrew@hermesrelay.dev</a>
+        </div>
       </div>
     </footer>
   );

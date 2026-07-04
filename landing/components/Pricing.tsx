@@ -109,6 +109,9 @@ export function Pricing() {
         <p className="font-mono text-caption text-muted mt-8">
           {"→"} Pilot pricing is fixed for current design partners. Production pricing locks at pilot rate for the first 12 months.
         </p>
+        <p className="font-mono text-caption text-muted mt-3">
+          {"→"} Business Associate Agreement (BAA) available upon request. Required for HIPAA-covered deployments.
+        </p>
       </div>
     </section>
   );

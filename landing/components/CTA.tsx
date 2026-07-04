@@ -7,6 +7,7 @@ const TRUST_SIGNALS: readonly string[] = [
   "Data never leaves your environment",
   "SHA-256 independently verifiable",
   "Safe Harbor-aligned — building toward 45 CFR §164.514(b)",
+  "BAA available upon request",
 ];
 
 export function CTA() {
