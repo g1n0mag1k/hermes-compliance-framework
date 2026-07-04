@@ -64,7 +64,7 @@ export function Readiness() {
           </div>
 
           <div className="flex flex-col gap-2">
-            
+            <a
               href="mailto:andrew@hermesrelay.dev?subject=PHI AI Readiness Assessment"
               className="inline-block bg-signal text-void font-display font-bold text-body px-8 py-4 border-2 border-signal hover:bg-ink hover:border-ink transition-colors"
             >
@@ -72,7 +72,7 @@ export function Readiness() {
             </a>
             <span className="font-mono text-caption text-muted">
               or email directly:{" "}
-              
+              <a
                 href="mailto:andrew@hermesrelay.dev"
                 className="text-signal hover:text-ink transition-colors"
               >
