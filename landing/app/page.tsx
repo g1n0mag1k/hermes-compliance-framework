@@ -4,6 +4,7 @@ import { Solution } from "@/components/Solution";
 import { AuditChain } from "@/components/AuditChain";
 import { Architecture } from "@/components/Architecture";
 import { Differentiators } from "@/components/Differentiators";
+import { Founder } from "@/components/Founder";
 import { Integrations } from "@/components/Integrations";
 import { SocialProof } from "@/components/SocialProof";
 import { Pricing } from "@/components/Pricing";
@@ -20,6 +21,7 @@ export default function Page() {
       <AuditChain />
       <Architecture />
       <Differentiators />
+      <Founder />
       <Integrations />
       <SocialProof />
       <Pricing />

@@ -11,9 +11,9 @@ const STATS: readonly { figure: string; label: string; source: string }[] = [
     source: "HHS Office for Civil Rights — 2025 Enforcement Report",
   },
   {
-    figure: "$4.75M",
-    label: "Average cost of a healthcare data breach — highest of any industry",
-    source: "IBM Cost of a Data Breach Report 2024",
+    figure: "$7.42M",
+    label: "Average cost of a healthcare data breach — the costliest industry for the 15th consecutive year",
+    source: "IBM Cost of a Data Breach Report 2025",
   },
   {
     figure: "18",

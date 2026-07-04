@@ -30,7 +30,7 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
     label: "Zero-Egress Architecture",
     verdict: "Your PHI never leaves your environment. Every competitor's does.",
     body:
-      "Nightfall, Strac, Private AI, AWS Comprehend Medical, Azure Text Analytics -- all transit PHI through external infrastructure to classify it. That transit is the violation. Their compliance attestation is technically a false statement: data left the environment to produce it. Hermes runs entirely inside the customer's environment. No external classifier. No data in transit. Every attestation Hermes produces is legally accurate in a way no cloud-ML competitor can match.",
+      "Most cloud-based PHI classifiers -- regardless of vendor -- transit data through external infrastructure to run detection. That transit is the exposure: once PHI crosses your environment's boundary to reach a hosted classifier, a zero-egress claim no longer holds. Hermes runs entirely inside the customer's environment. No external classifier. No data in transit. That architecture is what makes a zero-egress attestation accurate rather than aspirational.",
   },
   {
     index: "02",
