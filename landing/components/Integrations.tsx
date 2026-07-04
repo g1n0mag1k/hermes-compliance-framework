@@ -22,28 +22,28 @@ type Integration = {
 
 const INTEGRATIONS: readonly Integration[] = [
   {
-    category: "Enterprise DLP",
-    platforms: "Microsoft Purview - Netskope - Zscaler - Cyberhaven",
-    role: "Hermes pushes synthetic PHI detection events into your existing DLP policy engine. Your analysts see the event in their dashboard. The cryptographic proof stays on your node.",
-    method: "REST webhook / synthetic alert",
+    category: "Generic Webhook Export",
+    platforms: "Any HTTP JSON webhook receiver",
+    role: "Every scrubbing decision fires a structured JSON event to a URL you configure, with an optional auth header for token-based intake. This is a real, tested capability today -- not a mockup.",
+    method: "POST + configurable auth header",
   },
   {
-    category: "SIEM",
-    platforms: "Splunk - Datadog - CrowdStrike - Azure Sentinel",
-    role: "Every scrubbing decision exports as a structured JSON event -- CFR citation, field type, hash chain ID, timestamp. Ingests directly into your existing SIEM without a custom parser.",
-    method: "JSON event export / HTTP ingest",
+    category: "Splunk (HTTP Event Collector)",
+    platforms: "Splunk Cloud - Splunk Enterprise",
+    role: "Point the webhook at your HEC endpoint and set the auth header to your HEC token. Every scrub call lands as a structured event -- CFR citation, field type, hash chain ID, timestamp -- with no custom parser required.",
+    method: "HEC-compatible JSON POST",
   },
   {
-    category: "Cloud DLP",
-    platforms: "AWS Macie - Google Cloud DLP - Azure Text Analytics",
-    role: "Hermes runs before the cloud classifier, not instead of it. Core PHI identifiers are scrubbed locally first. What reaches the cloud has passed through deterministic, zero-egress redaction — with per-category coverage expanding.",
-    method: "Pre-filter / zero-egress proxy",
+    category: "SIEM / DLP -- Broader Landscape",
+    platforms: "Datadog - CrowdStrike - Azure Sentinel - Purview - Netskope - Zscaler",
+    role: "Platforms that accept a generic webhook or HTTP intake can consume Hermes' event stream today. Platforms requiring signed requests -- Sentinel's Data Collector API, for example -- are not yet supported; that is roadmap work, not a shipped connector.",
+    method: "Compatible where webhook intake exists",
   },
   {
     category: "AI Pipelines",
     platforms: "OpenAI - Azure OpenAI - Anthropic - Any LLM endpoint",
-    role: "Drop Hermes inline between your data source and your LLM API call. Core identifiers are scrubbed and the audit record is sealed before payload content reaches the model.",
-    method: "Inline proxy / API gateway",
+    role: "Call /v1/scrub before your LLM request in your own pipeline code. Core identifiers are scrubbed and the audit record is sealed before payload content reaches the model. Today this is a direct API call you wire in, not an automatic transparent proxy.",
+    method: "Direct API call, ahead of your LLM request",
   },
 ];
 
@@ -91,9 +91,10 @@ export function Integrations() {
         </h2>
         <p className="font-body text-body text-muted mt-6 max-w-[60ch]">
           No DLP platform -- Purview, Netskope, Nightfall -- can produce a
-          zero-egress, deterministic, CFR-cited audit record. That is an
-          architectural constraint, not a roadmap gap. Hermes fills it and
-          exports clean evidence into whatever you already run.
+          zero-egress, deterministic, CFR-cited audit record on its own.
+          Hermes fills that gap and exports the evidence as a generic JSON
+          webhook, ready for anything that accepts one today, with
+          platform-specific connectors as ongoing work.
         </p>
 
         {/* ---- Integration grid ---- */}
@@ -120,10 +121,11 @@ export function Integrations() {
             <p className="font-body text-body text-muted">
               Hermes emits a structured event for every scrubbing decision:
               field type, CFR citation, hash chain ID, payload ID, and
-              timestamp. That event is platform-agnostic. A lightweight
-              connector translates it into the format your SIEM or DLP expects.
-              If you run Splunk today and move to Sentinel next year, the
-              Hermes node does not change -- only the connector does.
+              timestamp. That event is platform-agnostic JSON over a
+              configurable webhook, with an optional auth header for
+              token-based intake like Splunk&apos;s HTTP Event Collector.
+              Platforms requiring signed requests are on the roadmap,
+              not yet shipped.
             </p>
           </div>
         </div>
