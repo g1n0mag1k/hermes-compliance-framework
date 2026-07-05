@@ -13,19 +13,30 @@ const TRUST_SIGNALS: readonly string[] = [
 export function CTA() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
+    setError(false);
     const form = e.currentTarget;
     const data = new FormData(form);
-    await fetch("https://formspree.io/f/xnjkdrar", {
-      method: "POST",
-      body: data,
-      headers: { Accept: "application/json" },
-    });
-    setLoading(false);
-    setSubmitted(true);
+    try {
+      const response = await fetch("https://formspree.io/f/xnjkdrar", {
+        method: "POST",
+        body: data,
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error(`Formspree returned ${response.status}`);
+      }
+      setSubmitted(true);
+    } catch (err) {
+      console.error("Pilot request submission failed:", err);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -53,6 +64,19 @@ export function CTA() {
             </p>
           </div>
         ) : (
+          <>
+          {error && (
+            <div className="mt-10 border border-warn px-8 py-6 max-w-[500px] w-full text-left">
+              <p className="font-display text-h3 text-warn">Something went wrong.</p>
+              <p className="font-body text-body text-muted mt-2">
+                Your request did not go through. Please try again, or email{" "}
+                <a href="mailto:andrew@hermesrelay.dev" className="text-signal hover:text-ink transition-colors">
+                  andrew@hermesrelay.dev
+                </a>{" "}
+                directly.
+              </p>
+            </div>
+          )}
           <form
             onSubmit={handleSubmit}
             className="mt-10 w-full max-w-[500px] flex flex-col gap-4 text-left"
@@ -93,6 +117,28 @@ export function CTA() {
                 className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40"
               />
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-mono text-caption text-muted uppercase tracking-widest">
+                Phone <span className="normal-case text-muted/60">(optional)</span>
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                placeholder="(555) 000-0000"
+                className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-mono text-caption text-muted uppercase tracking-widest">
+                Anything we should know? <span className="normal-case text-muted/60">(optional)</span>
+              </label>
+              <textarea
+                name="message"
+                rows={3}
+                placeholder="Current AI tooling, PHI workflows, timeline, specific compliance concerns..."
+                className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40 resize-none"
+              />
+            </div>
             <button
               type="submit"
               disabled={loading}
@@ -101,6 +147,7 @@ export function CTA() {
               {loading ? "Sending…" : "Request the Pilot Program"}
             </button>
           </form>
+          </>
         )}
 
         <p className="font-mono text-caption text-muted mt-10 break-words max-w-full">
