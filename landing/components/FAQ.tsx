@@ -45,6 +45,7 @@ const FAQS: readonly FAQItem[] = [
 export function FAQ() {
   return (
     <section
+      id="faq"
       data-section="faq"
       className="px-6 sm:px-8 lg:px-10 py-section border-t-2 border-border"
     >

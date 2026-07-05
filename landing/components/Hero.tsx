@@ -76,6 +76,7 @@ export function Hero() {
    *     the left, ticker on the right, both constrained by max-w-content. */
   return (
     <section
+      id="top"
       data-section="hero"
       className="min-h-screen flex flex-col justify-center py-section"
     >

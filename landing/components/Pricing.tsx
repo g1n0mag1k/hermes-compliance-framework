@@ -84,6 +84,7 @@ function TierCard({ tier }: { tier: Tier }) {
 export function Pricing() {
   return (
     <section
+      id="pricing"
       data-section="pricing"
       className="px-6 sm:px-8 lg:px-10 py-section"
     >
