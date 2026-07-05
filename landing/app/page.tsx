@@ -7,6 +7,7 @@ import { Differentiators } from "@/components/Differentiators";
 import { Founder } from "@/components/Founder";
 import { Integrations } from "@/components/Integrations";
 import { SocialProof } from "@/components/SocialProof";
+import { FAQ } from "@/components/FAQ";
 import { Pricing } from "@/components/Pricing";
 import { Readiness } from "@/components/Readiness";
 import { CTA } from "@/components/CTA";
@@ -24,6 +25,7 @@ export default function Page() {
       <Founder />
       <Integrations />
       <SocialProof />
+      <FAQ />
       <Pricing />
       <Readiness />
       <CTA />

@@ -3,10 +3,11 @@ import uuid
 from dataclasses import asdict
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, Header, HTTPException, Depends
+from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel
 
 from hermes.attestation import ATTESTATION_CHAIN, ComplianceReceipt
+from hermes.webhooks import dispatch_webhook
 from hermes.classifier import (
     FlagEntry,
     RedactionAuditLog,
@@ -104,7 +105,7 @@ def health_check():
     tags=["Pipeline"],
     dependencies=[Depends(verify_api_key)],
 )
-def scrub_endpoint(request: ScrubRequest):
+def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks):
     """
     Synchronous endpoint execution. FastAPI delegates this to a
     background threadpool to cleanly respect our _PIPELINE_LOCK.
@@ -112,6 +113,7 @@ def scrub_endpoint(request: ScrubRequest):
     txn_id = f"txn_api_{uuid.uuid4().hex[:12]}"
     result = scrub_payload(transaction_id=txn_id, text=request.payload)
     receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result)
+    background_tasks.add_task(dispatch_webhook, receipt)
     return ScrubResponse(
         clean_text=result.clean_text,
         audit_log=result.audit_log,
