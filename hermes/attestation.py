@@ -15,7 +15,15 @@ def _load_signing_key() -> bytes:
     key_hex = os.environ.get("HERMES_SIGNING_KEY")
     env = os.environ.get("HERMES_ENV", "development")
     if key_hex:
-        return bytes.fromhex(key_hex)
+        try:
+            return bytes.fromhex(key_hex)
+        except ValueError as exc:
+            if env == "production":
+                raise RuntimeError(
+                    "HERMES_SIGNING_KEY is invalid when HERMES_ENV=production. "
+                    "Set HERMES_SIGNING_KEY to a valid hex string."
+                ) from exc
+            raise
     if env == "production":
         raise RuntimeError(
             "HERMES_SIGNING_KEY is required when HERMES_ENV=production. "
