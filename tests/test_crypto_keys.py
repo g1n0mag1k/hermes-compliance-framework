@@ -1,6 +1,4 @@
 """Unit tests for production hard-fail on missing crypto keys."""
-import os
-
 import pytest
 
 from hermes.attestation import _load_signing_key
