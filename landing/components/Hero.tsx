@@ -22,19 +22,22 @@ type AuditLine = {
 /* Timestamps show time-only — the date is identical for every event in
  * the stream and would just eat horizontal width inside the desktop
  * ticker column without adding information. */
+/* CFR letters limited to categories classifier.py actually detects:
+ * (A) names, (B) address, (C) dates, (D) phone, (F) email, (G) SSN,
+ * (N) URL, (O) IP. Device IDs (J), biometrics (P), photos (Q) omitted. */
 const AUDIT_LINES: readonly AuditLine[] = [
   { ts: "14:32:01Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(A)", hash: "sha256:a3f8...c291" },
   { ts: "14:32:02Z", event: "VERIFY",     cfr: "45CFR§164.514(b)(2)(i)(B)", hash: "sha256:7b21...e4f0" },
   { ts: "14:32:03Z", event: "CHAIN_LINK", cfr: "45CFR§164.514(b)(2)(i)(C)", hash: "sha256:e09a...8d17" },
-  { ts: "14:32:04Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(J)", hash: "sha256:4d72...91ab" },
-  { ts: "14:32:06Z", event: "SEAL",       cfr: "45CFR§164.514(b)(2)(i)(P)", hash: "sha256:8c54...0e3d" },
-  { ts: "14:32:07Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(Q)", hash: "sha256:b6f1...2a48" },
+  { ts: "14:32:04Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(D)", hash: "sha256:4d72...91ab" },
+  { ts: "14:32:06Z", event: "SEAL",       cfr: "45CFR§164.514(b)(2)(i)(F)", hash: "sha256:8c54...0e3d" },
+  { ts: "14:32:07Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(G)", hash: "sha256:b6f1...2a48" },
   { ts: "14:32:09Z", event: "VERIFY",     cfr: "45CFR§164.514(b)(2)(i)(A)", hash: "sha256:1e9d...5b76" },
-  { ts: "14:32:10Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(B)", hash: "sha256:fa30...c812" },
-  { ts: "14:32:11Z", event: "CHAIN_LINK", cfr: "45CFR§164.514(b)(2)(i)(C)", hash: "sha256:25a7...8e09" },
-  { ts: "14:32:13Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(J)", hash: "sha256:9b4c...d367" },
-  { ts: "14:32:14Z", event: "SEAL",       cfr: "45CFR§164.514(b)(2)(i)(P)", hash: "sha256:6e08...41fc" },
-  { ts: "14:32:16Z", event: "VERIFY",     cfr: "45CFR§164.514(b)(2)(i)(Q)", hash: "sha256:cd17...a59b" },
+  { ts: "14:32:10Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(N)", hash: "sha256:fa30...c812" },
+  { ts: "14:32:11Z", event: "CHAIN_LINK", cfr: "45CFR§164.514(b)(2)(i)(O)", hash: "sha256:25a7...8e09" },
+  { ts: "14:32:13Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(D)", hash: "sha256:9b4c...d367" },
+  { ts: "14:32:14Z", event: "SEAL",       cfr: "45CFR§164.514(b)(2)(i)(F)", hash: "sha256:6e08...41fc" },
+  { ts: "14:32:16Z", event: "VERIFY",     cfr: "45CFR§164.514(b)(2)(i)(G)", hash: "sha256:cd17...a59b" },
 ];
 
 /* Per-event-type accent so the stream reads as live machine output without
@@ -84,21 +87,18 @@ export function Hero() {
         {/* -------------------- LEFT COLUMN -------------------- */}
         <div className="flex flex-col px-6 sm:px-8 lg:px-0">
           <p className="font-mono text-mono text-signal uppercase tracking-[0.1em]">
-            PHI Compliance Infrastructure
+            Verifiable PHI Redaction
           </p>
 
           <h1 className="font-display text-hero text-ink mt-6 sm:mt-8">
-            The audit chain your
-            <br />
-            OCR investigator
-            <br />
-            can actually read.
+            We don&apos;t just redact PHI — we give you tamper-evident proof it happened.
           </h1>
 
           <p className="font-body text-body text-muted mt-6 sm:mt-8 max-w-[55ch]">
-            Hermes produces a per-token, CFR-cited, SHA-256 hash-chained
-            record of every PHI scrubbing decision — inside your environment,
-            never leaving it. Built for MSPs serving HIPAA-covered entities.
+            Hermes redacts PHI in-flight and never stores it — not even
+            encrypted — then seals a cryptographically signed, hash-chained
+            attestation of what was detected and redacted. Built for MSPs
+            serving HIPAA-covered entities.
           </p>
 
           <div className="mt-8 sm:mt-10 flex flex-wrap items-center gap-4">
@@ -117,7 +117,7 @@ export function Hero() {
           </div>
 
           <p className="font-mono text-caption text-muted mt-8">
-            Zero-egress architecture. Data never leaves your environment.
+            Zero-retention · In-flight redaction · Hash-chained attestation receipts
           </p>
         </div>
 
@@ -126,7 +126,7 @@ export function Hero() {
          * viewport), constrained back into the column on desktop. */}
         <div className="flex flex-col">
           <p className="font-mono text-caption text-muted mb-3 px-6 sm:px-8 lg:px-0">
-            Illustrative output — sample audit stream (CFR citations shown are demo format)
+            Illustrative output — sample audit stream (CFR citations limited to categories Hermes detects)
           </p>
           <div className="bg-surface border-y-2 lg:border-2 border-signal">
             {/* window chrome */}
