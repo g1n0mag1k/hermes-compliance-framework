@@ -26,6 +26,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 def _load_vault_key() -> bytes:
     key_hex = os.environ.get("HERMES_VAULT_KEY")
+    env = os.environ.get("HERMES_ENV", "development")
     if key_hex:
         key = bytes.fromhex(key_hex)
         if len(key) != 32:
@@ -34,6 +35,11 @@ def _load_vault_key() -> bytes:
                 f"Got {len(key)} bytes."
             )
         return key
+    if env == "production":
+        raise RuntimeError(
+            "HERMES_VAULT_KEY is required when HERMES_ENV=production. "
+            "Set HERMES_VAULT_KEY to a 64-char hex string (32 bytes)."
+        )
     warnings.warn(
         "HERMES_VAULT_KEY not set — using insecure dev key. "
         "Set HERMES_VAULT_KEY to a 64-char hex string before production.",
