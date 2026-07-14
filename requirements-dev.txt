@@ -4,5 +4,5 @@
 # Verify latest patch on pypi.org before bumping; below are
 # known-stable starting points.
 
-pytest==9.0.3
+pytest==9.1.1
 pytest-cov==6.0.0
