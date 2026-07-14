@@ -13,7 +13,7 @@ const FAQS: readonly FAQItem[] = [
   {
     question: "What happens if Hermes misses a PHI identifier -- a false negative?",
     answer:
-      "No automated de-identification system achieves perfect recall, and Hermes does not claim to. Today Hermes covers 8 of the 18 Safe Harbor identifier categories with high-recall detection, with coverage actively expanding. For any deployment, we recommend treating Hermes as a strong first layer, not a substitute for your own risk assessment or a human review step on high-stakes payloads. The attestation receipt records exactly which categories were checked for a given transaction, so you always know precisely what was and was not covered -- not a vague compliance claim.",
+      "No automated PHI redaction system achieves perfect recall, and Hermes does not claim certified Safe Harbor de-identification or blanket HIPAA compliance. Hermes detects the following categories: person names, dates, organizations, phone numbers, email addresses, URLs, IP addresses, physical addresses/locations, US bank numbers, Social Security numbers, and payment card numbers (Luhn-validated). Treat it as a strong first layer for PHI reduction, not a substitute for your risk assessment or human review on high-stakes payloads. The cryptographically signed attestation receipt records exactly which of those categories were flagged and redacted for a given transaction — tamper-evident proof of what happened, not a vague compliance claim.",
   },
   {
     question: "Why not just use an enterprise LLM contract with a BAA already in place?",
@@ -38,7 +38,7 @@ const FAQS: readonly FAQItem[] = [
   {
     question: "What happens to data if we stop using Hermes?",
     answer:
-      "Hermes does not retain PHI after processing -- the zero-egress, zero-data-retention architecture means there is no PHI store to delete when a pilot or contract ends. Hash-chained attestation receipts (which contain metadata about what was detected, not the PHI itself) remain in your environment and are yours to keep, export, or discard.",
+      "PHI is redacted in-flight and never stored, not even encrypted — so there is no PHI store to delete when a pilot or contract ends. Hash-chained attestation receipts (which contain metadata about what was detected, not the PHI itself) remain in your environment and are yours to keep, export, or discard.",
   },
 ];
 
