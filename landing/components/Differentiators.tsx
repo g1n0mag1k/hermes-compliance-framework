@@ -1,8 +1,8 @@
 /* ---------------------------------------------------------------------------
- * Differentiators -- three structural advantages framed as an argument, not
+ * Differentiators -- structural advantages framed as an argument, not
  * a feature list. Each differentiator is a full-width block with:
  *
- *   - A terminal-style index prefix (01 / 02 / 03) in text-signal
+ *   - A terminal-style index prefix (01 / 02 / 03 / 04) in text-signal
  *   - A bold category label naming the advantage
  *   - A one-line verdict in text-ink -- the claim in its sharpest form
  *   - Body copy that makes the argument precisely
@@ -27,17 +27,17 @@ type Differentiator = {
 const DIFFERENTIATORS: readonly Differentiator[] = [
   {
     index: "01",
-    label: "Zero-Egress Architecture",
-    verdict: "Your PHI never leaves your environment. Every competitor's does.",
+    label: "Cryptographically Signed Attestation",
+    verdict: "We don't just redact PHI — we give you tamper-evident proof it happened.",
     body:
-      "Most cloud-based PHI classifiers -- regardless of vendor -- transit data through external infrastructure to run detection. That transit is the exposure: once PHI crosses your environment's boundary to reach a hosted classifier, a zero-egress claim no longer holds. Hermes runs entirely inside the customer's environment. No external classifier. No data in transit. That architecture is what makes a zero-egress attestation accurate rather than aspirational.",
+      "Every scrubbing pass emits a signed receipt linked into a hash chain. verify_chain checks signature integrity, previous-hash links, and sequential positions — so an investigator can confirm the record was not forged or truncated after the fact.",
   },
   {
     index: "02",
-    label: "Deterministic, CFR-Cited Audit Trail",
-    verdict: "Every token. Every citation. Every block. Cryptographically sealed.",
+    label: "Zero-Retention, In-Flight Redaction",
+    verdict: "PHI is redacted in-flight and never stored — not even encrypted.",
     body:
-      "ML classifiers are powerful and non-deterministic. The same input can produce different outputs on different runs. There is no per-token record. There is no CFR citation attached to each decision. There is no cryptographic proof the log was not tampered with after the fact. Hermes produces a SHA-256 hash-chained, per-token, CFR-cited record of every single scrubbing decision. An OCR investigator can verify it byte-by-byte. No competitor -- open-source or commercial -- can make that statement.",
+      "Detection and redaction run inside your environment. There is no PHI datastore to breach, export, or delete when an engagement ends. Attestation receipts keep metadata about categories detected/redacted — not the PHI itself. Attestation receipts record only the categories detected and redacted — never the PHI itself. There is no PHI datastore to breach, subpoena, or clean up when an engagement ends.",
   },
   {
     index: "03",
@@ -45,6 +45,13 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
     verdict: "The customers who need this most are the ones no competitor serves.",
     body:
       "Nightfall costs $20,000-$60,000 per year and requires enterprise procurement, a security team, and a multi-month sales cycle. The 10-person billing company in Knoxville, the regional clinic, the MSP managing 15 HIPAA-covered clients -- none of them will ever see a Nightfall contract. Hermes is priced, packaged, and deployed for exactly those customers. Self-hostable. Operational in a week. No enterprise contract, no security team required.",
+  },
+  {
+    index: "04",
+    label: "Built for MSP Delivery",
+    verdict: "One assessment. Repeatable across your entire book.",
+    body:
+      "The $750 PHI AI Readiness Assessment reviews your clients' AI data flows, maps PHI exposure points, and delivers a written report in 5 business days — no live patient data required. Credits in full toward a production pilot. Built for MSPs who need to answer 'are we HIPAA-safe with AI?' before their clients ask it first.",
   },
 ];
 
@@ -89,7 +96,7 @@ export function Differentiators() {
           Structural differentiation
         </p>
         <h2 className="font-display text-h2 text-ink mt-8 max-w-[26ch]">
-          Three things competitors
+          Four things competitors
           <br />
           cannot replicate without
           <br />
@@ -107,9 +114,9 @@ export function Differentiators() {
         <div className="border-t-2 border-border pt-10 mt-2">
           <p className="font-mono text-mono text-muted max-w-[72ch]">
             <span className="text-signal">{"->"}</span>{" "}
-            No funded competitor produces token-level, CFR-cited,
-            cryptographically-signed scrubbing decision records.
-            That is not a roadmap gap. It is an architectural one.
+            No other tool in this space produces cryptographically signed,
+            hash-chained records of every PHI redaction decision — tamper-evident
+            proof your AI pipeline handled patient data correctly.
           </p>
         </div>
 
