@@ -4,7 +4,7 @@ from dataclasses import asdict
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from hermes.attestation import ATTESTATION_CHAIN, ComplianceReceipt
 from hermes.webhooks import dispatch_webhook
@@ -32,7 +32,7 @@ app = FastAPI(
 API_KEY_ENV_VAR = "HERMES_API_KEY"
 
 class ScrubRequest(BaseModel):
-    payload: str
+    payload: str = Field(..., max_length=100_000)
 
 
 class ComplianceReceiptOut(BaseModel):

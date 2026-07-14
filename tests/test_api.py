@@ -110,3 +110,15 @@ def test_sequential_scrub_calls_produce_hash_chained_receipts():
     assert _verify_receipt_dict(receipt_one)
     assert _verify_receipt_dict(receipt_two)
     assert ATTESTATION_CHAIN.verify_chain()
+
+
+def test_over_limit_payload_rejected():
+    """Oversized ScrubRequest.payload must be rejected before scrubbing (422)."""
+    over_limit = "x" * 100_001
+    response = client.post(
+        "/v1/scrub",
+        headers={"X-API-Key": os.environ["HERMES_API_KEY"]},
+        json={"payload": over_limit},
+    )
+    assert 400 <= response.status_code < 500
+    assert response.status_code == 422

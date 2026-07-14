@@ -6,14 +6,34 @@ import hmac
 import json
 import os
 import threading
+import warnings
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 def _load_signing_key() -> bytes:
     key_hex = os.environ.get("HERMES_SIGNING_KEY")
+    env = os.environ.get("HERMES_ENV", "development")
     if key_hex:
-        return bytes.fromhex(key_hex)
+        try:
+            return bytes.fromhex(key_hex)
+        except ValueError as exc:
+            if env == "production":
+                raise RuntimeError(
+                    "HERMES_SIGNING_KEY is invalid when HERMES_ENV=production. "
+                    "Set HERMES_SIGNING_KEY to a valid hex string."
+                ) from exc
+            raise
+    if env == "production":
+        raise RuntimeError(
+            "HERMES_SIGNING_KEY is required when HERMES_ENV=production. "
+            "Set HERMES_SIGNING_KEY to a secure hex string."
+        )
+    warnings.warn(
+        "HERMES_SIGNING_KEY not set — using insecure dev key. "
+        "Set HERMES_SIGNING_KEY to a hex string before production.",
+        stacklevel=2,
+    )
     return hashlib.sha256(b"hermes-dev-signing-key-not-for-production").digest()
 
 SIGNING_KEY: bytes = _load_signing_key()
