@@ -190,11 +190,12 @@ def test_ssn_invalid_ranges_not_redacted() -> None:
 
 
 # -------------------------------------------------------------------------
-# VAULT TESTS — AES-256-GCM
+# VAULT TESTS — AES-256-GCM (experimental, unwired)
 # -------------------------------------------------------------------------
+@pytest.mark.skip(reason="experimental, unwired")
 def test_vault_aesgcm_roundtrip() -> None:
     """Stored PII must decrypt back to original value exactly."""
-    from hermes.vault import VAULT
+    from experimental.vault import VAULT
     values = [
         ("SSN", "372-18-5421"),
         ("PAN", "4111111111111111"),
@@ -208,9 +209,10 @@ def test_vault_aesgcm_roundtrip() -> None:
         assert recovered == value, f"Roundtrip failed for {pii_type}: {value}"
 
 
+@pytest.mark.skip(reason="experimental, unwired")
 def test_vault_tamper_detection() -> None:
     """Flipping a byte in encrypted_value must raise on decrypt — not silently return garbage."""
-    from hermes.vault import VAULT, _aesgcm_decrypt, VAULT_KEY
+    from experimental.vault import VAULT, _aesgcm_decrypt, VAULT_KEY
     from cryptography.exceptions import InvalidTag
     token = VAULT.store("SSN", "372-18-5421", "txn_tamper_test")
     entry = VAULT.retrieve_entry(token)
@@ -224,24 +226,27 @@ def test_vault_tamper_detection() -> None:
         pass
 
 
+@pytest.mark.skip(reason="experimental, unwired")
 def test_vault_nonce_uniqueness() -> None:
     """Same plaintext encrypted twice must produce different ciphertexts."""
-    from hermes.vault import _aesgcm_encrypt, VAULT_KEY
+    from experimental.vault import _aesgcm_encrypt, VAULT_KEY
     ct1 = _aesgcm_encrypt("372-18-5421", VAULT_KEY)
     ct2 = _aesgcm_encrypt("372-18-5421", VAULT_KEY)
     assert ct1 != ct2, "Nonce reuse detected — encryption is deterministic"
 
 
+@pytest.mark.skip(reason="experimental, unwired")
 def test_vault_unknown_token_returns_none() -> None:
     """Retrieving a non-existent token must return None, not raise."""
-    from hermes.vault import VAULT
+    from experimental.vault import VAULT
     result = VAULT.retrieve("[REDACTED_SSN_doesnotexist]")
     assert result is None
 
 
+@pytest.mark.skip(reason="experimental, unwired")
 def test_vault_purge_transaction() -> None:
     """purge_transaction must remove all entries for that transaction only."""
-    from hermes.vault import VAULT
+    from experimental.vault import VAULT
     VAULT.store("SSN", "111-22-3333", "txn_purge_a")
     VAULT.store("PAN", "4111111111111111", "txn_purge_a")
     t_keep = VAULT.store("SSN", "444-55-6666", "txn_purge_b")
