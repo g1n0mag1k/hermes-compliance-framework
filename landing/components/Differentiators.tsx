@@ -27,17 +27,17 @@ type Differentiator = {
 const DIFFERENTIATORS: readonly Differentiator[] = [
   {
     index: "01",
-    label: "Zero-Egress Architecture",
-    verdict: "Your PHI never leaves your environment. Every competitor's does.",
+    label: "Cryptographically Signed Attestation",
+    verdict: "We don't just redact PHI — we give you tamper-evident proof it happened.",
     body:
-      "Most cloud-based PHI classifiers -- regardless of vendor -- transit data through external infrastructure to run detection. That transit is the exposure: once PHI crosses your environment's boundary to reach a hosted classifier, a zero-egress claim no longer holds. Hermes runs entirely inside the customer's environment. No external classifier. No data in transit. That architecture is what makes a zero-egress attestation accurate rather than aspirational.",
+      "Every scrubbing pass emits a signed receipt linked into a hash chain. verify_chain checks signature integrity, previous-hash links, and sequential positions — so an investigator can confirm the record was not forged or truncated after the fact.",
   },
   {
     index: "02",
-    label: "Deterministic, CFR-Cited Audit Trail",
-    verdict: "Every token. Every citation. Every block. Cryptographically sealed.",
+    label: "Zero-Retention, In-Flight Redaction",
+    verdict: "PHI is redacted in-flight and never stored — not even encrypted.",
     body:
-      "ML classifiers are powerful and non-deterministic. The same input can produce different outputs on different runs. There is no per-token record. There is no CFR citation attached to each decision. There is no cryptographic proof the log was not tampered with after the fact. Hermes produces a SHA-256 hash-chained, per-token, CFR-cited record of every single scrubbing decision. An OCR investigator can verify it byte-by-byte. No competitor -- open-source or commercial -- can make that statement.",
+      "Detection and redaction run inside your environment. There is no PHI datastore to breach, export, or delete when an engagement ends. Attestation receipts keep metadata about categories detected/redacted — not the PHI itself.",
   },
   {
     index: "03",
