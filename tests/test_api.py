@@ -5,7 +5,7 @@ import os
 
 from fastapi.testclient import TestClient
 
-from hermes.api import app
+from hermes.api import API_KEY_ENV_VAR, app
 from hermes.attestation import ATTESTATION_CHAIN, SIGNING_KEY
 
 os.environ.setdefault("HERMES_API_KEY", "unit-test-key")
@@ -42,6 +42,19 @@ def test_unauthorized_access_blocked():
         json={"payload": "Test"}
     )
     assert response.status_code == 401
+
+
+def test_rejects_when_env_var_unset(monkeypatch):
+    """Reject authenticated-looking requests when HERMES_API_KEY is unset."""
+    monkeypatch.delenv(API_KEY_ENV_VAR, raising=False)
+    local_client = TestClient(app)
+    response = local_client.post(
+        "/v1/scrub",
+        headers={"x-api-key": "anything"},
+        json={"payload": "Test"},
+    )
+    assert response.status_code == 401
+
 
 def test_successful_payload_scrub():
     """Verify end-to-end routing through the REST layer."""
