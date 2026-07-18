@@ -56,6 +56,28 @@ def test_rejects_when_env_var_unset(monkeypatch):
     assert response.status_code == 401
 
 
+def test_rejects_wrong_key(monkeypatch):
+    monkeypatch.setenv(API_KEY_ENV_VAR, "correct-key-123")
+    local_client = TestClient(app)
+    response = local_client.post(
+        "/v1/scrub",
+        headers={"x-api-key": "wrong-key-456"},
+        json={"payload": "Test"},
+    )
+    assert response.status_code == 401
+
+
+def test_accepts_correct_key(monkeypatch):
+    monkeypatch.setenv(API_KEY_ENV_VAR, "correct-key-123")
+    local_client = TestClient(app)
+    response = local_client.post(
+        "/v1/scrub",
+        headers={"x-api-key": "correct-key-123"},
+        json={"payload": "Test"},
+    )
+    assert response.status_code != 401
+
+
 def test_successful_payload_scrub():
     """Verify end-to-end routing through the REST layer."""
     test_payload = "Patient SSN is 123-45-6789. Card 4242424242424242 charged."
