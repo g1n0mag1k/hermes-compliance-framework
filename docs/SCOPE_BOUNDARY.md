@@ -94,3 +94,47 @@ pipelines. For complete Safe Harbor de-identification, combine Hermes with:
 This document is maintained alongside hermes/classifier.py. When coverage
 changes, both DECLARED_SCOPE in the classifier and this document must be
 updated together.
+
+---
+
+## Known Architectural Limitations
+
+These are gaps that exist beyond the uncovered CFR categories above.
+They are documented here so the boundary of evidence is fully explicit.
+
+### 1. Quasi-identifier combinations
+
+Hermes redacts each identifier in isolation. It has no cross-field awareness.
+A payload containing 'female patient, born 1962, ZIP 37931' may pass clean
+even though that combination re-identifies a large fraction of individuals.
+The combination of gender, birth date, and postal code re-identifies between
+63-87% of the US population. The receipt cannot represent this risk.
+This is an architectural limitation of token-level redaction, not a bug.
+Mitigation: treat Hermes as a first layer and apply linkage-scenario analysis
+for high-sensitivity payloads.
+
+### 2. NER model not trained on clinical text
+
+Hermes uses spaCy en_core_web_sm — a general English model, not a clinical
+NER model. Clinical names, rare diseases, hospital codes, and physician names
+in clinical context will have lower recall than a model trained on i2b2/n2c2
+de-identification datasets. The upgrade path is scispaCy or a fine-tuned
+clinical NER model. This affects categories A (names), C (dates), and B
+(geographic subdivisions) in clinical free-text.
+
+### 3. Indirect identifiers not in scope
+
+A de-identified note may satisfy all 18 Safe Harbor categories while still
+being uniquely re-identifiable from context — rare diagnoses, unusual
+occupations, narrative events, family relationships, or combinations of
+quasi-identifiers. Hermes makes no claim about indirect identifiers.
+The receipt field zero_pii_egress_confirmed: true means no direct identifiers
+in declared scope were detected — not that re-identification is impossible.
+
+### 4. Age over 89 (added in v1.1.0)
+
+Safe Harbor requires ages over 89 be aggregated into a single 90+ category.
+REGEX_AGE_OVER_89 handles common English patterns (94 years old, age 91,
+92-year-old, aged 90). Unusual formats or non-English age expressions may
+not be caught. The regex catches ages 90-199 — values above 120 are
+clinically implausible but are redacted to avoid false negatives.

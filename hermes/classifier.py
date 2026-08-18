@@ -30,6 +30,7 @@ CFR_CITATION_MAP = {
     "HIPAA_PHI_ADDRESS": "45 CFR §164.514(b)(2)(i)(B)",
     "PCI_PAN": "PCI-DSS (not a HIPAA Safe Harbor identifier)",
     "HIPAA_PHI_MRN": "45 CFR §164.514(b)(2)(i)(H)",
+    "HIPAA_PHI_AGE_89": "45 CFR §164.514(b)(2)(i)(C)",
     "HIPAA_PHI_FAX": "45 CFR §164.514(b)(2)(i)(E)",
     "HIPAA_PHI_HPBN": "45 CFR §164.514(b)(2)(i)(I)",
     "HIPAA_PHI_ACCOUNT": "45 CFR §164.514(b)(2)(i)(J)",
@@ -104,6 +105,15 @@ REGEX_HPBN = re.compile(
 REGEX_ACCOUNT = re.compile(
     r'\b(?:account\s+(?:number|no\.?|#|num)|acct\.?\s*(?:number|no\.?|#)?|bank\s+account)'
     r'[\s:#]*(\d{6,17})\b',
+    re.IGNORECASE
+)
+
+# (C) Age over 89 — Safe Harbor requires ages 90+ be aggregated.
+# Catches: '94 years old', 'age 91', '92-year-old', 'aged 90'
+REGEX_AGE_OVER_89 = re.compile(
+    r'\b(9[0-9]|1[0-9]{2})'
+    r'(?:\s*[-\u2013]?\s*year(?:s)?(?:\s*[-\u2013]\s*old)?|\s+years?\s+old|\s+y/?o)\b'
+    r'|\bage[d]?\s*:?\s*(9[0-9]|1[0-9]{2})\b',
     re.IGNORECASE
 )
 
@@ -403,6 +413,13 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     detectors_executed: Dict[str, bool] = {}
 
     # 1. REGEX PASSES
+    def age_over_89_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_AGE_89")
+        _increment_flag(redacted_flags, "HIPAA_PHI_AGE_89")
+        return "[REDACTED_AGE_OVER_89]"
+    clean_text = REGEX_AGE_OVER_89.sub(age_over_89_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(C) age>89"] = True
+
     def hpbn_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_HPBN")
         _increment_flag(redacted_flags, "HIPAA_PHI_HPBN")
