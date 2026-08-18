@@ -51,7 +51,7 @@ export function AuditChain() {
     <section id="audit-chain" data-section="audit-chain" className="px-6 sm:px-8 lg:px-10 py-section">
       <div className="w-full max-w-content mx-auto">
         <p className="font-mono text-mono text-signal uppercase tracking-[0.1em]">Sample audit chain output</p>
-        <p className="font-mono text-caption text-muted mt-2">Illustrative output — not live product data. CFR citations shown are sample format; per-token citations are actively expanding.</p>
+        <p className="font-mono text-caption text-muted mt-2">Illustrative output — not live product data. CFR citations shown are sample format; Hermes currently covers 13 of 18 Safe Harbor identifier categories.</p>
         <h2 className="font-display text-h2 text-ink mt-8 max-w-[28ch]">Every scrubbing decision.<br />Hash-chained.<br />Audit-ready.</h2>
         <p className="font-body text-body text-muted mt-6 max-w-[60ch]">Illustrative sample of Hermes&apos; attestation chain. Hermes detects and redacts the following categories: person names, dates, organizations, phone numbers, email addresses, URLs, IP addresses, physical addresses/locations, US bank numbers, Social Security numbers, and payment card numbers (Luhn-validated). Each redaction is sealed into a SHA-256 hash-chained, cryptographically signed receipt inside your environment — so you get PHI reduction with verifiable proof, not a black box. This is not a claim of certified HIPAA Safe Harbor de-identification.</p>
 
