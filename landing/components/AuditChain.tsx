@@ -24,7 +24,7 @@ const EVENT_COLOR: Record<AuditEvent, string> = {
 const CHAIN: readonly ChainEntry[] = [
   { block: "#000001", ts: "14:32:01Z", event: "REDACT",     field: "PATIENT_NAME", cfr: "45CFR§164.514(b)(2)(i)(A)", prev: "0000000000000000",         hash: "sha256:a3f8b291c7e402d1f95a6b3c8e1d4f72a0b5c9e3d6f8a2b4c7e0d3f6a9b2c5e8" },
   { block: "#000002", ts: "14:32:02Z", event: "REDACT",     field: "DATE_OF_BIRTH", cfr: "45CFR§164.514(b)(2)(i)(C)", prev: "sha256:a3f8b291c7e402d1", hash: "sha256:7b21e4f0d8c395a2b6f1e8d4c7a0b3e6f9c2d5a8b1e4f7a0c3d6e9b2c5f8a1d4" },
-  { block: "#000003", ts: "14:32:03Z", event: "REDACT",     field: "SSN",           cfr: "45CFR§164.514(b)(2)(i)(J)", prev: "sha256:7b21e4f0d8c395a2", hash: "sha256:e09a8d17f3b4c6e1a2d5f8b0c3e6a9d2f5b8c1e4a7d0f3b6c9e2a5d8f1b4c7e0" },
+  { block: "#000003", ts: "14:32:03Z", event: "REDACT",     field: "SSN",           cfr: "45CFR§164.514(b)(2)(i)(G)", prev: "sha256:7b21e4f0d8c395a2", hash: "sha256:e09a8d17f3b4c6e1a2d5f8b0c3e6a9d2f5b8c1e4a7d0f3b6c9e2a5d8f1b4c7e0" },
   { block: "#000004", ts: "14:32:04Z", event: "CHAIN_LINK", field: "BLOCK_SEAL",    cfr: "45CFR§164.312(b)",           prev: "sha256:e09a8d17f3b4c6e1", hash: "sha256:4d7291ab8c3e6f0a1b4d7e0c3f6a9b2e5d8f1a4c7e0b3d6f9a2c5e8b1d4f7a0c3" },
   { block: "#000005", ts: "14:32:07Z", event: "SEAL",       field: "PAYLOAD_SEAL",  cfr: "45CFR§164.312(b)",           prev: "sha256:4d7291ab8c3e6f0a", hash: "sha256:b6f12a48e3c7d0f5a8b2e5d9c1f4a7b0e3d6f9c2a5e8b1d4f7a0c3e6b9d2f5a8b1" },
 ];
@@ -53,7 +53,7 @@ export function AuditChain() {
         <p className="font-mono text-mono text-signal uppercase tracking-[0.1em]">Sample audit chain output</p>
         <p className="font-mono text-caption text-muted mt-2">Illustrative output — not live product data. CFR citations shown are sample format; per-token citations are actively expanding.</p>
         <h2 className="font-display text-h2 text-ink mt-8 max-w-[28ch]">Every scrubbing decision.<br />Hash-chained.<br />Audit-ready.</h2>
-        <p className="font-body text-body text-muted mt-6 max-w-[60ch]">Illustrative sample of Hermes&apos; audit chain format. Today Hermes detects SSN, payment cards, and names, dates, and organizations via spaCy NER — high-recall detection on core identifier types, with transparent per-category coverage. Each redaction is sealed into a SHA-256 hash chain inside your environment. No external processor. No black box.</p>
+        <p className="font-body text-body text-muted mt-6 max-w-[60ch]">Illustrative sample of Hermes&apos; attestation chain. Hermes detects and redacts the following categories: person names, dates, organizations, phone numbers, email addresses, URLs, IP addresses, physical addresses/locations, US bank numbers, Social Security numbers, and payment card numbers (Luhn-validated). Each redaction is sealed into a SHA-256 hash-chained, cryptographically signed receipt inside your environment — so you get PHI reduction with verifiable proof, not a black box. This is not a claim of certified HIPAA Safe Harbor de-identification.</p>
 
         <div className="mt-16 grid gap-6 lg:grid-cols-2">
           <div className="flex flex-col">
@@ -99,7 +99,7 @@ export function AuditChain() {
         </div>
 
         <div className="mt-16 border-t-2 border-border pt-10">
-          <p className="font-body text-body text-muted max-w-[60ch]">Hash-chained audit records are generated inside your environment for every payload Hermes processes. Safe Harbor-aligned documentation with expanding identifier coverage.</p>
+          <p className="font-body text-body text-muted max-w-[60ch]">Hash-chained attestation records are generated inside your environment for every payload Hermes processes. PHI is redacted in-flight and never stored.</p>
           <a href="#pilot" className="mt-6 inline-block bg-signal text-void font-display font-bold px-7 py-3.5 border-2 border-signal hover:bg-ink hover:border-ink transition-colors">Request a Pilot</a>
         </div>
       </div>
