@@ -1,3 +1,4 @@
+import hmac
 import os
 import uuid
 from dataclasses import asdict
@@ -87,7 +88,7 @@ def _issue_scrub_attestation(
 def verify_api_key(x_api_key: str = Header(...)):
     """Simulates multi-tenant RMM authentication for MSP pilot deployments."""
     expected_key = os.environ.get(API_KEY_ENV_VAR)
-    if not expected_key or x_api_key != expected_key:
+    if not expected_key or not hmac.compare_digest(x_api_key, expected_key):
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing API Key")
     return x_api_key
 
