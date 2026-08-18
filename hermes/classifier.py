@@ -31,6 +31,9 @@ CFR_CITATION_MAP = {
     "PCI_PAN": "PCI-DSS (not a HIPAA Safe Harbor identifier)",
     "HIPAA_PHI_MRN": "45 CFR §164.514(b)(2)(i)(H)",
     "HIPAA_PHI_FAX": "45 CFR §164.514(b)(2)(i)(E)",
+    "HIPAA_PHI_HPBN": "45 CFR §164.514(b)(2)(i)(I)",
+    "HIPAA_PHI_ACCOUNT": "45 CFR §164.514(b)(2)(i)(J)",
+    "HIPAA_PHI_VIN": "45 CFR §164.514(b)(2)(i)(L)",
 }
 
 # -------------------------------------------------------------------------
@@ -48,6 +51,37 @@ REGEX_MRN = re.compile(
 REGEX_FAX = re.compile(
     r'\b(?:fax|facsimile)[\s:#]*'
     r'(\+?1?[\s.\-]?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})\b',
+    re.IGNORECASE
+)
+
+# (I) Health plan beneficiary numbers — Medicare Beneficiary ID (MBI),
+# legacy HICNs, and generic beneficiary/member/plan/subscriber ID patterns.
+# MBI format: 11 chars, may appear with hyphens (1EG4-TE5-MK72).
+REGEX_HPBN = re.compile(
+    r'\b(?:beneficiary(?:\s+id)?|member\s+id|plan\s+(?:id|number|no\.?)|'
+    r'subscriber\s+(?:id|number|no\.?)|hicn|mbi)'
+    r'[\s:#]*([A-Z0-9][A-Z0-9\-]{6,13}[A-Z0-9])\b'
+    r'|\b([1-9][A-HJ-NP-Z][A-HJ-NP-Z0-9]\d[A-HJ-NP-Z][A-HJ-NP-Z0-9]\d[A-HJ-NP-Z]{2}\d{2})\b',
+    re.IGNORECASE
+)
+
+# (J) Account numbers — catches bank/financial account numbers when
+# preceded by account context keywords. 6-17 digits covers most formats.
+REGEX_ACCOUNT = re.compile(
+    r'\b(?:account\s+(?:number|no\.?|#|num)|acct\.?\s*(?:number|no\.?|#)?|bank\s+account)'
+    r'[\s:#]*(\d{6,17})\b',
+    re.IGNORECASE
+)
+
+# (L) Vehicle identifiers — VIN is exactly 17 chars: 8 VIN chars, 1 check
+# digit (0-9 or X), 8 VIS chars. All positions use [A-HJ-NPR-Z0-9] (no I/O/Q).
+# Uses lookaround boundaries instead of \b (alphanum chars break \b).
+REGEX_VIN = re.compile(
+    r'(?<![A-HJ-NPR-Z0-9])'
+    r'[A-HJ-NPR-Z0-9]{8}'
+    r'[0-9X]'
+    r'[A-HJ-NPR-Z0-9]{8}'
+    r'(?![A-HJ-NPR-Z0-9])',
     re.IGNORECASE
 )
 
@@ -330,6 +364,24 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     clean_text = text
 
     # 1. REGEX PASSES
+    def hpbn_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_HPBN")
+        _increment_flag(redacted_flags, "HIPAA_PHI_HPBN")
+        return "[REDACTED_HPBN]"
+    clean_text = REGEX_HPBN.sub(hpbn_replacer, clean_text)
+
+    def account_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_ACCOUNT")
+        _increment_flag(redacted_flags, "HIPAA_PHI_ACCOUNT")
+        return "[REDACTED_ACCOUNT]"
+    clean_text = REGEX_ACCOUNT.sub(account_replacer, clean_text)
+
+    def vin_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_VIN")
+        _increment_flag(redacted_flags, "HIPAA_PHI_VIN")
+        return "[REDACTED_VIN]"
+    clean_text = REGEX_VIN.sub(vin_replacer, clean_text)
+
     def mrn_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_MRN")
         _increment_flag(redacted_flags, "HIPAA_PHI_MRN")
