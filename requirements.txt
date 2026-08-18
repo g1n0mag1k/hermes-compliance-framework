@@ -6,8 +6,8 @@
 # only at this phase because no production customer is consuming this
 # build yet. They are not acceptable post-pilot.
 
-spacy==3.8.14
-presidio-analyzer==2.2.363
+spacy==3.8.15
+presidio-analyzer==2.2.364
 cryptography>=49.0.0
 streamlit>=1.58.0
 pydantic>=2.13.4
