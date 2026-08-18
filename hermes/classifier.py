@@ -1,4 +1,5 @@
 import re
+import unicodedata
 import spacy
 import threading
 from pydantic import BaseModel, Field
@@ -31,6 +32,7 @@ CFR_CITATION_MAP = {
     "PCI_PAN": "PCI-DSS (not a HIPAA Safe Harbor identifier)",
     "HIPAA_PHI_MRN": "45 CFR §164.514(b)(2)(i)(H)",
     "HIPAA_PHI_AGE_89": "45 CFR §164.514(b)(2)(i)(C)",
+    "HIPAA_PHI_GPS": "45 CFR §164.514(b)(2)(i)(B)",
     "HIPAA_PHI_FAX": "45 CFR §164.514(b)(2)(i)(E)",
     "HIPAA_PHI_HPBN": "45 CFR §164.514(b)(2)(i)(I)",
     "HIPAA_PHI_ACCOUNT": "45 CFR §164.514(b)(2)(i)(J)",
@@ -114,6 +116,21 @@ REGEX_AGE_OVER_89 = re.compile(
     r'\b(9[0-9]|1[0-9]{2})'
     r'(?:\s*[-\u2013]?\s*year(?:s)?(?:\s*[-\u2013]\s*old)?|\s+years?\s+old|\s+y/?o)\b'
     r'|\bage[d]?\s*:?\s*(9[0-9]|1[0-9]{2})\b',
+    re.IGNORECASE
+)
+
+# (B) GPS coordinates — latitude/longitude in decimal or DMS format.
+# Catches: '35.9606, -83.9207', '35.9606° N, 83.9207° W',
+# '35°57'38"N 83°55'15"W', lat: 35.9606 lon: -83.9207
+REGEX_GPS = re.compile(
+    r'(?:lat(?:itude)?\s*[=:]?\s*|lon(?:gitude)?\s*[=:]?\s*)'
+    r'[-+]?\d{1,3}\.\d+'
+    r'|[-+]?\d{1,3}\.\d+\s*[°]?\s*[NSns]\s*[,/]?\s*'
+    r'[-+]?\d{1,3}\.\d+\s*[°]?\s*[EWew]'
+    r'|\b\d{1,3}[°°]\s*\d{1,2}[\'’]\s*\d{1,2}(?:\.\d+)?["\u201d]?\s*[NSns]'
+    r'\s*[,/]?\s*\d{1,3}[°°]\s*\d{1,2}[\'’]\s*\d{1,2}(?:\.\d+)?["\u201d]?\s*[EWew]\b'
+    r'|(?:location|loc|coords?|coordinates?)\s*[=:,]?\s*'
+    r'[-+]?\d{1,3}\.\d{4,}\s*,\s*[-+]?\d{1,3}\.\d{4,}',
     re.IGNORECASE
 )
 
@@ -406,6 +423,16 @@ def _apply_span_redactions(
 # GLOBAL THREAD LOCK & ORCHESTRATOR
 # -------------------------------------------------------------------------
 def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
+    # Unicode normalization — NFKC folds homoglyphs, fullwidth chars,
+    # and compatibility variants before any detection pass.
+    # Prevents evasion via Cyrillic lookalikes, Unicode dashes, etc.
+    text = unicodedata.normalize('NFKC', text)
+    # Explicit dash normalization — NFKC does not fold Unicode dashes
+    # to ASCII hyphen. Normalize all dash variants so SSN/phone/date
+    # regex patterns work correctly against obfuscated input.
+    _UNICODE_DASHES = '\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u2012\ufe58\ufe63\uff0d'
+    for _dash in _UNICODE_DASHES:
+        text = text.replace(_dash, '-')
     original_char_count = len(text)
     flags: Dict[str, FlagEntry] = {}
     redacted_flags: Dict[str, FlagEntry] = {}
@@ -413,6 +440,13 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     detectors_executed: Dict[str, bool] = {}
 
     # 1. REGEX PASSES
+    def gps_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_GPS")
+        _increment_flag(redacted_flags, "HIPAA_PHI_GPS")
+        return "[REDACTED_GPS]"
+    clean_text = REGEX_GPS.sub(gps_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(B) GPS"] = True
+
     def age_over_89_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_AGE_89")
         _increment_flag(redacted_flags, "HIPAA_PHI_AGE_89")

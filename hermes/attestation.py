@@ -52,6 +52,7 @@ class ComplianceReceipt:
     payload_char_count_out: int
     chars_removed: int
     zero_pii_egress_confirmed: bool
+    zero_pii_egress_scope_note: str
     downstream_target: Optional[str]
     previous_receipt_hash: str
     receipt_hash: str
@@ -117,6 +118,7 @@ class AttestationChain:
                 "payload_char_count_out": char_count_out,
                 "chars_removed": abs(char_count_in - char_count_out),
                 "zero_pii_egress_confirmed": zero_egress,
+                "zero_pii_egress_scope_note": "Confirmed within declared_scope only. evidence_incomplete_categories were not checked.",
                 "downstream_target": downstream_target,
                 "previous_receipt_hash": prev_hash,
                 "chain_position": position,
@@ -138,6 +140,7 @@ class AttestationChain:
                 payload_char_count_out=char_count_out,
                 chars_removed=abs(char_count_in - char_count_out),
                 zero_pii_egress_confirmed=zero_egress,
+                zero_pii_egress_scope_note="Confirmed within declared_scope only. evidence_incomplete_categories were not checked.",
                 downstream_target=downstream_target,
                 previous_receipt_hash=prev_hash,
                 chain_position=position,

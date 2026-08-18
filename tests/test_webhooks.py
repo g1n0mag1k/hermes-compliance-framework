@@ -28,6 +28,7 @@ def _sample_receipt() -> ComplianceReceipt:
         payload_char_count_out=80,
         chars_removed=20,
         zero_pii_egress_confirmed=True,
+        zero_pii_egress_scope_note="Confirmed within declared_scope only. evidence_incomplete_categories were not checked.",
         downstream_target=None,
         previous_receipt_hash="genesis_hash",
         receipt_hash="receipt_hash_abc",

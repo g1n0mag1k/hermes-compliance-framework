@@ -48,6 +48,7 @@ class ComplianceReceiptOut(BaseModel):
     payload_char_count_out: int
     chars_removed: int
     zero_pii_egress_confirmed: bool
+    zero_pii_egress_scope_note: str
     downstream_target: Optional[str]
     previous_receipt_hash: str
     receipt_hash: str
