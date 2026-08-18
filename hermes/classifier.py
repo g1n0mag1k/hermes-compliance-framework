@@ -29,6 +29,8 @@ CFR_CITATION_MAP = {
     "HIPAA_PHI_IP": "45 CFR §164.514(b)(2)(i)(O)",
     "HIPAA_PHI_ADDRESS": "45 CFR §164.514(b)(2)(i)(B)",
     "PCI_PAN": "PCI-DSS (not a HIPAA Safe Harbor identifier)",
+    "HIPAA_PHI_MRN": "45 CFR §164.514(b)(2)(i)(H)",
+    "HIPAA_PHI_FAX": "45 CFR §164.514(b)(2)(i)(E)",
 }
 
 # -------------------------------------------------------------------------
@@ -36,6 +38,18 @@ CFR_CITATION_MAP = {
 # -------------------------------------------------------------------------
 REGEX_SSN = re.compile(r'\b(?!(?:000|666|9\d{2}))([0-8]\d{2})([-. ])(?!00)(\d{2})\2(?!0000)(\d{4})\b')
 REGEX_PAN = re.compile(r'\b(?:\d[ -]*?){13,19}\b')
+
+REGEX_MRN = re.compile(
+    r'\b(?:MRN|Medical\s+Record\s+(?:Number|No\.?|#)|Patient\s+(?:ID|Number|No\.?))'
+    r'[\s:#]*(\d{6,10})\b',
+    re.IGNORECASE
+)
+
+REGEX_FAX = re.compile(
+    r'\b(?:fax|facsimile)[\s:#]*'
+    r'(\+?1?[\s.\-]?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})\b',
+    re.IGNORECASE
+)
 
 # -------------------------------------------------------------------------
 # PRESIDIO ENTITY MAPPING
@@ -316,6 +330,18 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     clean_text = text
 
     # 1. REGEX PASSES
+    def mrn_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_MRN")
+        _increment_flag(redacted_flags, "HIPAA_PHI_MRN")
+        return "[REDACTED_MRN]"
+    clean_text = REGEX_MRN.sub(mrn_replacer, clean_text)
+
+    def fax_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_FAX")
+        _increment_flag(redacted_flags, "HIPAA_PHI_FAX")
+        return "[REDACTED_FAX]"
+    clean_text = REGEX_FAX.sub(fax_replacer, clean_text)
+
     def ssn_replacer(_match):
         _increment_flag(flags, "HIPAA_SSN")
         _increment_flag(redacted_flags, "HIPAA_SSN")
