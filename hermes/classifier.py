@@ -36,6 +36,40 @@ CFR_CITATION_MAP = {
     "HIPAA_PHI_VIN": "45 CFR §164.514(b)(2)(i)(L)",
 }
 
+
+# -------------------------------------------------------------------------
+# DECLARED SCOPE — 45 CFR §164.514(b)(2)(i) Safe Harbor identifier coverage
+# This manifest is the authoritative record of what Hermes checks for.
+# It is embedded in every attestation receipt so the boundary of evidence
+# is explicit — "scanned and found nothing" vs "never in scope" are
+# distinguishable. EVIDENCE_INCOMPLETE is raised for uncovered categories.
+# -------------------------------------------------------------------------
+DECLARED_SCOPE: list[dict] = [
+    {"cfr": "45 CFR §164.514(b)(2)(i)(A)", "category": "Names",                          "flag": "HIPAA_PHI_PERSON",  "status": "covered",     "method": "spaCy NER"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(B)", "category": "Geographic subdivisions",        "flag": "HIPAA_PHI_ADDRESS", "status": "covered",     "method": "Presidio"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(C)", "category": "Dates",                          "flag": "HIPAA_PHI_DATE",    "status": "covered",     "method": "spaCy NER"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(D)", "category": "Telephone numbers",              "flag": "HIPAA_PHI_PHONE",   "status": "covered",     "method": "Presidio"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(E)", "category": "Fax numbers",                   "flag": "HIPAA_PHI_FAX",     "status": "covered",     "method": "regex"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(F)", "category": "Email addresses",               "flag": "HIPAA_PHI_EMAIL",   "status": "covered",     "method": "Presidio"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(G)", "category": "Social security numbers",       "flag": "HIPAA_SSN",         "status": "covered",     "method": "regex"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(H)", "category": "Medical record numbers",        "flag": "HIPAA_PHI_MRN",     "status": "covered",     "method": "regex"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(I)", "category": "Health plan beneficiary numbers","flag": "HIPAA_PHI_HPBN",   "status": "covered",     "method": "regex"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(J)", "category": "Account numbers",               "flag": "HIPAA_PHI_ACCOUNT", "status": "covered",     "method": "regex"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(K)", "category": "Certificate/license numbers",   "flag": None,                "status": "not_covered", "method": None},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(L)", "category": "Vehicle identifiers/VINs",      "flag": "HIPAA_PHI_VIN",     "status": "covered",     "method": "regex"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(M)", "category": "Device identifiers",            "flag": None,                "status": "not_covered", "method": None},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(N)", "category": "Web URLs",                      "flag": "HIPAA_PHI_URL",     "status": "covered",     "method": "Presidio"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(O)", "category": "IP addresses",                  "flag": "HIPAA_PHI_IP",      "status": "covered",     "method": "Presidio"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(P)", "category": "Biometric identifiers",         "flag": None,                "status": "not_covered", "method": None},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(Q)", "category": "Full face photographs",         "flag": None,                "status": "not_covered", "method": None},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(R)", "category": "Other unique identifiers",      "flag": None,                "status": "not_covered", "method": None},
+]
+
+# Pre-computed sets for O(1) receipt generation
+COVERED_FLAGS:    frozenset = frozenset(e["flag"]      for e in DECLARED_SCOPE if e["status"] == "covered")
+COVERED_CFRS:     list[str] = [e["cfr"]               for e in DECLARED_SCOPE if e["status"] == "covered"]
+NOT_COVERED_CFRS: list[str] = [e["cfr"]               for e in DECLARED_SCOPE if e["status"] == "not_covered"]
+
 # -------------------------------------------------------------------------
 # DETERMINISTIC REGEX PATTERNS
 # -------------------------------------------------------------------------

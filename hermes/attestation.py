@@ -10,6 +10,7 @@ import warnings
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
+from hermes.classifier import COVERED_CFRS, NOT_COVERED_CFRS
 
 def _load_signing_key() -> bytes:
     key_hex = os.environ.get("HERMES_SIGNING_KEY")
@@ -55,6 +56,8 @@ class ComplianceReceipt:
     previous_receipt_hash: str
     receipt_hash: str
     chain_position: int
+    declared_scope: List[str]
+    evidence_incomplete_categories: List[str]
 
 class AttestationChain:
     ISSUER = "Hermes Relay v1.0.0 — hermesrelay.dev"
@@ -87,6 +90,8 @@ class AttestationChain:
         char_count_out: int,
         downstream_target: Optional[str] = None,
     ) -> ComplianceReceipt:
+        # Compute evidence_incomplete: not_covered CFR categories
+        evidence_incomplete = list(NOT_COVERED_CFRS)
         pii_detected = list(flags_triggered.keys())
         pii_redacted = list(flags_redacted.keys())
         zero_egress = set(pii_detected) == set(pii_redacted)
@@ -112,6 +117,8 @@ class AttestationChain:
                 "downstream_target": downstream_target,
                 "previous_receipt_hash": prev_hash,
                 "chain_position": position,
+                "declared_scope": COVERED_CFRS,
+                "evidence_incomplete_categories": evidence_incomplete,
             }
 
             signature = self._sign_receipt(content)
@@ -131,6 +138,8 @@ class AttestationChain:
                 previous_receipt_hash=prev_hash,
                 chain_position=position,
                 receipt_hash=signature,
+                declared_scope=COVERED_CFRS,
+                evidence_incomplete_categories=evidence_incomplete,
             )
             self._chain.append(receipt)
 

@@ -52,6 +52,8 @@ class ComplianceReceiptOut(BaseModel):
     previous_receipt_hash: str
     receipt_hash: str
     chain_position: int
+    declared_scope: List[str]
+    evidence_incomplete_categories: List[str]
 
 
 class ScrubResponse(BaseModel):
