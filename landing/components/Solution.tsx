@@ -34,7 +34,7 @@ const PILLARS: readonly Pillar[] = [
     label: "METHOD",
     headline: "Deterministic",
     body:
-      "Regex and a fixed-version spaCy model detect core PHI identifiers — SSN, payment cards, and names, dates, and organizations — with Safe Harbor coverage actively expanding. Never a hosted LLM: the same input produces the same output, every run.",
+      "Regex and a fixed-version spaCy model detect 10 of 18 HIPAA Safe Harbor identifier categories — SSN, MRN, fax, payment cards, names, dates, addresses, phone, email, IP, and URL — cited to 45 CFR §164.514(b)(2)(i). Never a hosted LLM: the same input produces the same output, every run.",
   },
   {
     label: "EVIDENCE",
