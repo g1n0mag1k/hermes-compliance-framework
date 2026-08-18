@@ -58,6 +58,7 @@ class ComplianceReceipt:
     chain_position: int
     declared_scope: List[str]
     evidence_incomplete_categories: List[str]
+    detectors_executed: Dict[str, bool]
 
 class AttestationChain:
     ISSUER = "Hermes Relay v1.0.0 — hermesrelay.dev"
@@ -89,9 +90,11 @@ class AttestationChain:
         char_count_in: int,
         char_count_out: int,
         downstream_target: Optional[str] = None,
+        detectors_executed: Optional[Dict[str, bool]] = None,
     ) -> ComplianceReceipt:
         # Compute evidence_incomplete: not_covered CFR categories
         evidence_incomplete = list(NOT_COVERED_CFRS)
+        detectors_executed = detectors_executed or {}
         pii_detected = list(flags_triggered.keys())
         pii_redacted = list(flags_redacted.keys())
         zero_egress = set(pii_detected) == set(pii_redacted)
@@ -119,6 +122,7 @@ class AttestationChain:
                 "chain_position": position,
                 "declared_scope": COVERED_CFRS,
                 "evidence_incomplete_categories": evidence_incomplete,
+                "detectors_executed": detectors_executed,
             }
 
             signature = self._sign_receipt(content)
@@ -140,6 +144,7 @@ class AttestationChain:
                 receipt_hash=signature,
                 declared_scope=COVERED_CFRS,
                 evidence_incomplete_categories=evidence_incomplete,
+                detectors_executed=detectors_executed,
             )
             self._chain.append(receipt)
 

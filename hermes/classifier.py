@@ -171,6 +171,10 @@ class RedactionAuditLog(BaseModel):
 class ScrubberResult(BaseModel):
     clean_text: str
     audit_log: RedactionAuditLog
+    detectors_executed: Dict[str, bool] = Field(
+        default_factory=dict,
+        description="Per-CFR-category execution confirmation for this specific run",
+    )
 
 # -------------------------------------------------------------------------
 # DETERMINISTIC VALIDATORS
@@ -396,6 +400,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     flags: Dict[str, FlagEntry] = {}
     redacted_flags: Dict[str, FlagEntry] = {}
     clean_text = text
+    detectors_executed: Dict[str, bool] = {}
 
     # 1. REGEX PASSES
     def hpbn_replacer(_match):
@@ -403,30 +408,35 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         _increment_flag(redacted_flags, "HIPAA_PHI_HPBN")
         return "[REDACTED_HPBN]"
     clean_text = REGEX_HPBN.sub(hpbn_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(I)"] = True
 
     def account_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_ACCOUNT")
         _increment_flag(redacted_flags, "HIPAA_PHI_ACCOUNT")
         return "[REDACTED_ACCOUNT]"
     clean_text = REGEX_ACCOUNT.sub(account_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(J)"] = True
 
     def vin_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_VIN")
         _increment_flag(redacted_flags, "HIPAA_PHI_VIN")
         return "[REDACTED_VIN]"
     clean_text = REGEX_VIN.sub(vin_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(L)"] = True
 
     def mrn_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_MRN")
         _increment_flag(redacted_flags, "HIPAA_PHI_MRN")
         return "[REDACTED_MRN]"
     clean_text = REGEX_MRN.sub(mrn_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(H)"] = True
 
     def fax_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_FAX")
         _increment_flag(redacted_flags, "HIPAA_PHI_FAX")
         return "[REDACTED_FAX]"
     clean_text = REGEX_FAX.sub(fax_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(E)"] = True
 
     def ssn_replacer(_match):
         _increment_flag(flags, "HIPAA_SSN")
@@ -434,6 +444,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         return "[REDACTED_SSN]"
 
     clean_text = REGEX_SSN.sub(ssn_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(G)"] = True
 
     def pan_replacer(match):
         candidate = match.group(0)
@@ -445,11 +456,20 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         return candidate
 
     clean_text = REGEX_PAN.sub(pan_replacer, clean_text)
+    detectors_executed["PCI-DSS PAN (Luhn)"] = True
 
     # 2. NER + PRESIDIO PASSES (merged span redaction — no duplicate overlaps)
     entity_spans = _collect_spacy_spans(clean_text)
     entity_spans.extend(_collect_presidio_spans(clean_text))
     clean_text = _apply_span_redactions(clean_text, entity_spans, flags, redacted_flags)
+    # Record NER + Presidio categories as executed
+    detectors_executed["45 CFR §164.514(b)(2)(i)(A)"] = True  # Names (spaCy)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(B)"] = True  # Geographic (Presidio)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(C)"] = True  # Dates (spaCy)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(D)"] = True  # Phone (Presidio)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(F)"] = True  # Email (Presidio)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(N)"] = True  # URL (Presidio)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(O)"] = True  # IP (Presidio)
 
     # 3. AUDIT PAYLOAD
     audit_log = RedactionAuditLog(
@@ -460,4 +480,4 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         flags_redacted=redacted_flags,
     )
 
-    return ScrubberResult(clean_text=clean_text, audit_log=audit_log)
+    return ScrubberResult(clean_text=clean_text, audit_log=audit_log, detectors_executed=detectors_executed)

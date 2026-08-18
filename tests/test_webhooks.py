@@ -34,6 +34,7 @@ def _sample_receipt() -> ComplianceReceipt:
         chain_position=0,
         declared_scope=["45 CFR §164.514(b)(2)(i)(A)", "45 CFR §164.514(b)(2)(i)(G)"],
         evidence_incomplete_categories=["45 CFR §164.514(b)(2)(i)(K)", "45 CFR §164.514(b)(2)(i)(M)"],
+        detectors_executed={"45 CFR §164.514(b)(2)(i)(A)": True, "45 CFR §164.514(b)(2)(i)(G)": True},
     )
 
 

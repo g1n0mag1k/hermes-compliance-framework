@@ -54,6 +54,7 @@ class ComplianceReceiptOut(BaseModel):
     chain_position: int
     declared_scope: List[str]
     evidence_incomplete_categories: List[str]
+    detectors_executed: Dict[str, bool]
 
 
 class ScrubResponse(BaseModel):
@@ -84,6 +85,7 @@ def _issue_scrub_attestation(
         char_count_in=result.audit_log.original_char_count,
         char_count_out=result.audit_log.redacted_char_count,
         downstream_target=None,
+        detectors_executed=result.detectors_executed,
     )
 
 
