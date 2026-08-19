@@ -7,7 +7,12 @@ from typing import Dict, List, Optional
 from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel, Field
 
-from hermes.attestation import ATTESTATION_CHAIN, ComplianceReceipt
+from hermes.attestation import (
+    ATTESTATION_CHAIN,
+    ComplianceReceipt,
+    HumanReviewReceipt,
+    REVIEW_DECISIONS,
+)
 from hermes.webhooks import dispatch_webhook
 from hermes.classifier import (
     FlagEntry,
@@ -64,6 +69,26 @@ class ScrubResponse(BaseModel):
     clean_text: str
     audit_log: RedactionAuditLog
     compliance_receipt: ComplianceReceiptOut
+
+
+class HumanReviewReceiptOut(BaseModel):
+    review_id: str
+    transaction_id: str
+    reviewed_by: str
+    issued_at: str
+    decision: str
+    override_reason: Optional[str]
+    original_receipt_hash: str
+    previous_receipt_hash: str
+    review_receipt_hash: str
+    chain_position: int
+
+
+class ReviewRequest(BaseModel):
+    transaction_id: str = Field(..., min_length=1)
+    reviewed_by: str = Field(..., min_length=1)
+    decision: str = Field(..., description=f"One of {REVIEW_DECISIONS}")
+    override_reason: Optional[str] = None
 
 
 def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
@@ -127,3 +152,29 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks):
         audit_log=result.audit_log,
         compliance_receipt=ComplianceReceiptOut.model_validate(asdict(receipt)),
     )
+
+
+@app.post(
+    "/v1/review",
+    response_model=HumanReviewReceiptOut,
+    tags=["Pipeline"],
+    dependencies=[Depends(verify_api_key)],
+)
+def review_endpoint(request: ReviewRequest):
+    """Record a human review/override decision for a prior /v1/scrub
+    transaction, chained into the same AttestationChain as tamper-evident
+    proof that a control was actually looked at by a person — not just that
+    the automated scan ran."""
+    try:
+        review = ATTESTATION_CHAIN.issue_review(
+            transaction_id=request.transaction_id,
+            reviewed_by=request.reviewed_by,
+            decision=request.decision,
+            override_reason=request.override_reason,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "No ComplianceReceipt found" in message else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+
+    return HumanReviewReceiptOut.model_validate(asdict(review))

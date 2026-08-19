@@ -122,3 +122,91 @@ def test_over_limit_payload_rejected():
     )
     assert 400 <= response.status_code < 500
     assert response.status_code == 422
+
+
+def test_review_endpoint_requires_api_key():
+    """/v1/review must enforce the same tenant auth as /v1/scrub."""
+    response = client.post(
+        "/v1/review",
+        json={
+            "transaction_id": "txn_does_not_matter",
+            "reviewed_by": "someone",
+            "decision": "accepted",
+        },
+    )
+    assert response.status_code == 422  # missing header entirely
+
+    response = client.post(
+        "/v1/review",
+        headers={"X-API-Key": "invalid_key"},
+        json={
+            "transaction_id": "txn_does_not_matter",
+            "reviewed_by": "someone",
+            "decision": "accepted",
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_review_endpoint_roundtrip():
+    """A scrub followed by a review produces a review receipt chained
+    directly onto the original compliance receipt."""
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+
+    scrub_response = client.post(
+        "/v1/scrub", headers=headers, json={"payload": "SSN 555-12-3456"}
+    )
+    assert scrub_response.status_code == 200
+    original_receipt = scrub_response.json()["compliance_receipt"]
+
+    review_response = client.post(
+        "/v1/review",
+        headers=headers,
+        json={
+            "transaction_id": original_receipt["transaction_id"],
+            "reviewed_by": "kiki.stein@example.com",
+            "decision": "overridden",
+            "override_reason": "False positive on a non-SSN numeric pattern.",
+        },
+    )
+    assert review_response.status_code == 200
+    review = review_response.json()
+
+    assert review["transaction_id"] == original_receipt["transaction_id"]
+    assert review["original_receipt_hash"] == original_receipt["receipt_hash"]
+    assert review["decision"] == "overridden"
+    assert review["chain_position"] == original_receipt["chain_position"] + 1
+    assert ATTESTATION_CHAIN.verify_chain()
+
+
+def test_review_endpoint_unknown_transaction_returns_404():
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+    response = client.post(
+        "/v1/review",
+        headers=headers,
+        json={
+            "transaction_id": "txn_never_existed",
+            "reviewed_by": "kiki.stein@example.com",
+            "decision": "accepted",
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_review_endpoint_invalid_decision_returns_400():
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+    scrub_response = client.post(
+        "/v1/scrub", headers=headers, json={"payload": "SSN 111-22-3333"}
+    )
+    txn_id = scrub_response.json()["compliance_receipt"]["transaction_id"]
+
+    response = client.post(
+        "/v1/review",
+        headers=headers,
+        json={
+            "transaction_id": txn_id,
+            "reviewed_by": "kiki.stein@example.com",
+            "decision": "approved",
+        },
+    )
+    assert response.status_code == 400

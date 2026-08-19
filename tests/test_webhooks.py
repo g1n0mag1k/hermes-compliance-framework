@@ -24,6 +24,8 @@ def _sample_receipt() -> ComplianceReceipt:
         compliance_frameworks=["HIPAA", "PCI-DSS"],
         pii_classes_detected=["HIPAA_SSN", "HIPAA_NAME"],
         pii_classes_redacted=["HIPAA_SSN", "HIPAA_NAME"],
+        count_detected={"HIPAA_SSN": 1, "HIPAA_NAME": 1},
+        count_redacted={"HIPAA_SSN": 1, "HIPAA_NAME": 1},
         payload_char_count_in=100,
         payload_char_count_out=80,
         chars_removed=20,
@@ -35,7 +37,7 @@ def _sample_receipt() -> ComplianceReceipt:
         chain_position=0,
         declared_scope=["45 CFR §164.514(b)(2)(i)(A)", "45 CFR §164.514(b)(2)(i)(G)"],
         evidence_incomplete_categories=["45 CFR §164.514(b)(2)(i)(K)", "45 CFR §164.514(b)(2)(i)(M)"],
-        detectors_executed={"45 CFR §164.514(b)(2)(i)(A)": True, "45 CFR §164.514(b)(2)(i)(G)": True},
+        detectors_executed={"45 CFR §164.514(b)(2)(i)(A)": "ran_clean", "45 CFR §164.514(b)(2)(i)(G)": "ran_clean"},
     )
 
 
