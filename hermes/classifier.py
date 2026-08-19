@@ -1,5 +1,7 @@
 import re
+import base64
 import unicodedata
+import urllib.parse
 import spacy
 import threading
 from pydantic import BaseModel, Field
@@ -133,6 +135,75 @@ REGEX_GPS = re.compile(
     r'[-+]?\d{1,3}\.\d{4,}\s*,\s*[-+]?\d{1,3}\.\d{4,}',
     re.IGNORECASE
 )
+
+# Base64-encoded PHI detection — catches base64 strings that decode to
+# text containing PHI. Minimum 16 chars to avoid false positives on
+# short tokens. Only attempts decode if string is valid base64.
+# Base64 pattern — no \b since +/= are non-word chars.
+# Requires whitespace or string boundary on each side.
+# Excludes matches inside URLs (negative lookbehind for ://).
+# Base64 detection — requires context prefix (colon, space, comma etc.)
+# to avoid matching plain English words. Uses findall in the scrub pass.
+REGEX_BASE64 = re.compile(
+    r'(?:[\s:,;=])([A-Za-z0-9+/]{6,}(?:={0,2})?(?:\s[A-Za-z0-9+/]{4,}(?:={0,2})?)*)'
+)
+
+def _try_decode_base64(s: str) -> str:
+    """Attempt base64 decode. Return decoded string or empty string on failure."""
+    # Reject obvious non-base64 patterns
+    if '_' in s:  # underscores not in standard base64
+        return ''
+    if s.isupper() or s.isnumeric():  # ALL_CAPS or pure digits unlikely base64
+        return ''
+    try:
+        # Remove spaces (present in multi-word base64 strings)
+        clean = s.replace(' ', '')
+        # Must have mixed case or special chars to be plausible base64
+        has_lower = any(c.islower() for c in clean)
+        has_upper = any(c.isupper() for c in clean)
+        if not (has_lower and has_upper):
+            return ''
+        # Pad if needed
+        remainder = len(clean) % 4
+        if remainder:
+            clean += '=' * (4 - remainder)
+        decoded = base64.b64decode(clean, validate=True).decode('utf-8', errors='ignore')
+        # Only return if decoded text is readable, long enough, and contains
+        # at least one letter (not just numbers/punctuation)
+        if decoded and decoded.isprintable() and len(decoded) >= 4 and any(c.isalpha() for c in decoded):
+            return decoded
+    except Exception:
+        pass
+    return ''
+
+def _expand_url_path_components(text: str) -> str:
+    """Extract path segments and query values from URLs and append them
+    as plaintext so regex detectors can find PHI embedded in URL paths.
+    Example: https://api.example.com/patients/234-56-7891/records
+    appends '234-56-7891' so REGEX_SSN can match it.
+    The original URL is preserved — we only append extracted components.
+    """
+    url_pattern = re.compile(
+        r'https?://[^\s<>"{}|\\^`\[\]]+',
+        re.IGNORECASE
+    )
+    extras = []
+    for match in url_pattern.finditer(text):
+        url = match.group(0)
+        try:
+            parsed = urllib.parse.urlparse(url)
+            # Extract path segments
+            segments = [s for s in parsed.path.split('/') if s]
+            extras.extend(segments)
+            # Extract query values
+            qs = urllib.parse.parse_qs(parsed.query)
+            for vals in qs.values():
+                extras.extend(vals)
+        except Exception:
+            pass
+    if extras:
+        return text + ' ' + ' '.join(extras)
+    return text
 
 # (L) Vehicle identifiers — VIN is exactly 17 chars: 8 VIN chars, 1 check
 # digit (0-9 or X), 8 VIS chars. All positions use [A-HJ-NPR-Z0-9] (no I/O/Q).
@@ -438,6 +509,33 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     redacted_flags: Dict[str, FlagEntry] = {}
     clean_text = text
     detectors_executed: Dict[str, bool] = {}
+
+    # 0a. URL PATH EXPANSION — extract path segments and query values
+    # from URLs so regex detectors can find PHI embedded in URL paths.
+    # e.g. /patients/234-56-7891/records exposes the SSN to REGEX_SSN.
+    clean_text = _expand_url_path_components(clean_text)
+    detectors_executed["URL_PATH_EXPANSION"] = True
+
+    # 0. BASE64 DETECTION PASS — decode and re-scrub base64 segments
+    # A base64-encoded SSN, name, or MRN would bypass all other detectors.
+    # We decode candidates and substitute with their decoded plaintext
+    # so subsequent passes can detect PHI normally.
+    def _decode_base64_in_text(text: str) -> str:
+        # Strip URLs before base64 scan to prevent corrupting URL hostnames
+        url_pattern = re.compile(r'https?://[^\s]+')
+        urls = url_pattern.findall(text)
+        text_no_urls = url_pattern.sub('', text)
+        candidates = REGEX_BASE64.findall(text_no_urls)
+        for candidate in candidates:
+            decoded = _try_decode_base64(candidate)
+            if decoded:
+                text_no_urls = text_no_urls.replace(candidate, ' ' + decoded + ' ', 1)
+        # Restore URLs
+        for url in urls:
+            text_no_urls = text_no_urls + ' ' + url
+        return text_no_urls
+    clean_text = _decode_base64_in_text(clean_text)
+    detectors_executed["BASE64_DECODE_PASS"] = True
 
     # 1. REGEX PASSES
     def gps_replacer(_match):

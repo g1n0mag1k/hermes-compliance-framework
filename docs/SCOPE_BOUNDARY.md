@@ -138,3 +138,41 @@ REGEX_AGE_OVER_89 handles common English patterns (94 years old, age 91,
 92-year-old, aged 90). Unusual formats or non-English age expressions may
 not be caught. The regex catches ages 90-199 — values above 120 are
 clinically implausible but are redacted to avoid false negatives.
+
+### 5. Profession/occupation quasi-identifiers (Gap 12)
+
+"The only cardiac surgeon in Knoxville" passes clean. Profession combined
+with specialty and geography is highly re-identifying for rare specialties
+in small markets. Hermes has no occupation/profession detector. This is not
+a HIPAA Safe Harbor category but is an indirect identifier that can survive
+token-level redaction.
+
+### 6. Family member PHI (Gap 13)
+
+Safe Harbor applies to identifiers of the individual OR relatives, employers,
+or household members. spaCy will catch names and addresses of family members
+mentioned in text, but narrative references like "patient's daughter is a
+nurse at Vanderbilt" pass clean. The family relationship context is not
+detected.
+
+### 7. Attestation chain is in-memory only (Gap 14)
+
+ATTESTATION_CHAIN is a module-level singleton. Every API restart wipes it.
+verify_chain() always returns True on a fresh start. An auditor asking for
+30 days of receipts gets nothing. Chain persistence to disk or a database
+is a deployment requirement not yet implemented.
+
+### 8. Non-Western name recall (Gap 15)
+
+spaCy en_core_web_sm is trained predominantly on English news text with
+Western names. Names like "Nguyen Van An", "Mohammed Al-Rashid", or
+"Priya Krishnamurthy" have significantly lower recall than "John Smith".
+For MSPs serving diverse patient populations this is a real coverage gap.
+The upgrade path is a multilingual NER model or scispaCy.
+
+### 9. Single-threaded pipeline under concurrent load (Gap 16)
+
+_PIPELINE_LOCK is a single threading lock shared across spaCy and Presidio.
+Every scrub request waits for the lock. Under concurrent load this becomes
+a throughput bottleneck. Not a PHI gap but a deployment constraint that
+should be disclosed to customers expecting high-volume concurrent use.
