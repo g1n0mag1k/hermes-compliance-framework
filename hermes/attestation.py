@@ -66,7 +66,7 @@ class ComplianceReceipt:
     chain_position: int
     declared_scope: List[str]
     evidence_incomplete_categories: List[str]
-    detectors_executed: Dict[str, bool]
+    detectors_executed: Dict[str, str]  # tri-state: ran_clean / ran_error / not_run
 
 
 @dataclass
