@@ -52,6 +52,8 @@ def build_event_payload(receipt: ComplianceReceipt, event_type: str = "scrub") -
         "compliance_frameworks": receipt.compliance_frameworks,
         "pii_classes_detected": receipt.pii_classes_detected,
         "pii_classes_redacted": receipt.pii_classes_redacted,
+        "count_detected": receipt.count_detected,
+        "count_redacted": receipt.count_redacted,
         "zero_pii_egress_confirmed": receipt.zero_pii_egress_confirmed,
         "chain_position": receipt.chain_position,
         "receipt_hash": receipt.receipt_hash,

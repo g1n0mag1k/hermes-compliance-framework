@@ -44,6 +44,8 @@ class ComplianceReceiptOut(BaseModel):
     compliance_frameworks: List[str]
     pii_classes_detected: List[str]
     pii_classes_redacted: List[str]
+    count_detected: Dict[str, int]
+    count_redacted: Dict[str, int]
     payload_char_count_in: int
     payload_char_count_out: int
     chars_removed: int
@@ -55,7 +57,7 @@ class ComplianceReceiptOut(BaseModel):
     chain_position: int
     declared_scope: List[str]
     evidence_incomplete_categories: List[str]
-    detectors_executed: Dict[str, bool]
+    detectors_executed: Dict[str, str]
 
 
 class ScrubResponse(BaseModel):

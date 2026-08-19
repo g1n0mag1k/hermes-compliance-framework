@@ -48,6 +48,8 @@ class ComplianceReceipt:
     compliance_frameworks: List[str]
     pii_classes_detected: List[str]
     pii_classes_redacted: List[str]
+    count_detected: Dict[str, int]
+    count_redacted: Dict[str, int]
     payload_char_count_in: int
     payload_char_count_out: int
     chars_removed: int
@@ -98,7 +100,11 @@ class AttestationChain:
         detectors_executed = detectors_executed or {}
         pii_detected = list(flags_triggered.keys())
         pii_redacted = list(flags_redacted.keys())
-        zero_egress = set(pii_detected) == set(pii_redacted)
+        # COUNT PARITY (not just class-set parity): a class present in both
+        # key-sets can still have detected=2 / redacted=1 — a real PHI leak
+        # that a set-equality check cannot see. Comparing the full dicts
+        # (keys AND per-class counts) is what actually proves zero egress.
+        zero_egress = flags_triggered == flags_redacted
 
         with self._lock:
             position = len(self._chain)
@@ -114,6 +120,8 @@ class AttestationChain:
                 "compliance_frameworks": self.COMPLIANCE_FRAMEWORKS,
                 "pii_classes_detected": pii_detected,
                 "pii_classes_redacted": pii_redacted,
+                "count_detected": dict(flags_triggered),
+                "count_redacted": dict(flags_redacted),
                 "payload_char_count_in": char_count_in,
                 "payload_char_count_out": char_count_out,
                 "chars_removed": abs(char_count_in - char_count_out),
@@ -136,6 +144,8 @@ class AttestationChain:
                 compliance_frameworks=self.COMPLIANCE_FRAMEWORKS,
                 pii_classes_detected=pii_detected,
                 pii_classes_redacted=pii_redacted,
+                count_detected=dict(flags_triggered),
+                count_redacted=dict(flags_redacted),
                 payload_char_count_in=char_count_in,
                 payload_char_count_out=char_count_out,
                 chars_removed=abs(char_count_in - char_count_out),

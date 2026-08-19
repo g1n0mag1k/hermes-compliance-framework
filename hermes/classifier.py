@@ -266,12 +266,28 @@ class RedactionAuditLog(BaseModel):
     )
 
 
+# Tri-state per-detector status. A silently-failed or skipped detector must
+# never be indistinguishable from one that ran and found nothing clean —
+# that's a false-clean receipt, the worst failure mode for an attestation
+# system. "not_run" is reserved for detectors intentionally skipped by a
+# future conditional pipeline; every detector in the current pipeline always
+# attempts to run, so only ran_clean/ran_error are reachable today.
+DETECTOR_RAN_CLEAN = "ran_clean"
+DETECTOR_RAN_ERROR = "ran_error"
+DETECTOR_NOT_RUN = "not_run"
+
+
 class ScrubberResult(BaseModel):
     clean_text: str
     audit_log: RedactionAuditLog
-    detectors_executed: Dict[str, bool] = Field(
+    detectors_executed: Dict[str, str] = Field(
         default_factory=dict,
-        description="Per-CFR-category execution confirmation for this specific run",
+        description=(
+            "Per-CFR-category tri-state execution status for this run: "
+            "'ran_clean' (executed, no error), 'ran_error' (executed, raised "
+            "and was caught), or 'not_run' (skipped). Never boolean — a "
+            "silent failure must be distinguishable from a clean scan."
+        ),
     )
 
 # -------------------------------------------------------------------------
@@ -490,6 +506,30 @@ def _apply_span_redactions(
     return clean_text
 
 
+def _run_regex_stage(pattern: "re.Pattern", replacer, text: str) -> Tuple[str, str]:
+    """Run one regex substitution stage and report tri-state status.
+
+    A detector that raises must not take down the whole scan (that would be
+    worse than the silent-failure gap this closes — one bad payload would
+    zero out every category after it). Failure is caught, the stage is
+    skipped for this payload (text passed through unchanged for that stage),
+    and the failure is recorded as ran_error rather than presented as clean.
+    """
+    try:
+        return pattern.sub(replacer, text), DETECTOR_RAN_CLEAN
+    except Exception:
+        return text, DETECTOR_RAN_ERROR
+
+
+def _run_stage(fn, *args) -> Tuple[str, str]:
+    """Run one non-regex text-transform stage (callable(*args) -> str) with
+    the same fail-soft/tri-state contract as _run_regex_stage."""
+    try:
+        return fn(*args), DETECTOR_RAN_CLEAN
+    except Exception:
+        return args[0] if args else "", DETECTOR_RAN_ERROR
+
+
 # -------------------------------------------------------------------------
 # GLOBAL THREAD LOCK & ORCHESTRATOR
 # -------------------------------------------------------------------------
@@ -513,8 +553,8 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     # 0a. URL PATH EXPANSION — extract path segments and query values
     # from URLs so regex detectors can find PHI embedded in URL paths.
     # e.g. /patients/234-56-7891/records exposes the SSN to REGEX_SSN.
-    clean_text = _expand_url_path_components(clean_text)
-    detectors_executed["URL_PATH_EXPANSION"] = True
+    clean_text, status = _run_stage(_expand_url_path_components, clean_text)
+    detectors_executed["URL_PATH_EXPANSION"] = status
 
     # 0. BASE64 DETECTION PASS — decode and re-scrub base64 segments
     # A base64-encoded SSN, name, or MRN would bypass all other detectors.
@@ -534,66 +574,66 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         for url in urls:
             text_no_urls = text_no_urls + ' ' + url
         return text_no_urls
-    clean_text = _decode_base64_in_text(clean_text)
-    detectors_executed["BASE64_DECODE_PASS"] = True
+    clean_text, status = _run_stage(_decode_base64_in_text, clean_text)
+    detectors_executed["BASE64_DECODE_PASS"] = status
 
     # 1. REGEX PASSES
     def gps_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_GPS")
         _increment_flag(redacted_flags, "HIPAA_PHI_GPS")
         return "[REDACTED_GPS]"
-    clean_text = REGEX_GPS.sub(gps_replacer, clean_text)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(B) GPS"] = True
+    clean_text, status = _run_regex_stage(REGEX_GPS, gps_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(B) GPS"] = status
 
     def age_over_89_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_AGE_89")
         _increment_flag(redacted_flags, "HIPAA_PHI_AGE_89")
         return "[REDACTED_AGE_OVER_89]"
-    clean_text = REGEX_AGE_OVER_89.sub(age_over_89_replacer, clean_text)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(C) age>89"] = True
+    clean_text, status = _run_regex_stage(REGEX_AGE_OVER_89, age_over_89_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(C) age>89"] = status
 
     def hpbn_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_HPBN")
         _increment_flag(redacted_flags, "HIPAA_PHI_HPBN")
         return "[REDACTED_HPBN]"
-    clean_text = REGEX_HPBN.sub(hpbn_replacer, clean_text)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(I)"] = True
+    clean_text, status = _run_regex_stage(REGEX_HPBN, hpbn_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(I)"] = status
 
     def account_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_ACCOUNT")
         _increment_flag(redacted_flags, "HIPAA_PHI_ACCOUNT")
         return "[REDACTED_ACCOUNT]"
-    clean_text = REGEX_ACCOUNT.sub(account_replacer, clean_text)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(J)"] = True
+    clean_text, status = _run_regex_stage(REGEX_ACCOUNT, account_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(J)"] = status
 
     def vin_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_VIN")
         _increment_flag(redacted_flags, "HIPAA_PHI_VIN")
         return "[REDACTED_VIN]"
-    clean_text = REGEX_VIN.sub(vin_replacer, clean_text)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(L)"] = True
+    clean_text, status = _run_regex_stage(REGEX_VIN, vin_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(L)"] = status
 
     def mrn_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_MRN")
         _increment_flag(redacted_flags, "HIPAA_PHI_MRN")
         return "[REDACTED_MRN]"
-    clean_text = REGEX_MRN.sub(mrn_replacer, clean_text)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(H)"] = True
+    clean_text, status = _run_regex_stage(REGEX_MRN, mrn_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(H)"] = status
 
     def fax_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_FAX")
         _increment_flag(redacted_flags, "HIPAA_PHI_FAX")
         return "[REDACTED_FAX]"
-    clean_text = REGEX_FAX.sub(fax_replacer, clean_text)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(E)"] = True
+    clean_text, status = _run_regex_stage(REGEX_FAX, fax_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(E)"] = status
 
     def ssn_replacer(_match):
         _increment_flag(flags, "HIPAA_SSN")
         _increment_flag(redacted_flags, "HIPAA_SSN")
         return "[REDACTED_SSN]"
 
-    clean_text = REGEX_SSN.sub(ssn_replacer, clean_text)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(G)"] = True
+    clean_text, status = _run_regex_stage(REGEX_SSN, ssn_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(G)"] = status
 
     def pan_replacer(match):
         candidate = match.group(0)
@@ -604,21 +644,38 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
             return "[REDACTED_PAN]"
         return candidate
 
-    clean_text = REGEX_PAN.sub(pan_replacer, clean_text)
-    detectors_executed["PCI-DSS PAN (Luhn)"] = True
+    clean_text, status = _run_regex_stage(REGEX_PAN, pan_replacer, clean_text)
+    detectors_executed["PCI-DSS PAN (Luhn)"] = status
 
     # 2. NER + PRESIDIO PASSES (merged span redaction — no duplicate overlaps)
-    entity_spans = _collect_spacy_spans(clean_text)
-    entity_spans.extend(_collect_presidio_spans(clean_text))
+    # spaCy and Presidio are independent engines with independent failure
+    # domains — one throwing must not silently blank out the other's
+    # categories, and each category's status must reflect its own engine.
+    try:
+        spacy_spans = _collect_spacy_spans(clean_text)
+        spacy_status = DETECTOR_RAN_CLEAN
+    except Exception:
+        spacy_spans = []
+        spacy_status = DETECTOR_RAN_ERROR
+
+    try:
+        presidio_spans = _collect_presidio_spans(clean_text)
+        presidio_status = DETECTOR_RAN_CLEAN
+    except Exception:
+        presidio_spans = []
+        presidio_status = DETECTOR_RAN_ERROR
+
+    entity_spans = spacy_spans + presidio_spans
     clean_text = _apply_span_redactions(clean_text, entity_spans, flags, redacted_flags)
-    # Record NER + Presidio categories as executed
-    detectors_executed["45 CFR §164.514(b)(2)(i)(A)"] = True  # Names (spaCy)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(B)"] = True  # Geographic (Presidio)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(C)"] = True  # Dates (spaCy)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(D)"] = True  # Phone (Presidio)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(F)"] = True  # Email (Presidio)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(N)"] = True  # URL (Presidio)
-    detectors_executed["45 CFR §164.514(b)(2)(i)(O)"] = True  # IP (Presidio)
+    # Record NER + Presidio categories as executed, attributed to the
+    # engine that actually covers each CFR category.
+    detectors_executed["45 CFR §164.514(b)(2)(i)(A)"] = spacy_status     # Names (spaCy)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(B)"] = presidio_status  # Geographic (Presidio)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(C)"] = spacy_status     # Dates (spaCy)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(D)"] = presidio_status  # Phone (Presidio)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(F)"] = presidio_status  # Email (Presidio)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(N)"] = presidio_status  # URL (Presidio)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(O)"] = presidio_status  # IP (Presidio)
 
     # 3. AUDIT PAYLOAD
     audit_log = RedactionAuditLog(
