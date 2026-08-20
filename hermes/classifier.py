@@ -39,6 +39,7 @@ CFR_CITATION_MAP = {
     "HIPAA_PHI_HPBN": "45 CFR §164.514(b)(2)(i)(I)",
     "HIPAA_PHI_ACCOUNT": "45 CFR §164.514(b)(2)(i)(J)",
     "HIPAA_PHI_VIN": "45 CFR §164.514(b)(2)(i)(L)",
+    "HIPAA_PHI_ORG": "45 CFR §164.514(b)(2)(i)(A)",
 }
 
 
@@ -155,6 +156,10 @@ def _try_decode_base64(s: str) -> str:
         return ''
     if s.isupper() or s.isnumeric():  # ALL_CAPS or pure digits unlikely base64
         return ''
+    # Reject plain alphabetic strings — real base64 almost always contains
+    # at least one digit or special char. Pure alpha strings are English words.
+    if s.replace(' ', '').isalpha():
+        return ''
     try:
         # Remove spaces (present in multi-word base64 strings)
         clean = s.replace(' ', '')
@@ -170,8 +175,13 @@ def _try_decode_base64(s: str) -> str:
         decoded = base64.b64decode(clean, validate=True).decode('utf-8', errors='ignore')
         # Only return if decoded text is readable, long enough, and contains
         # at least one letter (not just numbers/punctuation)
-        if decoded and decoded.isprintable() and len(decoded) >= 4 and any(c.isalpha() for c in decoded):
-            return decoded
+        # Require ASCII-only printable output — Unicode garbage indicates
+        # a false positive on a plain English word, not real base64 PHI.
+        if not decoded or not decoded.isascii() or not decoded.isprintable():
+            return ''
+        if len(decoded) < 4 or not any(c.isalpha() for c in decoded):
+            return ''
+        return decoded
     except Exception:
         pass
     return ''
