@@ -10,16 +10,24 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, Spacer, TableStyle
 
 CFR = {
-    "HIPAA_PHI_PERSON": "45 CFR 164.514(b)(2)(i)(A)",
-    "HIPAA_PHI_DATE": "45 CFR 164.514(b)(2)(i)(C)",
-    "HIPAA_PHI_PHONE": "45 CFR 164.514(b)(2)(i)(D)",
-    "HIPAA_PHI_EMAIL": "45 CFR 164.514(b)(2)(i)(F)",
-    "HIPAA_SSN": "45 CFR 164.514(b)(2)(i)(G)",
-    "HIPAA_PHI_URL": "45 CFR 164.514(b)(2)(i)(N)",
-    "HIPAA_PHI_IP": "45 CFR 164.514(b)(2)(i)(O)",
-    "HIPAA_PHI_ORG": "45 CFR 164.514(b)(2)(i)",
-    "HIPAA_PHI_BANK_NUMBER": "45 CFR 164.514(b)(2)(i)",
-    "PCI_PAN": "PCI-DSS Req. 3",
+    "HIPAA_PHI_PERSON":      "45 CFR 164.514(b)(2)(i)(A)",
+    "HIPAA_PHI_ORG":         "45 CFR 164.514(b)(2)(i)(A)",
+    "HIPAA_PHI_ADDRESS":     "45 CFR 164.514(b)(2)(i)(B)",
+    "HIPAA_PHI_GPS":         "45 CFR 164.514(b)(2)(i)(B)",
+    "HIPAA_PHI_DATE":        "45 CFR 164.514(b)(2)(i)(C)",
+    "HIPAA_PHI_AGE_89":      "45 CFR 164.514(b)(2)(i)(C)",
+    "HIPAA_PHI_PHONE":       "45 CFR 164.514(b)(2)(i)(D)",
+    "HIPAA_PHI_FAX":         "45 CFR 164.514(b)(2)(i)(E)",
+    "HIPAA_PHI_EMAIL":       "45 CFR 164.514(b)(2)(i)(F)",
+    "HIPAA_SSN":             "45 CFR 164.514(b)(2)(i)(G)",
+    "HIPAA_PHI_MRN":         "45 CFR 164.514(b)(2)(i)(H)",
+    "HIPAA_PHI_HPBN":        "45 CFR 164.514(b)(2)(i)(I)",
+    "HIPAA_PHI_ACCOUNT":     "45 CFR 164.514(b)(2)(i)(J)",
+    "HIPAA_PHI_VIN":         "45 CFR 164.514(b)(2)(i)(L)",
+    "HIPAA_PHI_URL":         "45 CFR 164.514(b)(2)(i)(N)",
+    "HIPAA_PHI_IP":          "45 CFR 164.514(b)(2)(i)(O)",
+    "HIPAA_PHI_BANK_NUMBER": "45 CFR 164.514(b)(2)(i)(J)",
+    "PCI_PAN":               "PCI-DSS Req. 3",
 }
 
 def generate_evidence_report(receipt, engagement_meta: dict) -> bytes:
@@ -46,8 +54,8 @@ def generate_evidence_report(receipt, engagement_meta: dict) -> bytes:
         ["Scan Date", engagement_meta.get("scan_date", "-")],
         ["Engineer", engagement_meta.get("engineer", "Andrew Rogers - Hermes Relay")],
         ["Scope", engagement_meta.get("scope", "-")],
-        ["Exclusions", engagement_meta.get("excluded", "Physical addresses, MRNs")],
-    ], colWidths=[1.4*inch, 5.4*inch])
+        ["Exclusions", engagement_meta.get("excluded", "(K) Certificate/license; (M) Device identifiers; (P) Biometric; (Q) Full face photos; (R) Other unique IDs")],
+    ], colWidths=[1.2*inch, 5.6*inch])
     meta.setStyle(TableStyle([
         ("BACKGROUND",(0,0),(0,-1),LIGHT),
         ("FONTNAME",(0,0),(0,-1),"Helvetica-Bold"),
@@ -56,6 +64,8 @@ def generate_evidence_report(receipt, engagement_meta: dict) -> bytes:
         ("TOPPADDING",(0,0),(-1,-1),5),
         ("BOTTOMPADDING",(0,0),(-1,-1),5),
         ("LEFTPADDING",(0,0),(-1,-1),8),
+        ("VALIGN",(0,0),(-1,-1),"TOP"),
+        ("WORDWRAP",(0,0),(-1,-1),True),
     ]))
     story.append(meta)
     story.append(Spacer(1, 12))
@@ -106,12 +116,27 @@ def generate_evidence_report(receipt, engagement_meta: dict) -> bytes:
     if zero_egress and not detected:
         c = "No unredacted PHI or PAN detected in declared scope. Chain integrity verified."
     elif zero_egress:
-        c = f"PHI detected and redacted before egress: {', '.join(detected)}. Zero egress confirmed."
+        readable = [f.replace('HIPAA_PHI_','').replace('HIPAA_','').replace('PCI_','').replace('_',' ').title() for f in detected]
+        c = f"PHI detected and redacted before egress: {', '.join(readable)}. Zero egress confirmed."
     else:
         c = f"PHI detected: {', '.join(detected)}. Unredacted egress could not be confirmed. Review required."
     story.append(Paragraph(c, N))
     story.append(Spacer(1, 8))
-    story.append(Paragraph("<i>DISCLAIMER: This report is operational evidence only. It does not constitute legal advice or a guarantee of HIPAA compliance. Physical addresses and MRNs are not detected by Hermes Relay v1.0.0.</i>", N))
+    incomplete = receipt_dict.get("evidence_incomplete_categories", [])
+    if incomplete:
+        incomplete_str = "; ".join(incomplete)
+        disc = (
+            f"DISCLAIMER: This report is operational evidence only. It does not constitute "
+            f"legal advice or a guarantee of HIPAA compliance. The following 45 CFR "
+            f"\u00a7164.514(b)(2)(i) categories are outside declared scope and were not "
+            f"scanned: {incomplete_str}."
+        )
+    else:
+        disc = (
+            "DISCLAIMER: This report is operational evidence only. It does not constitute "
+            "legal advice or a guarantee of HIPAA compliance."
+        )
+    story.append(Paragraph(f"<i>{disc}</i>", N))
     story.append(Spacer(1, 24))
     story.append(Paragraph("<b>SIGNATURES</b>", N))
     story.append(Spacer(1, 4))
