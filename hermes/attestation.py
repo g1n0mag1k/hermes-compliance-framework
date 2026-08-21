@@ -194,7 +194,7 @@ class AttestationChain:
         char_count_in: int,
         char_count_out: int,
         downstream_target: Optional[str] = None,
-        detectors_executed: Optional[Dict[str, bool]] = None,
+        detectors_executed: Optional[Dict[str, str]] = None,
     ) -> ComplianceReceipt:
         # Compute evidence_incomplete: not_covered CFR categories
         evidence_incomplete = list(NOT_COVERED_CFRS)

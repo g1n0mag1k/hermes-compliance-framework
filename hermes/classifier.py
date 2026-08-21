@@ -558,7 +558,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     flags: Dict[str, FlagEntry] = {}
     redacted_flags: Dict[str, FlagEntry] = {}
     clean_text = text
-    detectors_executed: Dict[str, bool] = {}
+    detectors_executed: Dict[str, str] = {}
 
     # 0a. URL PATH EXPANSION — extract path segments and query values
     # from URLs so regex detectors can find PHI embedded in URL paths.
