@@ -8,7 +8,7 @@
 
 spacy==3.8.15
 presidio-analyzer==2.2.364
-cryptography>=49.0.0
+cryptography>=50.0.0
 streamlit>=1.61.1
 pydantic>=2.13.4
 fastapi>=0.140.1
