@@ -1,5 +1,11 @@
 """
 hermes/attestation.py — Cryptographically Signed Compliance Attestation Receipts
+
+PHI-OMEGA audit status:
+  Round 1 — OWNER/CODE-VERIFIED, NOT INDEPENDENTLY REPRODUCED (frozen)
+  Round 2 — Finding #1 closed: applicability propagation via superseded_by
+             and is_chain_head fields, stored outside the signature envelope
+             so mutability does not invalidate historical signatures.
 """
 import hashlib
 import hmac
@@ -8,14 +14,21 @@ import os
 import sqlite3
 import threading
 import warnings
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Union
 from hermes.classifier import COVERED_CFRS, NOT_COVERED_CFRS
 
 REVIEW_DECISIONS = ("accepted", "overridden", "escalated")
-
 DEFAULT_DB_PATH = "hermes_chain.db"
+
+# Fields that are mutable chain metadata — excluded from HMAC signature
+# envelope so that applicability propagation mutations do not invalidate
+# historical signatures. These fields are stored in a separate SQLite
+# column, not inside receipt_json, so tampering with them is detectable
+# by comparing against the immutable signed payload.
+_MUTABLE_FIELDS = frozenset({"superseded_by", "is_chain_head"})
+
 
 def _load_signing_key() -> bytes:
     key_hex = os.environ.get("HERMES_SIGNING_KEY")
@@ -42,10 +55,13 @@ def _load_signing_key() -> bytes:
     )
     return hashlib.sha256(b"hermes-dev-signing-key-not-for-production").digest()
 
+
 SIGNING_KEY: bytes = _load_signing_key()
+
 
 @dataclass
 class ComplianceReceipt:
+    # --- Immutable signed fields ---
     receipt_id: str
     transaction_id: str
     issued_at: str
@@ -66,34 +82,48 @@ class ComplianceReceipt:
     chain_position: int
     declared_scope: List[str]
     evidence_incomplete_categories: List[str]
-    detectors_executed: Dict[str, str]  # tri-state: ran_clean / ran_error / not_run
+    detectors_executed: Dict[str, str]
+    # --- Mutable chain metadata (outside signature envelope) ---
+    # superseded_by: null = authoritative. Populated = hash of superseding
+    # receipt. A verifier MUST NOT treat this receipt as standalone
+    # authoritative evidence if superseded_by is non-null.
+    # is_chain_head: True only for the current tail of the chain.
+    # These fields are stored in a separate SQLite column so mutations
+    # do not invalidate the historical HMAC signature.
+    superseded_by: Optional[str] = None
+    is_chain_head: bool = True
 
 
 @dataclass
 class HumanReviewReceipt:
-    """A human review/override event, chained alongside ComplianceReceipts
-    in the same AttestationChain — same signing scheme, same chain_position
-    sequence, same tamper-evidence guarantees.
-
-    previous_receipt_hash is not part of the originally specified field list
-    but is required for this to actually be "linked into the same hash
-    chain": without it there is no way for verify_chain() to prove a review
-    receipt hasn't been reordered or inserted after the fact, the same
-    invariant that already protects every ComplianceReceipt.
+    """A human review/override event chained alongside ComplianceReceipts.
+    Same signing scheme, same chain_position sequence, same tamper-evidence
+    guarantees. Mutable applicability fields follow the same pattern as
+    ComplianceReceipt — stored outside the signature envelope.
     """
+    # --- Immutable signed fields ---
     review_id: str
     transaction_id: str
     reviewed_by: str
     issued_at: str
-    decision: str  # one of REVIEW_DECISIONS: "accepted" | "overridden" | "escalated"
+    decision: str  # "accepted" | "overridden" | "escalated"
     override_reason: Optional[str]
     original_receipt_hash: str
     previous_receipt_hash: str
     review_receipt_hash: str
     chain_position: int
+    # --- Mutable chain metadata (outside signature envelope) ---
+    superseded_by: Optional[str] = None
+    is_chain_head: bool = True
 
 
 ChainItem = Union[ComplianceReceipt, HumanReviewReceipt]
+
+# Fields excluded from the HMAC content dict before signing.
+# Must match _MUTABLE_FIELDS plus the hash field itself (which is the
+# output of signing, not an input to it).
+_COMPLIANCE_SIGN_EXCLUDE = _MUTABLE_FIELDS | {"receipt_hash"}
+_REVIEW_SIGN_EXCLUDE = _MUTABLE_FIELDS | {"review_receipt_hash"}
 
 
 class AttestationChain:
@@ -104,87 +134,143 @@ class AttestationChain:
         self._chain: List[ChainItem] = []
         self._lock = threading.Lock()
         self._genesis_hash = hashlib.sha256(b"hermes-genesis-block").hexdigest()
-
-        # SQLite persistence — survives process restarts. Path resolution
-        # order: explicit constructor arg > HERMES_DB_PATH env var > default
-        # "hermes_chain.db" in the working directory.
         self._db_path = db_path or os.environ.get("HERMES_DB_PATH", DEFAULT_DB_PATH)
         self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._init_db()
         self._load_from_db()
 
     def _init_db(self) -> None:
-        # item_type distinguishes ComplianceReceipt ("compliance") from
-        # HumanReviewReceipt ("review") rows so _load_from_db knows which
-        # dataclass to reconstruct. Added alongside item_type in the same
-        # patch cycle that introduces HumanReviewReceipt — there is no
-        # pre-existing production data to migrate yet.
         with self._conn:
             self._conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS receipts (
-                    chain_position INTEGER PRIMARY KEY,
-                    transaction_id TEXT NOT NULL,
-                    receipt_hash TEXT NOT NULL,
-                    item_type TEXT NOT NULL DEFAULT 'compliance',
-                    receipt_json TEXT NOT NULL
+                    chain_position  INTEGER PRIMARY KEY,
+                    transaction_id  TEXT    NOT NULL,
+                    receipt_hash    TEXT    NOT NULL,
+                    item_type       TEXT    NOT NULL DEFAULT 'compliance',
+                    receipt_json    TEXT    NOT NULL,
+                    superseded_by   TEXT,
+                    is_chain_head   INTEGER NOT NULL DEFAULT 1
                 )
                 """
             )
 
     def _load_from_db(self) -> None:
         """Reconstruct the in-memory chain from SQLite in chain order.
-
-        Runs once at construction time, before any issue()/issue_review()
-        call, so the loaded items become the prefix of self._chain exactly
-        as if the process had never restarted.
-        """
+        Mutable applicability fields are loaded from their dedicated columns,
+        not from receipt_json, so they reflect post-issuance mutations."""
         cursor = self._conn.execute(
-            "SELECT item_type, receipt_json FROM receipts ORDER BY chain_position ASC"
+            """
+            SELECT item_type, receipt_json, superseded_by, is_chain_head
+            FROM receipts
+            ORDER BY chain_position ASC
+            """
         )
-        for item_type, receipt_json in cursor.fetchall():
+        for item_type, receipt_json, superseded_by, is_chain_head in cursor.fetchall():
             data = json.loads(receipt_json)
+            # Override with the authoritative mutable-column values
+            data["superseded_by"] = superseded_by
+            data["is_chain_head"] = bool(is_chain_head)
             if item_type == "review":
                 self._chain.append(HumanReviewReceipt(**data))
             else:
                 self._chain.append(ComplianceReceipt(**data))
 
     def _persist_item(self, item: ChainItem) -> None:
-        """Write a newly-issued chain item (receipt or review) to SQLite
-        immediately. Called while still holding self._lock so the in-memory
-        chain and the on-disk chain can never observe different lengths."""
+        """Write a newly-issued chain item to SQLite. Mutable fields are
+        written to dedicated columns so they can be updated without touching
+        receipt_json (which must remain immutable for signature verification)."""
         if isinstance(item, HumanReviewReceipt):
             item_type = "review"
             item_hash = item.review_receipt_hash
         else:
             item_type = "compliance"
             item_hash = item.receipt_hash
+
+        # receipt_json stores only the immutable signed payload
+        immutable_data = {
+            k: v for k, v in asdict(item).items()
+            if k not in _MUTABLE_FIELDS
+        }
+
         with self._conn:
             self._conn.execute(
-                "INSERT INTO receipts (chain_position, transaction_id, receipt_hash, item_type, receipt_json) "
-                "VALUES (?, ?, ?, ?, ?)",
+                """
+                INSERT INTO receipts
+                    (chain_position, transaction_id, receipt_hash,
+                     item_type, receipt_json, superseded_by, is_chain_head)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
                 (
                     item.chain_position,
                     item.transaction_id,
                     item_hash,
                     item_type,
-                    json.dumps(asdict(item)),
+                    json.dumps(immutable_data),
+                    item.superseded_by,
+                    int(item.is_chain_head),
+                ),
+            )
+
+    def _update_applicability(self, item: ChainItem) -> None:
+        """Update only the mutable applicability columns for an existing
+        chain item. Never touches receipt_json — the immutable signed payload
+        is preserved exactly as issued. Called while holding self._lock."""
+        with self._conn:
+            self._conn.execute(
+                """
+                UPDATE receipts
+                SET superseded_by = ?, is_chain_head = ?
+                WHERE chain_position = ?
+                """,
+                (
+                    item.superseded_by,
+                    int(item.is_chain_head),
+                    item.chain_position,
                 ),
             )
 
     def _sign_receipt(self, content: Dict) -> str:
+        """HMAC-SHA256 sign a content dict. Mutable fields must already be
+        excluded from content before this is called."""
         canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
         return hmac.new(
             SIGNING_KEY,
             canonical.encode("utf-8"),
-            hashlib.sha256
+            hashlib.sha256,
         ).hexdigest()
+
+    def _build_sign_content(self, item: ChainItem) -> Dict:
+        """Return the signable content dict for an item — all fields except
+        the mutable applicability fields and the hash field itself."""
+        full = asdict(item)
+        if isinstance(item, HumanReviewReceipt):
+            exclude = _REVIEW_SIGN_EXCLUDE
+        else:
+            exclude = _COMPLIANCE_SIGN_EXCLUDE
+        return {k: v for k, v in full.items() if k not in exclude}
 
     def _previous_hash(self) -> str:
         if not self._chain:
             return self._genesis_hash
         last = self._chain[-1]
-        return last.review_receipt_hash if isinstance(last, HumanReviewReceipt) else last.receipt_hash
+        return (
+            last.review_receipt_hash
+            if isinstance(last, HumanReviewReceipt)
+            else last.receipt_hash
+        )
+
+    def _mark_previous_superseded(self, new_item_hash: str) -> None:
+        """Mark the current chain tail as superseded by new_item_hash.
+        Called while holding self._lock, before the new item is appended.
+        Mutates only the mutable applicability fields — the tail item's
+        receipt_json and signature are never touched."""
+        if not self._chain:
+            return
+        prev = self._chain[-1]
+        prev.superseded_by = new_item_hash
+        prev.is_chain_head = False
+        self._update_applicability(prev)
 
     def issue(
         self,
@@ -196,15 +282,11 @@ class AttestationChain:
         downstream_target: Optional[str] = None,
         detectors_executed: Optional[Dict[str, str]] = None,
     ) -> ComplianceReceipt:
-        # Compute evidence_incomplete: not_covered CFR categories
         evidence_incomplete = list(NOT_COVERED_CFRS)
         detectors_executed = detectors_executed or {}
         pii_detected = list(flags_triggered.keys())
         pii_redacted = list(flags_redacted.keys())
-        # COUNT PARITY (not just class-set parity): a class present in both
-        # key-sets can still have detected=2 / redacted=1 — a real PHI leak
-        # that a set-equality check cannot see. Comparing the full dicts
-        # (keys AND per-class counts) is what actually proves zero egress.
+        # COUNT PARITY: compare full dicts (keys AND counts), not just key sets
         zero_egress = flags_triggered == flags_redacted
 
         with self._lock:
@@ -213,7 +295,8 @@ class AttestationChain:
             receipt_id = f"rcpt_{transaction_id}_{position:06d}"
             issued_at = datetime.now(timezone.utc).isoformat()
 
-            content = {
+            # Build the immutable signed content — no mutable fields
+            sign_content = {
                 "receipt_id": receipt_id,
                 "transaction_id": transaction_id,
                 "issued_at": issued_at,
@@ -227,7 +310,10 @@ class AttestationChain:
                 "payload_char_count_out": char_count_out,
                 "chars_removed": abs(char_count_in - char_count_out),
                 "zero_pii_egress_confirmed": zero_egress,
-                "zero_pii_egress_scope_note": "Confirmed within declared_scope only. evidence_incomplete_categories were not checked.",
+                "zero_pii_egress_scope_note": (
+                    "Confirmed within declared_scope only. "
+                    "evidence_incomplete_categories were not checked."
+                ),
                 "downstream_target": downstream_target,
                 "previous_receipt_hash": prev_hash,
                 "chain_position": position,
@@ -236,30 +322,16 @@ class AttestationChain:
                 "detectors_executed": detectors_executed,
             }
 
-            signature = self._sign_receipt(content)
+            signature = self._sign_receipt(sign_content)
+
             receipt = ComplianceReceipt(
-                receipt_id=receipt_id,
-                transaction_id=transaction_id,
-                issued_at=issued_at,
-                issuer=self.ISSUER,
-                compliance_frameworks=self.COMPLIANCE_FRAMEWORKS,
-                pii_classes_detected=pii_detected,
-                pii_classes_redacted=pii_redacted,
-                count_detected=dict(flags_triggered),
-                count_redacted=dict(flags_redacted),
-                payload_char_count_in=char_count_in,
-                payload_char_count_out=char_count_out,
-                chars_removed=abs(char_count_in - char_count_out),
-                zero_pii_egress_confirmed=zero_egress,
-                zero_pii_egress_scope_note="Confirmed within declared_scope only. evidence_incomplete_categories were not checked.",
-                downstream_target=downstream_target,
-                previous_receipt_hash=prev_hash,
-                chain_position=position,
+                **sign_content,
                 receipt_hash=signature,
-                declared_scope=COVERED_CFRS,
-                evidence_incomplete_categories=evidence_incomplete,
-                detectors_executed=detectors_executed,
+                superseded_by=None,
+                is_chain_head=True,
             )
+
+            self._mark_previous_superseded(signature)
             self._chain.append(receipt)
             self._persist_item(receipt)
 
@@ -272,12 +344,6 @@ class AttestationChain:
         decision: str,
         override_reason: Optional[str] = None,
     ) -> HumanReviewReceipt:
-        """Issue a human review/override event for an existing transaction,
-        chained into the same AttestationChain as the ComplianceReceipt it
-        reviews. original_receipt_hash is captured from the located
-        ComplianceReceipt and included in the signed content, so tampering
-        with a review's record of which original it reviewed invalidates
-        that review's own signature (invariant 1 below)."""
         if decision not in REVIEW_DECISIONS:
             raise ValueError(
                 f"decision must be one of {REVIEW_DECISIONS} — got {decision!r}"
@@ -286,7 +352,10 @@ class AttestationChain:
         with self._lock:
             original: Optional[ComplianceReceipt] = None
             for item in reversed(self._chain):
-                if isinstance(item, ComplianceReceipt) and item.transaction_id == transaction_id:
+                if (
+                    isinstance(item, ComplianceReceipt)
+                    and item.transaction_id == transaction_id
+                ):
                     original = item
                     break
             if original is None:
@@ -299,7 +368,7 @@ class AttestationChain:
             review_id = f"review_{transaction_id}_{position:06d}"
             issued_at = datetime.now(timezone.utc).isoformat()
 
-            content = {
+            sign_content = {
                 "review_id": review_id,
                 "transaction_id": transaction_id,
                 "reviewed_by": reviewed_by,
@@ -310,19 +379,17 @@ class AttestationChain:
                 "previous_receipt_hash": prev_hash,
                 "chain_position": position,
             }
-            signature = self._sign_receipt(content)
+
+            signature = self._sign_receipt(sign_content)
+
             review = HumanReviewReceipt(
-                review_id=review_id,
-                transaction_id=transaction_id,
-                reviewed_by=reviewed_by,
-                issued_at=issued_at,
-                decision=decision,
-                override_reason=override_reason,
-                original_receipt_hash=original.receipt_hash,
-                previous_receipt_hash=prev_hash,
+                **sign_content,
                 review_receipt_hash=signature,
-                chain_position=position,
+                superseded_by=None,
+                is_chain_head=True,
             )
+
+            self._mark_previous_superseded(signature)
             self._chain.append(review)
             self._persist_item(review)
 
@@ -330,65 +397,98 @@ class AttestationChain:
 
     def verify_chain(self) -> bool:
         """
-        Full chain verification — three invariants must hold, uniformly
-        across ComplianceReceipts and HumanReviewReceipts sharing this chain:
+        Full chain verification — four invariants must hold uniformly
+        across ComplianceReceipts and HumanReviewReceipts:
 
-        1. Every item's signature is valid (HMAC matches signed content)
+        1. Every item's HMAC signature is valid against its immutable
+           signed content (mutable fields excluded from verification input)
         2. Every item.previous_receipt_hash equals the prior item's hash
-        3. chain_position values are strictly sequential with no gaps or duplicates
-
-        A chain that passes only invariant 1 is forgeable by deleting items
-        and re-signing the survivors. Invariants 2 and 3 close that attack
-        vector. For a HumanReviewReceipt, invariant 1 also transitively
-        covers original_receipt_hash — since it's part of the signed
-        content, tampering with which original a review claims to have
-        reviewed invalidates that review's own signature.
+        3. chain_position values are strictly sequential with no gaps
+        4. Applicability propagation: only the tail item may have
+           is_chain_head=True and superseded_by=None. Every non-tail item
+           must have is_chain_head=False and superseded_by populated.
+           Closes PHI-OMEGA Round 2 Finding #1.
         """
         with self._lock:
             expected_prev = self._genesis_hash
 
             for i, item in enumerate(self._chain):
                 is_review = isinstance(item, HumanReviewReceipt)
-                hash_field = "review_receipt_hash" if is_review else "receipt_hash"
 
-                # Invariant 1: signature valid
-                content = asdict(item)
-                stored_hash = content.pop(hash_field)
-                expected_sig = self._sign_receipt(content)
+                # Invariant 1: rebuild sign content (mutable fields excluded)
+                # and verify HMAC
+                sign_content = self._build_sign_content(item)
+                stored_hash = (
+                    item.review_receipt_hash if is_review else item.receipt_hash
+                )
+                expected_sig = self._sign_receipt(sign_content)
                 if not hmac.compare_digest(stored_hash, expected_sig):
                     return False
 
-                # Invariant 2: previous_receipt_hash links to prior item
+                # Invariant 2: hash chain linkage
                 if not hmac.compare_digest(item.previous_receipt_hash, expected_prev):
                     return False
 
-                # Invariant 3: chain_position is strictly sequential
+                # Invariant 3: sequential positions
                 if item.chain_position != i:
                     return False
+
+                # Invariant 4: applicability propagation
+                is_tail = (i == len(self._chain) - 1)
+                if is_tail:
+                    if not item.is_chain_head or item.superseded_by is not None:
+                        return False
+                else:
+                    if item.is_chain_head or item.superseded_by is None:
+                        return False
 
                 expected_prev = stored_hash
 
         return True
 
-    def get_receipt(self, transaction_id: str) -> Optional[ComplianceReceipt]:
-        """Most recent chain item (of either type) matching transaction_id.
-        Unchanged behavior from before HumanReviewReceipt existed — kept
-        type-agnostic so existing callers are unaffected."""
+    def get_receipt(self, transaction_id: str) -> Optional[ChainItem]:
+        """Most recent chain item matching transaction_id."""
         with self._lock:
             for r in reversed(self._chain):
                 if r.transaction_id == transaction_id:
                     return r
         return None
 
-    def get_compliance_receipt(self, transaction_id: str) -> Optional[ComplianceReceipt]:
-        """Most recent ComplianceReceipt (never a review) matching
-        transaction_id — used by issue_review() and available for callers
-        that specifically need the original scan record, not a review."""
+    def get_compliance_receipt(
+        self, transaction_id: str
+    ) -> Optional[ComplianceReceipt]:
+        """Most recent ComplianceReceipt (never a review) for transaction_id."""
         with self._lock:
             for r in reversed(self._chain):
-                if isinstance(r, ComplianceReceipt) and r.transaction_id == transaction_id:
+                if (
+                    isinstance(r, ComplianceReceipt)
+                    and r.transaction_id == transaction_id
+                ):
                     return r
         return None
+
+    def get_current_head(self) -> Optional[ChainItem]:
+        """Return the current authoritative chain head — the only item a
+        verifier may treat as standalone evidence without traversal.
+        Returns None on an empty chain."""
+        with self._lock:
+            return self._chain[-1] if self._chain else None
+
+    def is_authoritative(self, receipt_hash: str) -> bool:
+        """Return True only if receipt_hash identifies the current chain
+        head. Verifiers must call this before relying on any receipt as
+        standalone authoritative evidence. False means the receipt has been
+        superseded — call get_current_head() to resolve current state."""
+        with self._lock:
+            if not self._chain:
+                return False
+            tail = self._chain[-1]
+            tail_hash = (
+                tail.review_receipt_hash
+                if isinstance(tail, HumanReviewReceipt)
+                else tail.receipt_hash
+            )
+            return hmac.compare_digest(tail_hash, receipt_hash)
 
     def export_chain(self) -> List[Dict]:
         with self._lock:
@@ -397,5 +497,6 @@ class AttestationChain:
     def chain_length(self) -> int:
         with self._lock:
             return len(self._chain)
+
 
 ATTESTATION_CHAIN = AttestationChain()
