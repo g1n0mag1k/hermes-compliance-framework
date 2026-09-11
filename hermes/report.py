@@ -28,6 +28,14 @@ CFR = {
     "HIPAA_PHI_IP":          "45 CFR 164.514(b)(2)(i)(O)",
     "HIPAA_PHI_BANK_NUMBER": "45 CFR 164.514(b)(2)(i)(J)",
     "PCI_PAN":               "PCI-DSS Req. 3",
+    "HIPAA_PHI_CERT_LICENSE":  "45 CFR 164.514(b)(2)(i)(K)",
+    "HIPAA_PHI_NPI":           "45 CFR 164.514(b)(2)(i)(K)",
+    "HIPAA_PHI_STATE_LICENSE": "45 CFR 164.514(b)(2)(i)(K)",
+    "HIPAA_PHI_DEVICE_ID":     "45 CFR 164.514(b)(2)(i)(M)",
+    "HIPAA_PHI_BIOMETRIC_REF": "45 CFR 164.514(b)(2)(i)(P)",
+    "HIPAA_PHI_IMAGE_REF":     "45 CFR 164.514(b)(2)(i)(Q)",
+    "HIPAA_PHI_TRIAL_ID":      "45 CFR 164.514(b)(2)(i)(R)",
+    "HIPAA_PHI_UNIQUE_CODE":   "45 CFR 164.514(b)(2)(i)(R)",
 }
 
 def generate_evidence_report(receipt, engagement_meta: dict) -> bytes:

@@ -40,6 +40,14 @@ CFR_CITATION_MAP = {
     "HIPAA_PHI_ACCOUNT": "45 CFR §164.514(b)(2)(i)(J)",
     "HIPAA_PHI_VIN": "45 CFR §164.514(b)(2)(i)(L)",
     "HIPAA_PHI_ORG": "45 CFR §164.514(b)(2)(i)(A)",
+    "HIPAA_PHI_CERT_LICENSE":   "45 CFR §164.514(b)(2)(i)(K)",
+    "HIPAA_PHI_NPI":            "45 CFR §164.514(b)(2)(i)(K)",
+    "HIPAA_PHI_STATE_LICENSE":  "45 CFR §164.514(b)(2)(i)(K)",
+    "HIPAA_PHI_DEVICE_ID":      "45 CFR §164.514(b)(2)(i)(M)",
+    "HIPAA_PHI_BIOMETRIC_REF":  "45 CFR §164.514(b)(2)(i)(P)",
+    "HIPAA_PHI_IMAGE_REF":      "45 CFR §164.514(b)(2)(i)(Q)",
+    "HIPAA_PHI_TRIAL_ID":       "45 CFR §164.514(b)(2)(i)(R)",
+    "HIPAA_PHI_UNIQUE_CODE":    "45 CFR §164.514(b)(2)(i)(R)",
 }
 
 
@@ -61,14 +69,14 @@ DECLARED_SCOPE: list[dict] = [
     {"cfr": "45 CFR §164.514(b)(2)(i)(H)", "category": "Medical record numbers",        "flag": "HIPAA_PHI_MRN",     "status": "covered",     "method": "regex"},
     {"cfr": "45 CFR §164.514(b)(2)(i)(I)", "category": "Health plan beneficiary numbers","flag": "HIPAA_PHI_HPBN",   "status": "covered",     "method": "regex"},
     {"cfr": "45 CFR §164.514(b)(2)(i)(J)", "category": "Account numbers",               "flag": "HIPAA_PHI_ACCOUNT", "status": "covered",     "method": "regex"},
-    {"cfr": "45 CFR §164.514(b)(2)(i)(K)", "category": "Certificate/license numbers",   "flag": None,                "status": "not_covered", "method": None},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(K)", "category": "Certificate/license numbers",    "flag": "HIPAA_PHI_CERT_LICENSE", "status": "covered",        "method": "regex+checksum"},
     {"cfr": "45 CFR §164.514(b)(2)(i)(L)", "category": "Vehicle identifiers/VINs",      "flag": "HIPAA_PHI_VIN",     "status": "covered",     "method": "regex"},
-    {"cfr": "45 CFR §164.514(b)(2)(i)(M)", "category": "Device identifiers",            "flag": None,                "status": "not_covered", "method": None},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(M)", "category": "Device identifiers",             "flag": "HIPAA_PHI_DEVICE_ID",    "status": "covered",        "method": "regex+checksum"},
     {"cfr": "45 CFR §164.514(b)(2)(i)(N)", "category": "Web URLs",                      "flag": "HIPAA_PHI_URL",     "status": "covered",     "method": "Presidio"},
     {"cfr": "45 CFR §164.514(b)(2)(i)(O)", "category": "IP addresses",                  "flag": "HIPAA_PHI_IP",      "status": "covered",     "method": "Presidio"},
-    {"cfr": "45 CFR §164.514(b)(2)(i)(P)", "category": "Biometric identifiers",         "flag": None,                "status": "not_covered", "method": None},
-    {"cfr": "45 CFR §164.514(b)(2)(i)(Q)", "category": "Full face photographs",         "flag": None,                "status": "not_covered", "method": None},
-    {"cfr": "45 CFR §164.514(b)(2)(i)(R)", "category": "Other unique identifiers",      "flag": None,                "status": "not_covered", "method": None},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(P)", "category": "Biometric identifiers",          "flag": "HIPAA_PHI_BIOMETRIC_REF","status": "reference_only", "method": "regex+denylist"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(Q)", "category": "Full face photographs",          "flag": "HIPAA_PHI_IMAGE_REF",    "status": "reference_only", "method": "regex"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(R)", "category": "Other unique identifiers",       "flag": "HIPAA_PHI_UNIQUE_CODE",  "status": "covered",        "method": "regex"},
 ]
 
 # Pre-computed sets for O(1) receipt generation
@@ -224,6 +232,105 @@ REGEX_VIN = re.compile(
     r'[0-9X]'
     r'[A-HJ-NPR-Z0-9]{8}'
     r'(?![A-HJ-NPR-Z0-9])',
+    re.IGNORECASE
+)
+
+# (K) DEA registration number: 2 letters + 7 digits
+# Check digit algorithm: digits = d[0]..d[6]
+# sum_odd = d[0] + d[2] + d[4]  (1st, 3rd, 5th digit)
+# sum_even = d[1] + d[3] + d[5]  (2nd, 4th, 6th digit)
+# check = (sum_odd + 2 * sum_even) % 10
+# Valid if check == d[6]
+REGEX_DEA = re.compile(
+    r'\b(?:dea|DEA)[\s:#]*([A-Za-z]{2}\d{7})\b'
+    r'|(?<![A-Za-z0-9])([A-Za-z]{2}\d{7})(?![A-Za-z0-9])',
+    re.IGNORECASE
+)
+
+def _validate_dea(number: str) -> bool:
+    """Validate DEA check digit. number must be exactly 9 chars: 2 letters + 7 digits."""
+    if len(number) != 9:
+        return False
+    digits_part = number[2:]
+    if not digits_part.isdigit():
+        return False
+    d = [int(c) for c in digits_part]
+    check = (d[0] + d[2] + d[4] + 2 * (d[1] + d[3] + d[5])) % 10
+    return check == d[6]
+
+# (K) NPI: exactly 10 digits, Luhn checksum over prefix "80840" + first 9 digits
+# Standard Luhn over the 15-digit string "80840" + npi[0:9]:
+# From right to left, double every second digit; if result > 9 subtract 9; sum all; valid if sum % 10 == 0 when npi[9] appended
+REGEX_NPI = re.compile(r'(?<!\d)(\d{10})(?!\d)')
+
+def _validate_npi(npi: str) -> bool:
+    """Validate NPI using Luhn algorithm with 80840 prefix."""
+    if len(npi) != 10 or not npi.isdigit():
+        return False
+    payload = "80840" + npi  # 15 chars
+    digits = [int(c) for c in reversed(payload)]
+    total = 0
+    for i, d in enumerate(digits):
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+# (K) State medical license: context-required, alpha+numeric
+REGEX_STATE_LICENSE = re.compile(
+    r'(?:license\s+no\.?|license|lic\.?|licensure|medical\s+board|state\s+board|lic\s*#|lic\s*no\.?)'
+    r'[\s:#]*([A-Z]{1,3}\d{4,8})',
+    re.IGNORECASE
+)
+
+# (M) FDA UDI — GS1 Human Readable Interpretation with Application Identifiers
+REGEX_UDI_GS1 = re.compile(r'\(01\)\d{14}(?:\(\d{2}\)[A-Za-z0-9]{1,20})+')
+
+# (M) GS1 Production Identifier serial AI(21)
+REGEX_UDI_SERIAL = re.compile(r'\(21\)[A-Za-z0-9]{1,20}')
+
+# (M) HIBCC UDI format (starts with +)
+REGEX_UDI_HIBCC = re.compile(r'\+[A-Za-z0-9]{5,22}/\$\$?[A-Za-z0-9/]+')
+
+# (M) ICCBBA / ISBT 128 (starts with =)
+REGEX_UDI_ICCBBA = re.compile(r'=[A-Za-z0-9]{16,24}')
+
+# (M) Bare GTIN-14 — only match with device context (gated in scrub_payload)
+REGEX_GTIN14 = re.compile(r'(?<!\d)(\d{14})(?!\d)')
+
+def _validate_gtin14(gtin: str) -> bool:
+    """GS1 mod-10 check digit. Positions alternate weight 3,1 from left on first 13 digits."""
+    if len(gtin) != 14 or not gtin.isdigit():
+        return False
+    d = [int(c) for c in gtin]
+    weights = [3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]
+    total = sum(w * v for w, v in zip(weights, d[:13]))
+    check = (10 - (total % 10)) % 10
+    return check == d[13]
+
+# (P) Biometric references — deny list words and file extensions
+_BIOMETRIC_DENYLIST = re.compile(
+    r'\b(?:fingerprint|finger\s+print|voiceprint|voice\s+print|retinal\s+scan|'
+    r'iris\s+scan|facial\s+geometry|biometric|palm\s+print|gait\s+signature)\b',
+    re.IGNORECASE
+)
+REGEX_BIOMETRIC_FILE = re.compile(r'\b[\w-]+\.(?:wsq|nist|tmpl)\b', re.IGNORECASE)
+
+# (Q) Image file references
+REGEX_IMAGE_FILE = re.compile(
+    r'\b[\w .-]+\.(?:jpg|jpeg|png|tiff?|bmp|heic|dcm)\b',
+    re.IGNORECASE
+)
+REGEX_IMAGE_B64 = re.compile(
+    r'data:image/[a-zA-Z]+;base64,[A-Za-z0-9+/=]{40,}'
+)
+
+# (R) Clinical trial and unique code identifiers
+REGEX_TRIAL_ID = re.compile(r'\bNCT\d{8}\b')
+REGEX_UNIQUE_CODE = re.compile(
+    r'\b(?:PAT|ENC|SPEC|ACC|CASE)[-_]?\d{4,10}\b',
     re.IGNORECASE
 )
 
@@ -616,7 +723,9 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     clean_text, status = _run_regex_stage(REGEX_ACCOUNT, account_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(J)"] = status
 
-    def vin_replacer(_match):
+    def vin_replacer(match):
+        if match.start() > 0 and clean_text[match.start() - 1] == "=":
+            return match.group(0)
         _increment_flag(flags, "HIPAA_PHI_VIN")
         _increment_flag(redacted_flags, "HIPAA_PHI_VIN")
         return "[REDACTED_VIN]"
@@ -656,6 +765,149 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
 
     clean_text, status = _run_regex_stage(REGEX_PAN, pan_replacer, clean_text)
     detectors_executed["PCI-DSS PAN (Luhn)"] = status
+
+    # (K) CERTIFICATE AND LICENSE NUMBERS
+    def cert_license_replacer(match):
+        candidate = (match.group(1) or match.group(2) or "").upper()
+        if _validate_dea(candidate):
+            _increment_flag(flags, "HIPAA_PHI_CERT_LICENSE")
+            _increment_flag(redacted_flags, "HIPAA_PHI_CERT_LICENSE")
+            return match.group(0).replace(candidate, "[REDACTED_CERT_LICENSE]")
+        return match.group(0)
+    clean_text, status = _run_regex_stage(REGEX_DEA, cert_license_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(K) DEA"] = status
+
+    def npi_replacer(match):
+        candidate = match.group(1)
+        if _validate_npi(candidate):
+            _increment_flag(flags, "HIPAA_PHI_NPI")
+            _increment_flag(redacted_flags, "HIPAA_PHI_NPI")
+            return "[REDACTED_NPI]"
+        return match.group(0)
+    # Only run NPI replacer when context word present to avoid false positives on bare 10-digit numbers
+    # Scan for NPI context then apply targeted replacement
+    _NPI_CONTEXT = re.compile(
+        r'(?:npi|national\s+provider|provider\s+id|rendering|billing)'
+        r'[\s:#]*(\d{10})',
+        re.IGNORECASE
+    )
+    def npi_context_replacer(match):
+        candidate = match.group(1)
+        if _validate_npi(candidate):
+            _increment_flag(flags, "HIPAA_PHI_NPI")
+            _increment_flag(redacted_flags, "HIPAA_PHI_NPI")
+            return match.group(0).replace(candidate, "[REDACTED_NPI]")
+        return match.group(0)
+    clean_text, status = _run_regex_stage(_NPI_CONTEXT, npi_context_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(K) NPI"] = status
+
+    def state_license_replacer(match):
+        _increment_flag(flags, "HIPAA_PHI_STATE_LICENSE")
+        _increment_flag(redacted_flags, "HIPAA_PHI_STATE_LICENSE")
+        return match.group(0).replace(match.group(1), "[REDACTED_STATE_LICENSE]")
+    clean_text, status = _run_regex_stage(REGEX_STATE_LICENSE, state_license_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(K) state_license"] = status
+
+    # (M) DEVICE IDENTIFIERS
+    def udi_gs1_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
+        _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
+        return "[REDACTED_DEVICE_ID]"
+    clean_text, status = _run_regex_stage(REGEX_UDI_GS1, udi_gs1_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(M) UDI_GS1"] = status
+
+    def udi_serial_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
+        _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
+        return "[REDACTED_DEVICE_ID]"
+    clean_text, status = _run_regex_stage(REGEX_UDI_SERIAL, udi_serial_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(M) UDI_SERIAL"] = status
+
+    def udi_hibcc_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
+        _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
+        return "[REDACTED_DEVICE_ID]"
+    clean_text, status = _run_regex_stage(REGEX_UDI_HIBCC, udi_hibcc_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(M) UDI_HIBCC"] = status
+
+    def udi_iccbba_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
+        _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
+        return "[REDACTED_DEVICE_ID]"
+    clean_text, status = _run_regex_stage(REGEX_UDI_ICCBBA, udi_iccbba_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(M) UDI_ICCBBA"] = status
+
+    def gtin14_replacer(match):
+        candidate = match.group(1)
+        if _validate_gtin14(candidate):
+            _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
+            _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
+            return "[REDACTED_DEVICE_ID]"
+        return match.group(0)
+    # Only run GTIN-14 with device context
+    _GTIN_CONTEXT = re.compile(
+        r'(?:udi|device|serial|gtin|implant|lot|catalog|model|pacemaker|sn\b|ref\b)'
+        r'[^0-9]{0,20}(\d{14})',
+        re.IGNORECASE
+    )
+    def gtin_context_replacer(match):
+        candidate = match.group(1)
+        if _validate_gtin14(candidate):
+            _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
+            _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
+            return match.group(0).replace(candidate, "[REDACTED_DEVICE_ID]")
+        return match.group(0)
+    clean_text, status = _run_regex_stage(_GTIN_CONTEXT, gtin_context_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(M) GTIN14"] = status
+
+    # (P) BIOMETRIC IDENTIFIERS — text references only
+    def biometric_denylist_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_BIOMETRIC_REF")
+        _increment_flag(redacted_flags, "HIPAA_PHI_BIOMETRIC_REF")
+        return "[REDACTED_BIOMETRIC_REF]"
+    clean_text, status = _run_regex_stage(_BIOMETRIC_DENYLIST, biometric_denylist_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(P) text_ref"] = status
+
+    def biometric_file_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_BIOMETRIC_REF")
+        _increment_flag(redacted_flags, "HIPAA_PHI_BIOMETRIC_REF")
+        return "[REDACTED_BIOMETRIC_REF]"
+    clean_text, status = _run_regex_stage(REGEX_BIOMETRIC_FILE, biometric_file_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(P) file_ref"] = status
+    # Content channel — cannot be inspected by text pipeline
+    detectors_executed["45 CFR §164.514(b)(2)(i)(P) content"] = DETECTOR_NOT_RUN
+
+    # (Q) FULL FACE PHOTOGRAPHS — text references only
+    def image_file_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_IMAGE_REF")
+        _increment_flag(redacted_flags, "HIPAA_PHI_IMAGE_REF")
+        return "[REDACTED_IMAGE_REF]"
+    clean_text, status = _run_regex_stage(REGEX_IMAGE_FILE, image_file_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(Q) file_ref"] = status
+
+    def image_b64_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_IMAGE_REF")
+        _increment_flag(redacted_flags, "HIPAA_PHI_IMAGE_REF")
+        return "[REDACTED_IMAGE_REF]"
+    clean_text, status = _run_regex_stage(REGEX_IMAGE_B64, image_b64_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(Q) b64_ref"] = status
+    # Content channel — cannot be inspected by text pipeline
+    detectors_executed["45 CFR §164.514(b)(2)(i)(Q) content"] = DETECTOR_NOT_RUN
+
+    # (R) OTHER UNIQUE IDENTIFYING NUMBERS
+    def trial_id_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_TRIAL_ID")
+        _increment_flag(redacted_flags, "HIPAA_PHI_TRIAL_ID")
+        return "[REDACTED_TRIAL_ID]"
+    clean_text, status = _run_regex_stage(REGEX_TRIAL_ID, trial_id_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(R) trial_id"] = status
+
+    def unique_code_replacer(_match):
+        _increment_flag(flags, "HIPAA_PHI_UNIQUE_CODE")
+        _increment_flag(redacted_flags, "HIPAA_PHI_UNIQUE_CODE")
+        return "[REDACTED_UNIQUE_CODE]"
+    clean_text, status = _run_regex_stage(REGEX_UNIQUE_CODE, unique_code_replacer, clean_text)
+    detectors_executed["45 CFR §164.514(b)(2)(i)(R) unique_code"] = status
 
     # 2. NER + PRESIDIO PASSES (merged span redaction — no duplicate overlaps)
     # spaCy and Presidio are independent engines with independent failure
