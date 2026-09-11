@@ -490,6 +490,196 @@ class AttestationChain:
             )
             return hmac.compare_digest(tail_hash, receipt_hash)
 
+
+    def issue_checkpoint(self) -> Dict:
+        """Issue a signed current-head checkpoint — a standalone artifact
+        that identifies the authoritative chain head at a point in time.
+        Includes a monotonic epoch (chain_length) so freshness and
+        rollback attacks are detectable.
+
+        A verifier presented with a receipt in isolation MUST obtain a
+        fresh checkpoint and confirm the receipt hash matches
+        checkpoint["head_hash"] before treating it as authoritative.
+        A checkpoint with a lower epoch than a previously seen checkpoint
+        MUST be rejected (Massimiliano Round 2 falsification test #8).
+        """
+        with self._lock:
+            if not self._chain:
+                raise RuntimeError("Cannot issue checkpoint on empty chain")
+            tail = self._chain[-1]
+            tail_hash = (
+                tail.review_receipt_hash
+                if isinstance(tail, HumanReviewReceipt)
+                else tail.receipt_hash
+            )
+            epoch = len(self._chain)  # monotonic — never decreases
+            issued_at = datetime.now(timezone.utc).isoformat()
+
+            content = {
+                "checkpoint_type": "current_head",
+                "head_hash": tail_hash,
+                "chain_position": tail.chain_position,
+                "epoch": epoch,
+                "issued_at": issued_at,
+                "issuer": self.ISSUER,
+            }
+            canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
+            signature = hmac.new(
+                SIGNING_KEY,
+                canonical.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            content["checkpoint_signature"] = signature
+            return content
+
+    def verify_checkpoint(self, checkpoint: Dict, min_epoch: int = 0) -> bool:
+        """Verify a checkpoint signature and freshness.
+
+        Returns True only if:
+        1. The HMAC signature is valid
+        2. The epoch is >= min_epoch (freshness — rejects stale checkpoints)
+        3. The head_hash matches the current chain tail
+
+        Closes Massimiliano Round 2 falsification test #8 (stale checkpoint
+        replay) and underpins tests #3, #4, #6 (fork/truncation/prefix).
+        """
+        try:
+            provided_sig = checkpoint.get("checkpoint_signature")
+            if not provided_sig:
+                return False
+
+            content = {k: v for k, v in checkpoint.items()
+                       if k != "checkpoint_signature"}
+            canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
+            expected_sig = hmac.new(
+                SIGNING_KEY,
+                canonical.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            if not hmac.compare_digest(provided_sig, expected_sig):
+                return False
+
+            if checkpoint.get("epoch", 0) < min_epoch:
+                return False
+
+            with self._lock:
+                if not self._chain:
+                    return False
+                tail = self._chain[-1]
+                tail_hash = (
+                    tail.review_receipt_hash
+                    if isinstance(tail, HumanReviewReceipt)
+                    else tail.receipt_hash
+                )
+                return hmac.compare_digest(
+                    checkpoint.get("head_hash", ""), tail_hash
+                )
+        except Exception:
+            return False
+
+    def detect_fork(self, receipt_hash_a: str, receipt_hash_b: str) -> bool:
+        """Return True if two receipts claim the same chain_position —
+        indicating a fork (concurrent write attempt from the same parent).
+        Closes Massimiliano Round 2 falsification test #7.
+        A fork must never be silently resolved; callers must halt and
+        alert on True."""
+        with self._lock:
+            positions: Dict[int, list] = {}
+            for item in self._chain:
+                h = (item.review_receipt_hash
+                     if isinstance(item, HumanReviewReceipt)
+                     else item.receipt_hash)
+                pos = item.chain_position
+                positions.setdefault(pos, []).append(h)
+
+            # A fork exists if any position has more than one hash,
+            # OR if the two provided hashes share a chain_position
+            for pos, hashes in positions.items():
+                if len(hashes) > 1:
+                    return True
+
+            # Also check the two specific hashes passed in
+            pos_a = next(
+                (item.chain_position for item in self._chain
+                 if (item.review_receipt_hash
+                     if isinstance(item, HumanReviewReceipt)
+                     else item.receipt_hash) == receipt_hash_a),
+                None,
+            )
+            pos_b = next(
+                (item.chain_position for item in self._chain
+                 if (item.review_receipt_hash
+                     if isinstance(item, HumanReviewReceipt)
+                     else item.receipt_hash) == receipt_hash_b),
+                None,
+            )
+            if pos_a is not None and pos_b is not None and pos_a == pos_b:
+                return True
+            return False
+
+    def verify_receipt_applicability(
+        self, receipt_hash: str, checkpoint: Dict, min_epoch: int = 0
+    ) -> Dict:
+        """Full applicability verification for a receipt presented in isolation.
+
+        Returns a structured verdict so callers can distinguish:
+          - historically_valid: the receipt exists in the chain with valid HMAC
+          - currently_applicable: the receipt IS the current chain head
+          - checkpoint_fresh: the checkpoint passes freshness + signature check
+          - verdict: "authoritative" | "superseded" | "invalid" | "stale_checkpoint"
+
+        This is the method an auditor or verifier MUST call — not just
+        is_authoritative() — to close Massimiliano's core finding that
+        historical validity != current applicability.
+        """
+        result = {
+            "receipt_hash": receipt_hash,
+            "historically_valid": False,
+            "currently_applicable": False,
+            "checkpoint_fresh": False,
+            "verdict": "invalid",
+        }
+
+        # 1. Verify checkpoint freshness first — if stale, we cannot trust
+        # the applicability determination at all
+        if not self.verify_checkpoint(checkpoint, min_epoch=min_epoch):
+            result["verdict"] = "stale_checkpoint"
+            return result
+
+        result["checkpoint_fresh"] = True
+
+        # 2. Check historical validity — receipt must exist with valid HMAC
+        with self._lock:
+            matching = next(
+                (item for item in self._chain
+                 if (item.review_receipt_hash
+                     if isinstance(item, HumanReviewReceipt)
+                     else item.receipt_hash) == receipt_hash),
+                None,
+            )
+
+        if matching is None:
+            result["verdict"] = "invalid"
+            return result
+
+        sign_content = self._build_sign_content(matching)
+        expected_sig = self._sign_receipt(sign_content)
+        if not hmac.compare_digest(receipt_hash, expected_sig):
+            result["verdict"] = "invalid"
+            return result
+
+        result["historically_valid"] = True
+
+        # 3. Check current applicability against checkpoint head
+        head_hash = checkpoint.get("head_hash", "")
+        if hmac.compare_digest(receipt_hash, head_hash):
+            result["currently_applicable"] = True
+            result["verdict"] = "authoritative"
+        else:
+            result["verdict"] = "superseded"
+
+        return result
+
     def export_chain(self) -> List[Dict]:
         with self._lock:
             return [asdict(r) for r in self._chain]
