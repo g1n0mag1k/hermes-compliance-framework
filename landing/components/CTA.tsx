@@ -117,17 +117,7 @@ export function CTA() {
                 className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="font-mono text-caption text-muted uppercase tracking-widest">
-                Phone <span className="normal-case text-muted/60">(optional)</span>
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                placeholder="(555) 000-0000"
-                className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40"
-              />
-            </div>
+
             <div className="flex flex-col gap-1">
               <label className="font-mono text-caption text-muted uppercase tracking-widest">
                 Anything we should know? <span className="normal-case text-muted/60">(optional)</span>
