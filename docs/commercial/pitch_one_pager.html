@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hermes Relay — One-Page Pitch | Sui-Generis LLC</title>
+  <meta name="description" content="Hermes Relay: zero-egress PHI redaction API with hash-chained attestation. Built for MSPs serving HIPAA-covered entities." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --void: #080c10;
+      --surface: #0d1117;
+      --border: #1c2a3a;
+      --ink: #e8edf2;
+      --muted: #6b7e8f;
+      --signal: #00b4d8;
+      --verify: #00c896;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      background: var(--void);
+      color: var(--ink);
+      font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 1.5rem;
+    }
+
+    .page {
+      width: 8.5in;
+      min-height: 11in;
+      max-width: 100%;
+      background: var(--void);
+      border: 2px solid var(--border);
+      padding: 0.55in 0.6in 0.5in;
+      display: flex;
+      flex-direction: column;
+      gap: 0.42rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .page::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 40% at 100% 0%, rgba(0, 180, 216, 0.12), transparent 55%),
+        radial-gradient(ellipse 60% 35% at 0% 100%, rgba(0, 180, 216, 0.06), transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0.35rem;
+      margin-bottom: 0.15rem;
+    }
+
+    .brand {
+      font-size: 1.65rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .brand span {
+      color: var(--signal);
+    }
+
+    .brand-meta {
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: right;
+      line-height: 1.45;
+    }
+
+    .brand-meta a {
+      color: var(--signal);
+      text-decoration: none;
+    }
+
+    h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      max-width: 28ch;
+      margin-top: 0.2rem;
+    }
+
+    .lede {
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.45;
+      max-width: 62ch;
+      margin-top: 0.2rem;
+    }
+
+    .pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.35rem;
+    }
+
+    .pill {
+      border: 2px solid var(--border);
+      color: var(--signal);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.28rem 0.5rem;
+      font-weight: 600;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.45rem;
+      margin-top: 0.55rem;
+    }
+
+    .stat {
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-top: 2px solid var(--signal);
+      padding: 0.55rem 0.6rem;
+    }
+
+    .stat-num {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--signal);
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .stat-label {
+      margin-top: 0.35rem;
+      font-size: 0.68rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .section-label {
+      margin-top: 0.55rem;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .diffs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.45rem;
+      margin-top: 0.3rem;
+    }
+
+    .diff {
+      border: 2px solid var(--border);
+      border-left: 2px solid var(--signal);
+      background: var(--surface);
+      padding: 0.55rem 0.55rem 0.6rem;
+    }
+
+    .diff-index {
+      font-size: 0.65rem;
+      color: var(--signal);
+      letter-spacing: 0.1em;
+      font-weight: 600;
+    }
+
+    .diff h3 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-top: 0.25rem;
+      line-height: 1.2;
+    }
+
+    .diff p {
+      margin-top: 0.3rem;
+      font-size: 0.7rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .pricing {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.45rem;
+      margin-top: 0.3rem;
+    }
+
+    .tier {
+      border: 2px solid var(--border);
+      background: var(--surface);
+      padding: 0.55rem 0.6rem;
+    }
+
+    .tier.featured {
+      border-color: var(--signal);
+    }
+
+    .tier-label {
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--signal);
+      font-weight: 600;
+    }
+
+    .tier-price {
+      margin-top: 0.25rem;
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .tier-price small {
+      font-size: 0.68rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-left: 0.15rem;
+    }
+
+    .tier-desc {
+      margin-top: 0.35rem;
+      font-size: 0.68rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .footer {
+      margin-top: auto;
+      padding-top: 0.55rem;
+      border-top: 2px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 1rem;
+    }
+
+    .baa {
+      font-size: 0.78rem;
+      line-height: 1.4;
+    }
+
+    .baa strong {
+      color: var(--verify);
+      font-weight: 600;
+    }
+
+    .contact {
+      text-align: right;
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .contact a {
+      color: var(--signal);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .contact .company {
+      color: var(--muted);
+      font-size: 0.68rem;
+    }
+
+    @media print {
+      @page {
+        size: letter;
+        margin: 0.35in;
+      }
+
+      body {
+        padding: 0;
+        background: var(--void);
+      }
+
+      .page {
+        border: none;
+        width: 100%;
+        min-height: auto;
+        padding: 0;
+      }
+    }
+
+    @media screen and (max-width: 900px) {
+      body {
+        padding: 0.75rem;
+      }
+
+      .page {
+        width: 100%;
+        min-height: auto;
+        padding: 1.25rem;
+      }
+
+      .stats,
+      .diffs,
+      .pricing {
+        grid-template-columns: 1fr;
+      }
+
+      .footer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .contact {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <article class="page" aria-label="Hermes Relay one-page pitch">
+    <header class="topbar">
+      <div class="brand">Hermes <span>Relay</span></div>
+      <div class="brand-meta">
+        Sui-Generis LLC · Rocky Top, TN<br />
+        <a href="https://hermesrelay.dev">hermesrelay.dev</a>
+      </div>
+    </header>
+
+    <h1>We don’t just redact PHI — we give you tamper-evident proof it happened.</h1>
+    <p class="lede">
+      Zero-egress PHI redaction API with hash-chained attestation. Runs inside your environment.
+      Built for MSPs serving HIPAA-covered entities and SMB healthcare — no enterprise contract, no security team required.
+    </p>
+    <div class="pills" aria-label="Product attributes">
+      <span class="pill">Zero-egress</span>
+      <span class="pill">In-flight redaction</span>
+      <span class="pill">Hash-chained attestation</span>
+      <span class="pill">Deterministic pipeline</span>
+    </div>
+
+    <p class="section-label">OCR enforcement reality</p>
+    <div class="stats" role="list">
+      <div class="stat" role="listitem">
+        <div class="stat-num">7</div>
+        <p class="stat-label">OCR resolution agreements against business associates in 2025 alone — highest BA total since 2013</p>
+      </div>
+      <div class="stat" role="listitem">
+        <div class="stat-num">$7.42M</div>
+        <p class="stat-label">Average cost of a healthcare data breach — costliest industry for 15 consecutive years (IBM 2025)</p>
+      </div>
+      <div class="stat" role="listitem">
+        <div class="stat-num">18</div>
+        <p class="stat-label">Safe Harbor identifier categories OCR expects documented per incident — 45 CFR §164.514(b)(2)</p>
+      </div>
+    </div>
+
+    <p class="section-label">Three differentiators</p>
+    <div class="diffs">
+      <div class="diff">
+        <div class="diff-index">01</div>
+        <h3>Cryptographically signed attestation</h3>
+        <p>Every scrub emits a signed receipt linked into a SHA-256 hash chain — tamper-evident proof of what was detected and redacted.</p>
+      </div>
+      <div class="diff">
+        <div class="diff-index">02</div>
+        <h3>Zero-retention, in-flight redaction</h3>
+        <p>PHI is redacted in-flight and never stored — not even encrypted. No PHI datastore to breach, subpoena, or clean up.</p>
+      </div>
+      <div class="diff">
+        <div class="diff-index">03</div>
+        <h3>Built for MSPs &amp; SMB healthcare</h3>
+        <p>Priced and packaged for the MSP managing HIPAA clients and the regional clinic — self-hostable, operational in a week.</p>
+      </div>
+    </div>
+
+    <p class="section-label">Pricing</p>
+    <div class="pricing">
+      <div class="tier">
+        <div class="tier-label">Assessment</div>
+        <div class="tier-price">$750</div>
+        <p class="tier-desc">PHI AI Readiness Assessment — written Safe Harbor gap analysis in five business days. Credited in full toward the pilot.</p>
+      </div>
+      <div class="tier featured">
+        <div class="tier-label">Pilot</div>
+        <div class="tier-price">$2,000 <small>/ 30 days</small></div>
+        <p class="tier-desc">Full production deployment in your environment. Hash-chained audit trail from day one. Direct engineer support.</p>
+      </div>
+      <div class="tier">
+        <div class="tier-label">Production</div>
+        <div class="tier-price">$500 <small>/ month</small></div>
+        <p class="tier-desc">Month-to-month after pilot. Expanding identifier coverage, CFR citation updates, priority support.</p>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <div class="baa">
+        <strong>Business Associate Agreement (BAA) available upon request.</strong><br />
+        Required for HIPAA-covered deployments.
+      </div>
+      <div class="contact">
+        <a href="mailto:andrew@hermesrelay.dev">andrew@hermesrelay.dev</a><br />
+        <a href="https://hermesrelay.dev">hermesrelay.dev</a><br />
+        <span class="company">Andrew Rogers, Founder · Sui-Generis LLC</span>
+      </div>
+    </footer>
+  </article>
+</body>
+</html>
