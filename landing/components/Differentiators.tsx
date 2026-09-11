@@ -37,7 +37,7 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
     label: "Zero-Retention, In-Flight Redaction",
     verdict: "PHI is redacted in-flight and never stored — not even encrypted.",
     body:
-      "Detection and redaction run inside your environment. There is no PHI datastore to breach, export, or delete when an engagement ends. Attestation receipts keep metadata about categories detected/redacted — not the PHI itself. Attestation receipts record only the categories detected and redacted — never the PHI itself. There is no PHI datastore to breach, subpoena, or clean up when an engagement ends.",
+      "Detection and redaction run inside your environment. There is no PHI datastore to breach, subpoena, or clean up when an engagement ends. Attestation receipts record only the categories detected and redacted — never the PHI itself.",
   },
   {
     index: "03",
@@ -48,10 +48,10 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
   },
   {
     index: "04",
-    label: "Built for MSP Delivery",
-    verdict: "One assessment. Repeatable across your entire book.",
+    label: "Applicability-Aware Attestation Chain",
+    verdict: "A receipt is not authoritative evidence unless the chain says it still is.",
     body:
-      "The $750 PHI AI Readiness Assessment reviews your clients' AI data flows, maps PHI exposure points, and delivers a written report in 5 business days — no live patient data required. Credits in full toward a production pilot. Built for MSPs who need to answer 'are we HIPAA-safe with AI?' before their clients ask it first.",
+      "Hermes tracks whether every receipt in the chain is currently authoritative or has been superseded by a later override. A verifier presented with an old receipt cannot treat it as standalone evidence without traversing to the current chain head — closing the gap between historical validity and current applicability that no competing tool addresses.",
   },
 ];
 

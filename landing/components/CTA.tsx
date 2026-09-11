@@ -113,7 +113,7 @@ export function CTA() {
                 type="email"
                 name="email"
                 required
-                placeholder="andrew@hermesrelay.dev"
+                placeholder="you@yourcompany.com"
                 className="bg-transparent border border-muted text-ink font-body text-body px-4 py-3 focus:outline-none focus:border-signal placeholder:text-muted/40"
               />
             </div>
