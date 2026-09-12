@@ -5,8 +5,10 @@ import urllib.parse
 import spacy
 import threading
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 from presidio_analyzer import AnalyzerEngine
+
+from hermes.vault import VAULT
 
 # -------------------------------------------------------------------------
 # COMPLIANCE INVARIANT: Model must be local. No external API calls permitted.
@@ -603,20 +605,50 @@ def _collect_presidio_spans(text: str) -> List[Tuple[int, int, Set[str], str]]:
     return spans
 
 
+def _static_redaction_token(placeholder: str) -> str:
+    return f"[REDACTED_{placeholder}]"
+
+
+def _primary_flag_for_span(flag_names: Set[str], placeholder: str) -> str:
+    """Pick one flag for vault storage when a span maps to multiple flags."""
+    placeholder_to_flag = {
+        "PHONE": "HIPAA_PHI_PHONE",
+        "EMAIL": "HIPAA_PHI_EMAIL",
+        "URL": "HIPAA_PHI_URL",
+        "IP": "HIPAA_PHI_IP",
+        "ADDRESS": "HIPAA_PHI_ADDRESS",
+        "BANK_NUMBER": "HIPAA_PHI_BANK_NUMBER",
+        "PERSON": "HIPAA_PHI_PERSON",
+        "DATE": "HIPAA_PHI_DATE",
+        "ORG": "HIPAA_PHI_ORG",
+    }
+    preferred = placeholder_to_flag.get(placeholder)
+    if preferred and preferred in flag_names:
+        return preferred
+    return sorted(flag_names)[0]
+
+
 def _apply_span_redactions(
     text: str,
     spans: List[Tuple[int, int, Set[str], str]],
     flags: Dict[str, FlagEntry],
     redacted_flags: Dict[str, FlagEntry],
+    token_for_match: Optional[Callable[[str, str, str], str]] = None,
 ) -> str:
     merged_spans = _merge_overlapping_spans(spans)
     merged_spans.sort(key=lambda item: item[0], reverse=True)
 
     clean_text = text
     for start, end, flag_names, placeholder in merged_spans:
+        matched_value = text[start:end]
         for flag_name in flag_names:
             _increment_flag(flags, flag_name)
-        clean_text = clean_text[:start] + f"[REDACTED_{placeholder}]" + clean_text[end:]
+        if token_for_match is not None:
+            primary = _primary_flag_for_span(flag_names, placeholder)
+            replacement = token_for_match(primary, matched_value, placeholder)
+        else:
+            replacement = _static_redaction_token(placeholder)
+        clean_text = clean_text[:start] + replacement + clean_text[end:]
         for flag_name in flag_names:
             _increment_flag(redacted_flags, flag_name)
 
@@ -651,6 +683,26 @@ def _run_stage(fn, *args) -> Tuple[str, str]:
 # GLOBAL THREAD LOCK & ORCHESTRATOR
 # -------------------------------------------------------------------------
 def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
+    """Irreversible scrub — PHI replaced with static [REDACTED_*] placeholders."""
+    return _scrub_payload_impl(transaction_id, text, reversible=False)
+
+
+def scrub_payload_reversible(transaction_id: str, text: str) -> ScrubberResult:
+    """Reversible scrub — PHI replaced with vault tokens via VAULT.store()."""
+    return _scrub_payload_impl(transaction_id, text, reversible=True)
+
+
+def _scrub_payload_impl(
+    transaction_id: str,
+    text: str,
+    *,
+    reversible: bool = False,
+) -> ScrubberResult:
+    def _tok(flag_name: str, matched_value: str, placeholder: str) -> str:
+        if reversible:
+            return VAULT.store(flag_name, matched_value, transaction_id)
+        return _static_redaction_token(placeholder)
+
     # Unicode normalization — NFKC folds homoglyphs, fullwidth chars,
     # and compatibility variants before any detection pass.
     # Prevents evasion via Cyrillic lookalikes, Unicode dashes, etc.
@@ -698,28 +750,28 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     def gps_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_GPS")
         _increment_flag(redacted_flags, "HIPAA_PHI_GPS")
-        return "[REDACTED_GPS]"
+        return _tok("HIPAA_PHI_GPS", _match.group(0), "GPS")
     clean_text, status = _run_regex_stage(REGEX_GPS, gps_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(B) GPS"] = status
 
     def age_over_89_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_AGE_89")
         _increment_flag(redacted_flags, "HIPAA_PHI_AGE_89")
-        return "[REDACTED_AGE_OVER_89]"
+        return _tok("HIPAA_PHI_AGE_89", _match.group(0), "AGE_OVER_89")
     clean_text, status = _run_regex_stage(REGEX_AGE_OVER_89, age_over_89_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(C) age>89"] = status
 
     def hpbn_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_HPBN")
         _increment_flag(redacted_flags, "HIPAA_PHI_HPBN")
-        return "[REDACTED_HPBN]"
+        return _tok("HIPAA_PHI_HPBN", _match.group(0), "HPBN")
     clean_text, status = _run_regex_stage(REGEX_HPBN, hpbn_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(I)"] = status
 
     def account_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_ACCOUNT")
         _increment_flag(redacted_flags, "HIPAA_PHI_ACCOUNT")
-        return "[REDACTED_ACCOUNT]"
+        return _tok("HIPAA_PHI_ACCOUNT", _match.group(0), "ACCOUNT")
     clean_text, status = _run_regex_stage(REGEX_ACCOUNT, account_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(J)"] = status
 
@@ -728,28 +780,28 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
             return match.group(0)
         _increment_flag(flags, "HIPAA_PHI_VIN")
         _increment_flag(redacted_flags, "HIPAA_PHI_VIN")
-        return "[REDACTED_VIN]"
+        return _tok("HIPAA_PHI_VIN", match.group(0), "VIN")
     clean_text, status = _run_regex_stage(REGEX_VIN, vin_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(L)"] = status
 
     def mrn_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_MRN")
         _increment_flag(redacted_flags, "HIPAA_PHI_MRN")
-        return "[REDACTED_MRN]"
+        return _tok("HIPAA_PHI_MRN", _match.group(0), "MRN")
     clean_text, status = _run_regex_stage(REGEX_MRN, mrn_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(H)"] = status
 
     def fax_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_FAX")
         _increment_flag(redacted_flags, "HIPAA_PHI_FAX")
-        return "[REDACTED_FAX]"
+        return _tok("HIPAA_PHI_FAX", _match.group(0), "FAX")
     clean_text, status = _run_regex_stage(REGEX_FAX, fax_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(E)"] = status
 
     def ssn_replacer(_match):
         _increment_flag(flags, "HIPAA_SSN")
         _increment_flag(redacted_flags, "HIPAA_SSN")
-        return "[REDACTED_SSN]"
+        return _tok("HIPAA_SSN", _match.group(0), "SSN")
 
     clean_text, status = _run_regex_stage(REGEX_SSN, ssn_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(G)"] = status
@@ -760,7 +812,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         if validate_luhn_checksum(clean_candidate):
             _increment_flag(flags, "PCI_PAN")
             _increment_flag(redacted_flags, "PCI_PAN")
-            return "[REDACTED_PAN]"
+            return _tok("PCI_PAN", candidate, "PAN")
         return candidate
 
     clean_text, status = _run_regex_stage(REGEX_PAN, pan_replacer, clean_text)
@@ -772,7 +824,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         if _validate_dea(candidate):
             _increment_flag(flags, "HIPAA_PHI_CERT_LICENSE")
             _increment_flag(redacted_flags, "HIPAA_PHI_CERT_LICENSE")
-            return match.group(0).replace(candidate, "[REDACTED_CERT_LICENSE]")
+            return match.group(0).replace(candidate, _tok("HIPAA_PHI_CERT_LICENSE", candidate, "CERT_LICENSE"))
         return match.group(0)
     clean_text, status = _run_regex_stage(REGEX_DEA, cert_license_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(K) DEA"] = status
@@ -782,7 +834,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         if _validate_npi(candidate):
             _increment_flag(flags, "HIPAA_PHI_NPI")
             _increment_flag(redacted_flags, "HIPAA_PHI_NPI")
-            return "[REDACTED_NPI]"
+            return _tok("HIPAA_PHI_NPI", candidate, "NPI")
         return match.group(0)
     # Only run NPI replacer when context word present to avoid false positives on bare 10-digit numbers
     # Scan for NPI context then apply targeted replacement
@@ -796,7 +848,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         if _validate_npi(candidate):
             _increment_flag(flags, "HIPAA_PHI_NPI")
             _increment_flag(redacted_flags, "HIPAA_PHI_NPI")
-            return match.group(0).replace(candidate, "[REDACTED_NPI]")
+            return match.group(0).replace(candidate, _tok("HIPAA_PHI_NPI", candidate, "NPI"))
         return match.group(0)
     clean_text, status = _run_regex_stage(_NPI_CONTEXT, npi_context_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(K) NPI"] = status
@@ -804,7 +856,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     def state_license_replacer(match):
         _increment_flag(flags, "HIPAA_PHI_STATE_LICENSE")
         _increment_flag(redacted_flags, "HIPAA_PHI_STATE_LICENSE")
-        return match.group(0).replace(match.group(1), "[REDACTED_STATE_LICENSE]")
+        return match.group(0).replace(match.group(1), _tok("HIPAA_PHI_STATE_LICENSE", match.group(1), "STATE_LICENSE"))
     clean_text, status = _run_regex_stage(REGEX_STATE_LICENSE, state_license_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(K) state_license"] = status
 
@@ -812,28 +864,28 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     def udi_gs1_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
         _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
-        return "[REDACTED_DEVICE_ID]"
+        return _tok("HIPAA_PHI_DEVICE_ID", _match.group(0), "DEVICE_ID")
     clean_text, status = _run_regex_stage(REGEX_UDI_GS1, udi_gs1_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(M) UDI_GS1"] = status
 
     def udi_serial_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
         _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
-        return "[REDACTED_DEVICE_ID]"
+        return _tok("HIPAA_PHI_DEVICE_ID", _match.group(0), "DEVICE_ID")
     clean_text, status = _run_regex_stage(REGEX_UDI_SERIAL, udi_serial_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(M) UDI_SERIAL"] = status
 
     def udi_hibcc_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
         _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
-        return "[REDACTED_DEVICE_ID]"
+        return _tok("HIPAA_PHI_DEVICE_ID", _match.group(0), "DEVICE_ID")
     clean_text, status = _run_regex_stage(REGEX_UDI_HIBCC, udi_hibcc_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(M) UDI_HIBCC"] = status
 
     def udi_iccbba_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
         _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
-        return "[REDACTED_DEVICE_ID]"
+        return _tok("HIPAA_PHI_DEVICE_ID", _match.group(0), "DEVICE_ID")
     clean_text, status = _run_regex_stage(REGEX_UDI_ICCBBA, udi_iccbba_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(M) UDI_ICCBBA"] = status
 
@@ -842,7 +894,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         if _validate_gtin14(candidate):
             _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
             _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
-            return "[REDACTED_DEVICE_ID]"
+            return _tok("HIPAA_PHI_DEVICE_ID", match.group(0), "DEVICE_ID")
         return match.group(0)
     # Only run GTIN-14 with device context
     _GTIN_CONTEXT = re.compile(
@@ -855,7 +907,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         if _validate_gtin14(candidate):
             _increment_flag(flags, "HIPAA_PHI_DEVICE_ID")
             _increment_flag(redacted_flags, "HIPAA_PHI_DEVICE_ID")
-            return match.group(0).replace(candidate, "[REDACTED_DEVICE_ID]")
+            return match.group(0).replace(candidate, _tok("HIPAA_PHI_DEVICE_ID", candidate, "DEVICE_ID"))
         return match.group(0)
     clean_text, status = _run_regex_stage(_GTIN_CONTEXT, gtin_context_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(M) GTIN14"] = status
@@ -864,14 +916,14 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     def biometric_denylist_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_BIOMETRIC_REF")
         _increment_flag(redacted_flags, "HIPAA_PHI_BIOMETRIC_REF")
-        return "[REDACTED_BIOMETRIC_REF]"
+        return _tok("HIPAA_PHI_BIOMETRIC_REF", _match.group(0), "BIOMETRIC_REF")
     clean_text, status = _run_regex_stage(_BIOMETRIC_DENYLIST, biometric_denylist_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(P) text_ref"] = status
 
     def biometric_file_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_BIOMETRIC_REF")
         _increment_flag(redacted_flags, "HIPAA_PHI_BIOMETRIC_REF")
-        return "[REDACTED_BIOMETRIC_REF]"
+        return _tok("HIPAA_PHI_BIOMETRIC_REF", _match.group(0), "BIOMETRIC_REF")
     clean_text, status = _run_regex_stage(REGEX_BIOMETRIC_FILE, biometric_file_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(P) file_ref"] = status
     # Content channel — cannot be inspected by text pipeline
@@ -881,14 +933,14 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     def image_file_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_IMAGE_REF")
         _increment_flag(redacted_flags, "HIPAA_PHI_IMAGE_REF")
-        return "[REDACTED_IMAGE_REF]"
+        return _tok("HIPAA_PHI_IMAGE_REF", _match.group(0), "IMAGE_REF")
     clean_text, status = _run_regex_stage(REGEX_IMAGE_FILE, image_file_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(Q) file_ref"] = status
 
     def image_b64_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_IMAGE_REF")
         _increment_flag(redacted_flags, "HIPAA_PHI_IMAGE_REF")
-        return "[REDACTED_IMAGE_REF]"
+        return _tok("HIPAA_PHI_IMAGE_REF", _match.group(0), "IMAGE_REF")
     clean_text, status = _run_regex_stage(REGEX_IMAGE_B64, image_b64_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(Q) b64_ref"] = status
     # Content channel — cannot be inspected by text pipeline
@@ -898,14 +950,14 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     def trial_id_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_TRIAL_ID")
         _increment_flag(redacted_flags, "HIPAA_PHI_TRIAL_ID")
-        return "[REDACTED_TRIAL_ID]"
+        return _tok("HIPAA_PHI_TRIAL_ID", _match.group(0), "TRIAL_ID")
     clean_text, status = _run_regex_stage(REGEX_TRIAL_ID, trial_id_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(R) trial_id"] = status
 
     def unique_code_replacer(_match):
         _increment_flag(flags, "HIPAA_PHI_UNIQUE_CODE")
         _increment_flag(redacted_flags, "HIPAA_PHI_UNIQUE_CODE")
-        return "[REDACTED_UNIQUE_CODE]"
+        return _tok("HIPAA_PHI_UNIQUE_CODE", _match.group(0), "UNIQUE_CODE")
     clean_text, status = _run_regex_stage(REGEX_UNIQUE_CODE, unique_code_replacer, clean_text)
     detectors_executed["45 CFR §164.514(b)(2)(i)(R) unique_code"] = status
 
@@ -928,7 +980,7 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
         presidio_status = DETECTOR_RAN_ERROR
 
     entity_spans = spacy_spans + presidio_spans
-    clean_text = _apply_span_redactions(clean_text, entity_spans, flags, redacted_flags)
+    clean_text = _apply_span_redactions(clean_text, entity_spans, flags, redacted_flags, token_for_match=_tok)
     # Record NER + Presidio categories as executed, attributed to the
     # engine that actually covers each CFR category.
     detectors_executed["45 CFR §164.514(b)(2)(i)(A)"] = spacy_status     # Names (spaCy)
