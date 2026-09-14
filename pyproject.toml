@@ -22,7 +22,7 @@ dependencies = [
     "presidio-analyzer==2.2.364",
     "cryptography==45.0.5",
     "pydantic==2.13.4",
-    "fastapi==0.115.12",
+    "fastapi==0.141.1",
     "uvicorn==0.34.3",
     "httpx==0.28.1",
     "python-dotenv==1.1.0",
