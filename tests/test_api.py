@@ -210,3 +210,41 @@ def test_review_endpoint_invalid_decision_returns_400():
         },
     )
     assert response.status_code == 400
+
+
+def test_status_endpoint_requires_api_key():
+    """/v1/status must enforce the same tenant auth as /v1/scrub."""
+    response = client.get("/v1/status")
+    assert response.status_code == 422  # missing header entirely
+
+    response = client.get(
+        "/v1/status",
+        headers={"X-API-Key": "invalid_key"},
+    )
+    assert response.status_code == 401
+
+
+def test_status_endpoint_after_scrub():
+    """After a scrub, /v1/status reports chain metrics from ATTESTATION_CHAIN."""
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+
+    scrub_response = client.post(
+        "/v1/scrub",
+        headers=headers,
+        json={"payload": "Patient SSN is 123-45-6789."},
+    )
+    assert scrub_response.status_code == 200
+    receipt = scrub_response.json()["compliance_receipt"]
+
+    response = client.get("/v1/status", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["chain_position"] == receipt["chain_position"]
+    assert data["total_scans"] == ATTESTATION_CHAIN.chain_length()
+    assert data["last_scan_at"] == receipt["issued_at"]
+    assert data["zero_phi_egress_confirmed"] is True
+    assert "HIPAA_SSN" in data["phi_classes_detected_today"]
+    assert data["critical_findings_open"] >= 1
+    assert data["evidence_current_as_of"] == receipt["issued_at"]
+    assert data["chain_integrity"] == "verified"

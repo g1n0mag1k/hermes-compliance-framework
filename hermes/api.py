@@ -2,6 +2,7 @@ import hmac
 import os
 import uuid
 from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks
@@ -87,6 +88,17 @@ class ReviewRequest(BaseModel):
     reviewed_by: str = Field(..., min_length=1)
     decision: str = Field(..., description=f"One of {REVIEW_DECISIONS}")
     override_reason: Optional[str] = None
+
+
+class StatusResponse(BaseModel):
+    chain_position: int
+    total_scans: int
+    last_scan_at: str
+    zero_phi_egress_confirmed: bool
+    phi_classes_detected_today: List[str]
+    critical_findings_open: int
+    evidence_current_as_of: str
+    chain_integrity: str
 
 
 def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
@@ -176,3 +188,66 @@ def review_endpoint(request: ReviewRequest):
         raise HTTPException(status_code=status_code, detail=message) from exc
 
     return HumanReviewReceiptOut.model_validate(asdict(review))
+
+
+@app.get(
+    "/v1/status",
+    response_model=StatusResponse,
+    tags=["System"],
+    dependencies=[Depends(verify_api_key)],
+)
+def status_endpoint():
+    """Dashboard data source — aggregate attestation-chain metrics for MSP UI."""
+    chain = ATTESTATION_CHAIN.export_chain()
+    total_scans = len(chain)
+
+    if total_scans == 0:
+        return StatusResponse(
+            chain_position=0,
+            total_scans=0,
+            last_scan_at="",
+            zero_phi_egress_confirmed=True,
+            phi_classes_detected_today=[],
+            critical_findings_open=0,
+            evidence_current_as_of="",
+            chain_integrity="no_data",
+        )
+
+    latest = chain[-1]
+    now = datetime.now(timezone.utc)
+    cutoff_24h = now - timedelta(hours=24)
+    cutoff_7d = now - timedelta(days=7)
+
+    # Most recent ComplianceReceipt for zero_phi (reviews lack this field)
+    zero_phi = True
+    for item in reversed(chain):
+        if "zero_pii_egress_confirmed" in item:
+            zero_phi = bool(item["zero_pii_egress_confirmed"])
+            break
+
+    phi_today: set = set()
+    critical_findings_open = 0
+    for item in chain:
+        classes = item.get("pii_classes_detected")
+        if classes is None:
+            continue
+        issued_at = datetime.fromisoformat(item["issued_at"])
+        if issued_at.tzinfo is None:
+            issued_at = issued_at.replace(tzinfo=timezone.utc)
+        if issued_at >= cutoff_24h:
+            phi_today.update(classes)
+        if issued_at >= cutoff_7d and len(classes) > 0:
+            critical_findings_open += 1
+
+    return StatusResponse(
+        chain_position=latest["chain_position"],
+        total_scans=total_scans,
+        last_scan_at=latest["issued_at"],
+        zero_phi_egress_confirmed=zero_phi,
+        phi_classes_detected_today=sorted(phi_today),
+        critical_findings_open=critical_findings_open,
+        evidence_current_as_of=latest["issued_at"],
+        chain_integrity=(
+            "verified" if ATTESTATION_CHAIN.verify_chain() else "no_data"
+        ),
+    )
