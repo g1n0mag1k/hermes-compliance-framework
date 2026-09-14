@@ -79,3 +79,8 @@ site/
 *.bak
 *.save
 zorin-code
+hermes_round2_receipt.pdf
+review_response.json
+scrub_response.json
+hermes_chain.db
+hermes_canary.db
