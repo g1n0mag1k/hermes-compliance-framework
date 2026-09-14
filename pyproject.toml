@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools==75.8.2", "wheel==0.45.1"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "hermes-relay"
+version = "1.0.0"
+description = "Local-first PHI detection and compliance evidence for MSPs serving HIPAA-covered entities"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "Proprietary"}
+authors = [
+    {name = "Andrew Rogers", email = "andrew@hermesrelay.dev"}
+]
+keywords = ["HIPAA", "PHI", "compliance", "MSP", "healthcare", "DLP"]
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "spacy==3.8.16",
+    "presidio-analyzer==2.2.364",
+    "cryptography==45.0.5",
+    "pydantic==2.13.4",
+    "fastapi==0.115.12",
+    "uvicorn==0.34.3",
+    "httpx==0.28.1",
+    "python-dotenv==1.1.0",
+    "reportlab==5.0.1",
+]
+
+[project.scripts]
+hermes-relay = "hermes.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hermes*"]
+
