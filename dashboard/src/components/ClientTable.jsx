@@ -17,7 +17,7 @@ function timeAgo(isoString) {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
-export default function ClientTable({ status }) {
+export default function ClientTable({ status, onClientClick }) {
   const { label, color } = statusLabel(status)
 
   return (
@@ -42,7 +42,7 @@ export default function ClientTable({ status }) {
           </tr>
         </thead>
         <tbody>
-          <tr className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+          <tr className="border-t border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer" onClick={onClientClick}>
             <td className="px-5 py-4">
               <div className="font-medium text-slate-800">Hermes Relay (Self)</div>
               <div className="text-xs text-slate-400">Rocky Top, TN</div>

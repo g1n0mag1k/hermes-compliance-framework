@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import PortfolioHeader from './components/PortfolioHeader.jsx'
 import ClientTable from './components/ClientTable.jsx'
+import ClientDetail from './components/ClientDetail.jsx'
 import { fetchStatus, API_URL } from './lib/api.js'
 
 export default function App() {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [view, setView] = useState('portfolio')
 
   async function load() {
     try {
@@ -58,7 +60,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-canvas">
       <header className="bg-navy text-white px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+        <div
+          className="flex items-center gap-3 cursor-pointer"
+          onClick={() => setView('portfolio')}
+        >
           <div className="w-7 h-7 rounded-full bg-emerald-600 flex items-center justify-center">
             <span className="text-white text-xs font-bold">H</span>
           </div>
@@ -71,8 +76,20 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <PortfolioHeader status={status} />
-        <ClientTable status={status} />
+        {view === 'portfolio' ? (
+          <>
+            <PortfolioHeader status={status} />
+            <ClientTable
+              status={status}
+              onClientClick={() => setView('client')}
+            />
+          </>
+        ) : (
+          <ClientDetail
+            status={status}
+            onBack={() => setView('portfolio')}
+          />
+        )}
 
         <div className="mt-6 text-center text-xs text-slate-400">
           Chain integrity: {status?.chain_integrity} ·
