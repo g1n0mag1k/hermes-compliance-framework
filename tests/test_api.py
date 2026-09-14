@@ -210,3 +210,167 @@ def test_review_endpoint_invalid_decision_returns_400():
         },
     )
     assert response.status_code == 400
+
+
+def test_status_endpoint_requires_api_key():
+    """/v1/status must enforce the same tenant auth as /v1/scrub."""
+    response = client.get("/v1/status")
+    assert response.status_code == 422  # missing header entirely
+
+    response = client.get(
+        "/v1/status",
+        headers={"X-API-Key": "invalid_key"},
+    )
+    assert response.status_code == 401
+
+
+def test_status_endpoint_after_scrub():
+    """After a scrub, /v1/status reports chain metrics from ATTESTATION_CHAIN."""
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+
+    scrub_response = client.post(
+        "/v1/scrub",
+        headers=headers,
+        json={"payload": "Patient SSN is 123-45-6789."},
+    )
+    assert scrub_response.status_code == 200
+    receipt = scrub_response.json()["compliance_receipt"]
+
+    response = client.get("/v1/status", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["chain_position"] == receipt["chain_position"]
+    assert data["total_scans"] == ATTESTATION_CHAIN.chain_length()
+    assert data["last_scan_at"] == receipt["issued_at"]
+    assert data["zero_phi_egress_confirmed"] is True
+    assert "HIPAA_SSN" in data["phi_classes_detected_today"]
+    assert data["critical_findings_open"] >= 1
+    assert data["evidence_current_as_of"] == receipt["issued_at"]
+    assert data["chain_integrity"] == "verified"
+
+
+def test_status_endpoint_includes_trial_quota_fields():
+    """/v1/status always exposes trial quota fields for the dashboard."""
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+    response = client.get("/v1/status", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert "scans_used" in data
+    assert "scans_remaining" in data
+    assert "trial_active" in data
+    assert "trial_expires_at" in data
+    assert isinstance(data["scans_used"], int)
+    assert isinstance(data["scans_remaining"], int)
+    assert isinstance(data["trial_active"], bool)
+
+
+def test_trial_scan_endpoint_requires_api_key():
+    """/v1/trial-scan must enforce the same tenant auth as /v1/scrub."""
+    response = client.post("/v1/trial-scan")
+    assert response.status_code == 422
+
+    response = client.post(
+        "/v1/trial-scan",
+        headers={"X-API-Key": "invalid_key"},
+    )
+    assert response.status_code == 401
+
+
+def test_trial_scan_endpoint_returns_scrub_response():
+    """Successful trial scan returns ScrubResponse and increments quota by 1."""
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+    before = client.get("/v1/status", headers=headers).json()["scans_used"]
+
+    response = client.post("/v1/trial-scan", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "clean_text" in data
+    assert "compliance_receipt" in data
+    assert data["compliance_receipt"]["receipt_hash"]
+    assert _verify_receipt_dict(data["compliance_receipt"])
+    assert ATTESTATION_CHAIN.verify_chain()
+
+    after = client.get("/v1/status", headers=headers).json()["scans_used"]
+    assert after == before + 1
+
+
+def test_trial_scan_then_status_reflects_scan():
+    """After trial scan, /v1/status reflects chain metrics and quota fields."""
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+
+    response = client.post("/v1/trial-scan", headers=headers)
+    assert response.status_code == 200
+    receipt = response.json()["compliance_receipt"]
+
+    status = client.get("/v1/status", headers=headers)
+    assert status.status_code == 200
+    data = status.json()
+
+    assert data["total_scans"] == ATTESTATION_CHAIN.chain_length()
+    assert data["chain_position"] == receipt["chain_position"]
+    assert data["scans_used"] >= 1
+    assert data["scans_remaining"] == max(5 - data["scans_used"], 0)
+    assert data["trial_active"] is True
+    assert data["trial_expires_at"] is not None
+    assert len(data["phi_classes_detected_today"]) >= 1
+
+
+def test_trial_scan_returns_429_when_quota_exhausted(tmp_path, monkeypatch):
+    """After 5 successful trial scans, the 6th returns 429 and does not increment."""
+    from hermes.attestation import AttestationChain
+    from hermes import api as api_mod
+
+    db_path = str(tmp_path / "quota_exhaust_hermes_chain.db")
+    monkeypatch.setenv("HERMES_DB_PATH", db_path)
+    chain = AttestationChain(db_path=db_path)
+    monkeypatch.setattr(api_mod, "ATTESTATION_CHAIN", chain)
+
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+
+    for _ in range(5):
+        resp = client.post("/v1/trial-scan", headers=headers)
+        assert resp.status_code == 200, resp.text
+
+    used_at_limit = client.get("/v1/status", headers=headers).json()["scans_used"]
+    assert used_at_limit == 5
+
+    blocked = client.post("/v1/trial-scan", headers=headers)
+    assert blocked.status_code == 429
+
+    after = client.get("/v1/status", headers=headers).json()["scans_used"]
+    assert after == used_at_limit
+
+
+def test_trial_quota_persists_after_simulated_restart(tmp_path, monkeypatch):
+    """Quota in hermes_chain.db survives a new AttestationChain on the same path."""
+    from hermes.attestation import AttestationChain
+    from hermes import api as api_mod
+
+    db_path = str(tmp_path / "restart_hermes_chain.db")
+    monkeypatch.setenv("HERMES_DB_PATH", db_path)
+
+    # Fresh chain on the isolated DB path (simulates process start).
+    chain = AttestationChain(db_path=db_path)
+    monkeypatch.setattr(api_mod, "ATTESTATION_CHAIN", chain)
+
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+    response = client.post("/v1/trial-scan", headers=headers)
+    assert response.status_code == 200
+
+    scans_used, first_scan_at, _ = api_mod._get_trial_quota()
+    assert scans_used == 1
+    assert first_scan_at
+
+    # Simulated restart: new AttestationChain handle, same SQLite file.
+    restarted = AttestationChain(db_path=db_path)
+    monkeypatch.setattr(api_mod, "ATTESTATION_CHAIN", restarted)
+
+    scans_used_after, first_after, _ = api_mod._get_trial_quota()
+    assert scans_used_after == 1
+    assert first_after == first_scan_at
+
+    status = client.get("/v1/status", headers=headers)
+    assert status.status_code == 200
+    assert status.json()["scans_used"] == 1
