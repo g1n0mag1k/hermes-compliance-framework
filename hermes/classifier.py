@@ -442,7 +442,10 @@ _PIPELINE_LOCK = threading.Lock()
 
 def _get_presidio_analyzer() -> AnalyzerEngine:
     if _PresidioAnalyzerCache.engine is None:
-        _PresidioAnalyzerCache.engine = AnalyzerEngine()
+        from presidio_analyzer.nlp_engine import NlpEngineProvider as _NlpEngineProvider
+        _nlp_config = {"nlp_engine_name": "spacy", "models": [{"lang_code": "en", "model_name": "en_core_web_sm"}]}
+        _nlp_provider = _NlpEngineProvider(nlp_configuration=_nlp_config)
+        _PresidioAnalyzerCache.engine = AnalyzerEngine(nlp_engine=_nlp_provider.create_engine())
     return _PresidioAnalyzerCache.engine
 
 
