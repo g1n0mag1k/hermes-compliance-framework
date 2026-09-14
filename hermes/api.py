@@ -13,7 +13,7 @@ from hermes.attestation import (
     HumanReviewReceipt,
     REVIEW_DECISIONS,
 )
-from hermes.webhooks import dispatch_webhook
+from hermes.webhooks import dispatch_webhook, dispatch_drata_cct
 from hermes.classifier import (
     FlagEntry,
     RedactionAuditLog,
@@ -33,8 +33,6 @@ app = FastAPI(
 # -------------------------------------------------------------------------
 # SCHEMAS & AUTHENTICATION
 # -------------------------------------------------------------------------
-# The expected tenant API key is sourced from the environment so that no
-# credential is committed to source control (set HERMES_API_KEY at deploy).
 API_KEY_ENV_VAR = "HERMES_API_KEY"
 
 class ScrubRequest(BaseModel):
@@ -92,7 +90,7 @@ class ReviewRequest(BaseModel):
 
 
 def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
-    """Map audit-log flag entries to per-flag counts for attestation issuance. Not a detection change."""
+    """Map audit-log flag entries to per-flag counts for attestation issuance."""
     return {
         k: v.count if isinstance(v, FlagEntry) else v["count"]
         for k, v in flags_triggered.items()
@@ -103,7 +101,7 @@ def _issue_scrub_attestation(
     transaction_id: str,
     result: ScrubberResult,
 ) -> ComplianceReceipt:
-    """Issue a hash-chained compliance receipt for a /v1/scrub call via the shared AttestationChain. Not a detection change."""
+    """Issue a hash-chained compliance receipt for a /v1/scrub call."""
     flags = _flags_to_counts(result.audit_log.flags_triggered)
     redacted = _flags_to_counts(result.audit_log.flags_redacted)
     return ATTESTATION_CHAIN.issue(
@@ -147,6 +145,7 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks):
     result = scrub_payload(transaction_id=txn_id, text=request.payload)
     receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result)
     background_tasks.add_task(dispatch_webhook, receipt)
+    background_tasks.add_task(dispatch_drata_cct, receipt)
     return ScrubResponse(
         clean_text=result.clean_text,
         audit_log=result.audit_log,
@@ -163,8 +162,7 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks):
 def review_endpoint(request: ReviewRequest):
     """Record a human review/override decision for a prior /v1/scrub
     transaction, chained into the same AttestationChain as tamper-evident
-    proof that a control was actually looked at by a person — not just that
-    the automated scan ran."""
+    proof that a control was actually looked at by a person."""
     try:
         review = ATTESTATION_CHAIN.issue_review(
             transaction_id=request.transaction_id,
