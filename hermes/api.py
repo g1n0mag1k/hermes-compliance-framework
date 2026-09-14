@@ -176,3 +176,9 @@ def review_endpoint(request: ReviewRequest):
         raise HTTPException(status_code=status_code, detail=message) from exc
 
     return HumanReviewReceiptOut.model_validate(asdict(review))
+
+# Serve React dashboard — API routes take priority
+from pathlib import Path
+_dashboard_dist = Path(__file__).parent.parent / "dashboard" / "dist"
+if _dashboard_dist.exists():
+    app.frontend("/", directory=_dashboard_dist)
