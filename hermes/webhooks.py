@@ -107,3 +107,69 @@ def dispatch_webhook(receipt: ComplianceReceipt, event_type: str = "scrub") -> b
     except Exception as exc:
         logger.warning("Hermes webhook dispatch raised unexpected error: %s", exc)
         return False
+
+
+def dispatch_drata_cct(receipt: ComplianceReceipt) -> bool:
+    """
+    POST a Hermes compliance receipt to Drata's Custom Connections
+    and Tests (CCT) API as structured evidence.
+
+    Configuration (environment variables):
+        HERMES_DRATA_CCT_URL    Full Drata CCT endpoint URL.
+                                If unset, this function is a no-op.
+        HERMES_DRATA_API_KEY    Drata API key for Authorization header.
+                                If unset, no auth header is added.
+    """
+    cct_url = os.environ.get("HERMES_DRATA_CCT_URL")
+    if not cct_url:
+        return False
+
+    payload = {
+        "timestamp": receipt.issued_at,
+        "transaction_id": receipt.transaction_id,
+        "receipt_id": receipt.receipt_id,
+        "zero_phi_egress_confirmed": receipt.zero_pii_egress_confirmed,
+        "phi_classes_detected": receipt.pii_classes_detected,
+        "phi_classes_redacted": receipt.pii_classes_redacted,
+        "count_detected": receipt.count_detected,
+        "count_redacted": receipt.count_redacted,
+        "compliance_frameworks": receipt.compliance_frameworks,
+        "chain_position": receipt.chain_position,
+        "receipt_hash": receipt.receipt_hash,
+        "declared_scope": receipt.declared_scope,
+        "evidence_incomplete_categories": receipt.evidence_incomplete_categories,
+        "issuer": receipt.issuer,
+        "source": "hermes-relay",
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "hermes-relay-drata-cct/1.0",
+    }
+
+    api_key = os.environ.get("HERMES_DRATA_API_KEY")
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    req = urllib.request.Request(
+        cct_url,
+        data=data,
+        headers=headers,
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:
+            success = 200 <= resp.status < 300
+            if not success:
+                logger.warning(
+                    "Hermes Drata CCT dispatch returned non-2xx: %s", resp.status
+                )
+            return success
+    except urllib.error.URLError as exc:
+        logger.warning("Hermes Drata CCT dispatch failed: %s", exc)
+        return False
+    except Exception as exc:
+        logger.warning("Hermes Drata CCT dispatch unexpected error: %s", exc)
+        return False
