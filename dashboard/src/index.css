@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #12263a;
+  --blue: #2563eb;
+  --verified: #14866d;
+  --warning: #c47a00;
+  --critical: #c43d4d;
+  --unknown: #667085;
+  --canvas: #f7f9fc;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  background-color: var(--canvas);
+  color: var(--navy);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
