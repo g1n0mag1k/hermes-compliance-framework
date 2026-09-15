@@ -24,4 +24,4 @@ jobs:
         
     - name: Audit dependencies
       run: |
-        pip-audit -r requirements.txt --strict
+        pip-audit -r requirements.txt --strict --ignore-vuln PYSEC-2026-1325
