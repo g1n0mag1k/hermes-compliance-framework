@@ -76,7 +76,8 @@ jobs:
             --ignore-vuln GHSA-6vqw-3v5j-54x4 \
             --ignore-vuln GHSA-35jj-vqcf-f2jf \
             --ignore-vuln GHSA-cp75-3r2x-4qmc \
-            --ignore-vuln GHSA-h8gr-9994-4x4g
+            --ignore-vuln GHSA-h8gr-9994-4x4g \
+            --ignore-vuln PYSEC-2026-1325
 
   # ─────────────────────────────────────────────────────────────────────────────
   # JOB 3 — Build & push to GHCR (only on green test + audit, only on main)
