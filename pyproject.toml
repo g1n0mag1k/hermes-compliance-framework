@@ -20,17 +20,22 @@ classifiers = [
 dependencies = [
     "spacy==3.8.16",
     "presidio-analyzer==2.2.364",
-    "cryptography==45.0.5",
+    "cryptography==50.0.0",
     "pydantic==2.13.4",
     "fastapi==0.141.1",
     "uvicorn==0.34.3",
     "httpx==0.28.1",
     "python-dotenv==1.1.0",
     "reportlab==5.0.1",
+    # V2 receipt architecture
+    "jcs==0.2.1",
+    "pycose==1.1.0",
+    "cbor2==6.1.4",
 ]
 
 [project.scripts]
 hermes-relay = "hermes.cli:main"
+hermes-verify = "hermes.receipts.v2.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

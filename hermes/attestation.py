@@ -688,5 +688,38 @@ class AttestationChain:
         with self._lock:
             return len(self._chain)
 
+    def get_chain_head(self) -> Dict:
+        """
+        Return the V1 chain head as a dict for use in the V2 migration bridge.
+
+        Provides the information needed by create_v1_bridge() without
+        exposing the full chain or signing key. Never modifies any record.
+
+        Returns a dict with:
+            head_hash:      HMAC hex of the final chain item
+            chain_position: Position of the final chain item
+            issued_at:      Timestamp of the final chain item
+            record_count:   Total number of chain records
+
+        Raises RuntimeError if the chain is empty.
+        """
+        with self._lock:
+            if not self._chain:
+                raise RuntimeError(
+                    "V1 chain is empty — nothing to bridge. "
+                    "Issue at least one V1 receipt before creating the bridge record."
+                )
+            tail = self._chain[-1]
+            is_review = isinstance(tail, HumanReviewReceipt)
+            head_hash = (
+                tail.review_receipt_hash if is_review else tail.receipt_hash
+            )
+            return {
+                "head_hash": head_hash,
+                "chain_position": tail.chain_position,
+                "issued_at": tail.issued_at,
+                "record_count": len(self._chain),
+            }
+
 
 ATTESTATION_CHAIN = AttestationChain()

@@ -8,7 +8,7 @@
 
 spacy==3.8.16
 presidio-analyzer==2.2.364
-cryptography>=50.0.1
+cryptography==50.0.0
 streamlit>=1.62.0
 pydantic>=2.13.4
 fastapi>=0.141.1
@@ -16,3 +16,13 @@ uvicorn>=0.52.4
 httpx==0.28.1
 python-dotenv>=1.2.3
 reportlab==5.0.1
+# V2 receipt architecture (Release A-D)
+jcs==0.2.1
+pycose==1.1.0
+cbor2==6.1.4
+jcs==0.2.1
+pycose==1.1.0
+cbor2==6.1.4
+# ecdsa 0.19.2 — transitive dep of pycose, no CVE fix available (PYSEC-2026-1325)
+# pycose uses it as a legacy fallback; Hermes signing uses cryptography directly
+ecdsa==0.19.2
