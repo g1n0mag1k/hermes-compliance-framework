@@ -23,3 +23,6 @@ cbor2==6.1.4
 jcs==0.2.1
 pycose==1.1.0
 cbor2==6.1.4
+# ecdsa 0.19.2 — transitive dep of pycose, no CVE fix available (PYSEC-2026-1325)
+# pycose uses it as a legacy fallback; Hermes signing uses cryptography directly
+ecdsa==0.19.2

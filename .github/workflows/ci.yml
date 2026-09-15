@@ -77,6 +77,7 @@ jobs:
             --ignore-vuln GHSA-35jj-vqcf-f2jf \
             --ignore-vuln GHSA-cp75-3r2x-4qmc \
             --ignore-vuln GHSA-h8gr-9994-4x4g \
+            --ignore-vuln PYSEC-2026-1325 \
             --ignore-vuln PYSEC-2026-1325
 
   # ─────────────────────────────────────────────────────────────────────────────
