@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Hermes Relay — PHI Detection for MSPs</title>
+</head>
+<body>
+<pre>
+# Hermes Relay — PHI Detection for MSPs
+
+## The Problem
+
+OCR investigators ask for evidence, not just tools. Cloud DLP sends PHI to external APIs, making honest attestation impossible.
+
+## What Hermes Relay Produces
+
+- 16 of 18 HIPAA Safe Harbor categories covered
+- Per-finding CFR citations (45 CFR §164.514(b)(2)(i))
+- HMAC-SHA256 signed compliance receipts
+- Hash-chained audit log verifiable without Hermes
+- Zero PHI egress — runs entirely inside client environment
+- Evidence pushes automatically to Drata CCT dashboard
+
+## Why Local-First Wins
+
+- PHI never transits external infrastructure
+- Works in air-gapped and BAA-restricted environments
+- Attestations are technically accurate, not aspirational
+- No cloud API — nothing to configure, nothing to breach
+
+## Live Demo Output
+
+**BEFORE:**
+Patient John Smith SSN 372-18-5421 DOB 1982-03-15
+
+**AFTER:**
+Patient [REDACTED_PERSON] [REDACTED_SSN] [REDACTED_DATE]
+
+**Flags triggered:**
+
+| Flag | CFR Citation |
+|---|---|
+| HIPAA_SSN | 45 CFR §164.514(b)(2)(i)(G) |
+| HIPAA_PHI_PERSON | 45 CFR §164.514(b)(2)(i)(A) |
+| HIPAA_PHI_DATE | 45 CFR §164.514(b)(2)(i)(C) |
+
+## Setup Time
+
+- Under 10 minutes via `pipx install hermes-relay`
+- Works alongside existing Drata deployment
+- White-glove setup included
+
+## Pricing
+
+$299/month per MSP deployment
+
+## Contact
+
+- andrew@hermesrelay.dev
+- hermesrelay.dev
+- Sui-Generis LLC — Rocky Top, Tennessee
+</pre>
+</body>
+</html>

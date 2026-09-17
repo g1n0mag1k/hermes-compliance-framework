@@ -12,6 +12,7 @@ from hermes.webhooks import (
     WEBHOOK_URL_ENV_VAR,
     build_event_payload,
     dispatch_webhook,
+    dispatch_drata_cct,
 )
 
 
@@ -24,14 +25,20 @@ def _sample_receipt() -> ComplianceReceipt:
         compliance_frameworks=["HIPAA", "PCI-DSS"],
         pii_classes_detected=["HIPAA_SSN", "HIPAA_NAME"],
         pii_classes_redacted=["HIPAA_SSN", "HIPAA_NAME"],
+        count_detected={"HIPAA_SSN": 1, "HIPAA_NAME": 1},
+        count_redacted={"HIPAA_SSN": 1, "HIPAA_NAME": 1},
         payload_char_count_in=100,
         payload_char_count_out=80,
         chars_removed=20,
         zero_pii_egress_confirmed=True,
+        zero_pii_egress_scope_note="Confirmed within declared_scope only. evidence_incomplete_categories were not checked.",
         downstream_target=None,
         previous_receipt_hash="genesis_hash",
         receipt_hash="receipt_hash_abc",
         chain_position=0,
+        declared_scope=["45 CFR §164.514(b)(2)(i)(A)", "45 CFR §164.514(b)(2)(i)(G)"],
+        evidence_incomplete_categories=["45 CFR §164.514(b)(2)(i)(K)", "45 CFR §164.514(b)(2)(i)(M)"],
+        detectors_executed={"45 CFR §164.514(b)(2)(i)(A)": "ran_clean", "45 CFR §164.514(b)(2)(i)(G)": "ran_clean"},
     )
 
 
@@ -41,6 +48,8 @@ def _clear_webhook_env(monkeypatch):
     monkeypatch.delenv(WEBHOOK_URL_ENV_VAR, raising=False)
     monkeypatch.delenv(WEBHOOK_AUTH_HEADER_ENV_VAR, raising=False)
     monkeypatch.delenv(WEBHOOK_AUTH_VALUE_ENV_VAR, raising=False)
+    monkeypatch.delenv("HERMES_DRATA_CCT_URL", raising=False)
+    monkeypatch.delenv("HERMES_DRATA_API_KEY", raising=False)
 
 
 def test_build_event_payload_contains_expected_fields():
@@ -126,3 +135,56 @@ def test_dispatch_webhook_never_raises_on_network_failure(monkeypatch):
         result = dispatch_webhook(receipt)
 
     assert result is False
+
+
+# -------------------------------------------------------------------------
+# Drata CCT dispatcher tests
+# -------------------------------------------------------------------------
+
+def test_dispatch_drata_cct_is_noop_when_url_not_configured():
+    """No HERMES_DRATA_CCT_URL set -- must return False, no network call."""
+    receipt = _sample_receipt()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        result = dispatch_drata_cct(receipt)
+        assert result is False
+        mock_urlopen.assert_not_called()
+
+
+def test_dispatch_drata_cct_posts_correct_payload(monkeypatch):
+    """When HERMES_DRATA_CCT_URL is set, posts JSON with correct CCT fields."""
+    monkeypatch.setenv("HERMES_DRATA_CCT_URL", "https://api.drata.com/cct/test")
+    receipt = _sample_receipt()
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        result = dispatch_drata_cct(receipt)
+
+    assert result is True
+    sent_request = mock_urlopen.call_args[0][0]
+    assert sent_request.full_url == "https://api.drata.com/cct/test"
+    payload = json.loads(sent_request.data.decode("utf-8"))
+    assert payload["transaction_id"] == receipt.transaction_id
+    assert payload["receipt_id"] == receipt.receipt_id
+    assert payload["zero_phi_egress_confirmed"] is True
+    assert payload["source"] == "hermes-relay"
+    assert payload["chain_position"] == 0
+
+
+def test_dispatch_drata_cct_includes_bearer_token_when_configured(monkeypatch):
+    """When HERMES_DRATA_API_KEY is set, Authorization: Bearer header is added."""
+    monkeypatch.setenv("HERMES_DRATA_CCT_URL", "https://api.drata.com/cct/test")
+    monkeypatch.setenv("HERMES_DRATA_API_KEY", "drata-test-key-abc123")
+    receipt = _sample_receipt()
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        dispatch_drata_cct(receipt)
+
+    sent_request = mock_urlopen.call_args[0][0]
+    assert sent_request.get_header("Authorization") == "Bearer drata-test-key-abc123"

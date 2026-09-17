@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy:     #12263A;
+  --blue:     #2563EB;
+  --verified: #14866D;
+  --warning:  #C47A00;
+  --critical: #C43D4D;
+  --unknown:  #667085;
+  --canvas:   #F7F9FC;
+}
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui;
+  background-color: #F7F9FC;
+  color: #12263A;
+  margin: 0;
+  padding: 0;
+}

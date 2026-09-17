@@ -20,21 +20,47 @@ PROXY_TARGETS: Dict[str, str] = {
 _TEXT_FIELDS = {"content", "text", "prompt", "input", "query", "message", "instructions"}
 
 
-def _scrub_str(text: str, transaction_id: str, flags: Dict[str, int]) -> str:
+def _scrub_str(
+    text: str,
+    transaction_id: str,
+    flags_triggered: Dict[str, int],
+    flags_redacted: Dict[str, int],
+    detectors_executed: Dict[str, str],
+) -> str:
     result = scrub_payload(transaction_id=transaction_id, text=text)
+
+    # Accumulate triggered counts
     for k, entry in result.audit_log.flags_triggered.items():
         count = entry.count if isinstance(entry, FlagEntry) else entry["count"]
-        flags[k] = flags.get(k, 0) + count
+        flags_triggered[k] = flags_triggered.get(k, 0) + count
+
+    # Accumulate redacted counts
+    for k, entry in result.audit_log.flags_redacted.items():
+        count = entry.count if isinstance(entry, FlagEntry) else entry["count"]
+        flags_redacted[k] = flags_redacted.get(k, 0) + count
+
+    # Merge detector execution states (worst-case wins)
+    _STATE_PRIORITY = {"ran_error": 2, "not_run": 1, "ran_clean": 0}
+    for k, state in result.detectors_executed.items():
+        existing = detectors_executed.get(k, "ran_clean")
+        if _STATE_PRIORITY.get(state, 0) > _STATE_PRIORITY.get(existing, 0):
+            detectors_executed[k] = state
+
     return result.clean_text
 
 
-def _deep_scrub(obj: Any, transaction_id: str) -> Tuple[Any, Dict[str, int]]:
-    flags: Dict[str, int] = {}
+def _deep_scrub(
+    obj: Any,
+    transaction_id: str,
+) -> Tuple[Any, Dict[str, int], Dict[str, int], Dict[str, str]]:
+    flags_triggered: Dict[str, int] = {}
+    flags_redacted: Dict[str, int] = {}
+    detectors_executed: Dict[str, str] = {}
 
     def _walk(node: Any) -> Any:
         if isinstance(node, dict):
             return {
-                k: (_scrub_str(v, transaction_id, flags)
+                k: (_scrub_str(v, transaction_id, flags_triggered, flags_redacted, detectors_executed)
                     if isinstance(v, str) and k.lower() in _TEXT_FIELDS
                     else _walk(v))
                 for k, v in node.items()
@@ -43,7 +69,7 @@ def _deep_scrub(obj: Any, transaction_id: str) -> Tuple[Any, Dict[str, int]]:
             return [_walk(item) for item in node]
         return node
 
-    return _walk(obj), flags
+    return _walk(obj), flags_triggered, flags_redacted, detectors_executed
 
 
 class ProxyRelay:
@@ -67,27 +93,38 @@ class ProxyRelay:
         upstream_url = f"{base_url}{path}"
         original_size = len(body) if body else 0
         scrubbed_body = body
-        flags: Dict[str, int] = {}
+        flags_triggered: Dict[str, int] = {}
+        flags_redacted: Dict[str, int] = {}
+        detectors_executed: Dict[str, str] = {}
 
         if body:
             try:
                 payload_obj = json.loads(body)
-                scrubbed_obj, flags = _deep_scrub(payload_obj, transaction_id)
+                scrubbed_obj, flags_triggered, flags_redacted, detectors_executed = (
+                    _deep_scrub(payload_obj, transaction_id)
+                )
                 scrubbed_body = json.dumps(scrubbed_obj).encode("utf-8")
             except (json.JSONDecodeError, UnicodeDecodeError):
                 text = body.decode("utf-8", errors="replace")
                 result = scrub_payload(transaction_id=transaction_id, text=text)
                 scrubbed_body = result.clean_text.encode("utf-8")
-                flags = {
+                flags_triggered = {
                     k: v.count if isinstance(v, FlagEntry) else v["count"]
                     for k, v in result.audit_log.flags_triggered.items()
                 }
+                flags_redacted = {
+                    k: v.count if isinstance(v, FlagEntry) else v["count"]
+                    for k, v in result.audit_log.flags_redacted.items()
+                }
+                detectors_executed = dict(result.audit_log.detectors_executed)
 
         scrubbed_size = len(scrubbed_body) if scrubbed_body else 0
 
         ATTESTATION_CHAIN.issue(
             transaction_id=transaction_id,
-            flags_triggered=flags,
+            flags_triggered=flags_triggered,
+            flags_redacted=flags_redacted,
+            detectors_executed=detectors_executed,
             char_count_in=original_size,
             char_count_out=scrubbed_size,
             downstream_target=base_url,
@@ -107,10 +144,7 @@ class ProxyRelay:
             content=scrubbed_body,
         )
 
-        return response, transaction_id, flags
-
-    def close(self) -> None:
-        self._client.close()
+        return response, transaction_id, flags_triggered
 
 
 PROXY_RELAY = ProxyRelay()

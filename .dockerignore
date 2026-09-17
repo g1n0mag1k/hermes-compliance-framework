@@ -1,0 +1,8 @@
+.git
+__pycache__
+*.pyc
+.env
+hermes_chain.db
+tests/
+docs/
+landing/

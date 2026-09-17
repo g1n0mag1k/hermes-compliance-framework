@@ -8,7 +8,7 @@ const SPECS: readonly { label: string; value: string }[] = [
   { label: "Deployment target", value: "Customer environment — Docker, bare metal, or VM" },
   { label: "External network calls", value: "None during scrubbing. Zero-egress by design." },
   { label: "Detection method", value: "Regex + fixed-version spaCy NER + Microsoft Presidio" },
-  { label: "PHI categories covered", value: "8 of 18 Safe Harbor identifiers today — expanding" },
+  { label: "PHI categories covered", value: "13 of 18 Safe Harbor identifier categories — 5 documented gaps" },
   { label: "Audit record format", value: "SHA-256 hash-chained JSON — independently verifiable" },
   { label: "CFR citation per token", value: "Yes — 45 CFR §164.514(b)(2)(i) subcategory attached" },
   { label: "LLM dependency", value: "None. Deterministic pipeline only." },

@@ -13,7 +13,12 @@ const FAQS: readonly FAQItem[] = [
   {
     question: "What happens if Hermes misses a PHI identifier -- a false negative?",
     answer:
-      "No automated de-identification system achieves perfect recall, and Hermes does not claim to. Today Hermes covers 8 of the 18 Safe Harbor identifier categories with high-recall detection, with coverage actively expanding. For any deployment, we recommend treating Hermes as a strong first layer, not a substitute for your own risk assessment or a human review step on high-stakes payloads. The attestation receipt records exactly which categories were checked for a given transaction, so you always know precisely what was and was not covered -- not a vague compliance claim.",
+      "No automated PHI redaction system achieves perfect recall, and Hermes does not claim certified Safe Harbor de-identification or blanket HIPAA compliance. Hermes currently detects 18 of 18 HIPAA Safe Harbor identifier categories — 16 via direct detection in text, and 2 (biometric identifiers and full-face photographs) via reference and metadata detection with a disclosed limitation: actual biometric templates and image pixel content cannot be inspected by a text-only pipeline: person names, dates, organizations, phone numbers, fax numbers, email addresses, URLs, IP addresses, physical addresses/locations, Social Security numbers, medical record numbers, health plan beneficiary numbers, account numbers, vehicle identifiers (VINs), and payment card numbers (Luhn-validated). Treat Hermes as a strong first layer for PHI reduction, not a substitute for your risk assessment or human review on high-stakes payloads. The cryptographically signed attestation receipt records exactly which categories were flagged and redacted for a given transaction — tamper-evident proof of what happened, not a vague compliance claim.",
+  },
+  {
+    question: "What is a hash-chained attestation receipt and why does it matter?",
+    answer:
+      "Every time Hermes processes a payload, it emits a signed receipt recording which PHI categories were detected and redacted, a timestamp, and a hash of the previous receipt. These receipts are linked into a chain — so an auditor, OCR investigator, or your client can verify that the record was not altered, forged, or truncated after the fact. It is tamper-evident proof that redaction happened, not a log you wrote yourself after the fact.",
   },
   {
     question: "Why not just use an enterprise LLM contract with a BAA already in place?",
@@ -38,7 +43,7 @@ const FAQS: readonly FAQItem[] = [
   {
     question: "What happens to data if we stop using Hermes?",
     answer:
-      "Hermes does not retain PHI after processing -- the zero-egress, zero-data-retention architecture means there is no PHI store to delete when a pilot or contract ends. Hash-chained attestation receipts (which contain metadata about what was detected, not the PHI itself) remain in your environment and are yours to keep, export, or discard.",
+      "PHI is redacted in-flight and never stored, not even encrypted — so there is no PHI store to delete when a pilot or contract ends. Hash-chained attestation receipts (which contain metadata about what was detected, not the PHI itself) remain in your environment and are yours to keep, export, or discard.",
   },
 ];
 

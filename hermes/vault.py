@@ -28,12 +28,23 @@ def _load_vault_key() -> bytes:
     key_hex = os.environ.get("HERMES_VAULT_KEY")
     env = os.environ.get("HERMES_ENV", "development")
     if key_hex:
-        key = bytes.fromhex(key_hex)
+        try:
+            key = bytes.fromhex(key_hex)
+        except ValueError as exc:
+            if env == "production":
+                raise RuntimeError(
+                    "HERMES_VAULT_KEY is invalid when HERMES_ENV=production. "
+                    "Set HERMES_VAULT_KEY to a 64-char hex string (32 bytes)."
+                ) from exc
+            raise
         if len(key) != 32:
-            raise ValueError(
+            msg = (
                 "HERMES_VAULT_KEY must be exactly 64 hex characters (32 bytes). "
                 f"Got {len(key)} bytes."
             )
+            if env == "production":
+                raise RuntimeError(msg)
+            raise ValueError(msg)
         return key
     if env == "production":
         raise RuntimeError(

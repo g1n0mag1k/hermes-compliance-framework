@@ -1,13 +1,19 @@
+import hmac
 import os
 import uuid
 from dataclasses import asdict
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from hermes.attestation import ATTESTATION_CHAIN, ComplianceReceipt
-from hermes.webhooks import dispatch_webhook
+from hermes.attestation import (
+    ATTESTATION_CHAIN,
+    ComplianceReceipt,
+    HumanReviewReceipt,
+    REVIEW_DECISIONS,
+)
+from hermes.webhooks import dispatch_webhook, dispatch_drata_cct
 from hermes.classifier import (
     FlagEntry,
     RedactionAuditLog,
@@ -27,12 +33,10 @@ app = FastAPI(
 # -------------------------------------------------------------------------
 # SCHEMAS & AUTHENTICATION
 # -------------------------------------------------------------------------
-# The expected tenant API key is sourced from the environment so that no
-# credential is committed to source control (set HERMES_API_KEY at deploy).
 API_KEY_ENV_VAR = "HERMES_API_KEY"
 
 class ScrubRequest(BaseModel):
-    payload: str
+    payload: str = Field(..., max_length=100_000)
 
 
 class ComplianceReceiptOut(BaseModel):
@@ -43,14 +47,20 @@ class ComplianceReceiptOut(BaseModel):
     compliance_frameworks: List[str]
     pii_classes_detected: List[str]
     pii_classes_redacted: List[str]
+    count_detected: Dict[str, int]
+    count_redacted: Dict[str, int]
     payload_char_count_in: int
     payload_char_count_out: int
     chars_removed: int
     zero_pii_egress_confirmed: bool
+    zero_pii_egress_scope_note: str
     downstream_target: Optional[str]
     previous_receipt_hash: str
     receipt_hash: str
     chain_position: int
+    declared_scope: List[str]
+    evidence_incomplete_categories: List[str]
+    detectors_executed: Dict[str, str]
 
 
 class ScrubResponse(BaseModel):
@@ -59,8 +69,28 @@ class ScrubResponse(BaseModel):
     compliance_receipt: ComplianceReceiptOut
 
 
+class HumanReviewReceiptOut(BaseModel):
+    review_id: str
+    transaction_id: str
+    reviewed_by: str
+    issued_at: str
+    decision: str
+    override_reason: Optional[str]
+    original_receipt_hash: str
+    previous_receipt_hash: str
+    review_receipt_hash: str
+    chain_position: int
+
+
+class ReviewRequest(BaseModel):
+    transaction_id: str = Field(..., min_length=1)
+    reviewed_by: str = Field(..., min_length=1)
+    decision: str = Field(..., description=f"One of {REVIEW_DECISIONS}")
+    override_reason: Optional[str] = None
+
+
 def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
-    """Map audit-log flag entries to per-flag counts for attestation issuance. Not a detection change."""
+    """Map audit-log flag entries to per-flag counts for attestation issuance."""
     return {
         k: v.count if isinstance(v, FlagEntry) else v["count"]
         for k, v in flags_triggered.items()
@@ -71,7 +101,7 @@ def _issue_scrub_attestation(
     transaction_id: str,
     result: ScrubberResult,
 ) -> ComplianceReceipt:
-    """Issue a hash-chained compliance receipt for a /v1/scrub call via the shared AttestationChain. Not a detection change."""
+    """Issue a hash-chained compliance receipt for a /v1/scrub call."""
     flags = _flags_to_counts(result.audit_log.flags_triggered)
     redacted = _flags_to_counts(result.audit_log.flags_redacted)
     return ATTESTATION_CHAIN.issue(
@@ -81,13 +111,14 @@ def _issue_scrub_attestation(
         char_count_in=result.audit_log.original_char_count,
         char_count_out=result.audit_log.redacted_char_count,
         downstream_target=None,
+        detectors_executed=result.detectors_executed,
     )
 
 
 def verify_api_key(x_api_key: str = Header(...)):
     """Simulates multi-tenant RMM authentication for MSP pilot deployments."""
     expected_key = os.environ.get(API_KEY_ENV_VAR)
-    if not expected_key or x_api_key != expected_key:
+    if not expected_key or not hmac.compare_digest(x_api_key, expected_key):
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing API Key")
     return x_api_key
 
@@ -114,8 +145,40 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks):
     result = scrub_payload(transaction_id=txn_id, text=request.payload)
     receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result)
     background_tasks.add_task(dispatch_webhook, receipt)
+    background_tasks.add_task(dispatch_drata_cct, receipt)
     return ScrubResponse(
         clean_text=result.clean_text,
         audit_log=result.audit_log,
         compliance_receipt=ComplianceReceiptOut.model_validate(asdict(receipt)),
     )
+
+
+@app.post(
+    "/v1/review",
+    response_model=HumanReviewReceiptOut,
+    tags=["Pipeline"],
+    dependencies=[Depends(verify_api_key)],
+)
+def review_endpoint(request: ReviewRequest):
+    """Record a human review/override decision for a prior /v1/scrub
+    transaction, chained into the same AttestationChain as tamper-evident
+    proof that a control was actually looked at by a person."""
+    try:
+        review = ATTESTATION_CHAIN.issue_review(
+            transaction_id=request.transaction_id,
+            reviewed_by=request.reviewed_by,
+            decision=request.decision,
+            override_reason=request.override_reason,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        status_code = 404 if "No ComplianceReceipt found" in message else 400
+        raise HTTPException(status_code=status_code, detail=message) from exc
+
+    return HumanReviewReceiptOut.model_validate(asdict(review))
+
+# Serve React dashboard — API routes take priority
+from pathlib import Path
+_dashboard_dist = Path(__file__).parent.parent / "dashboard" / "dist"
+if _dashboard_dist.exists():
+    app.frontend("/", directory=_dashboard_dist)
