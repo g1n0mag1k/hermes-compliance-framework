@@ -390,3 +390,80 @@ def test_trial_quota_persists_after_simulated_restart(tmp_path, monkeypatch):
     status = client.get("/v1/status", headers=headers)
     assert status.status_code == 200
     assert status.json()["scans_used"] == 1
+
+
+def test_scrub_respects_trial_quota_when_in_trial(tmp_path, monkeypatch):
+    """Workspace in trial mode with scans_used=5 gets 429 on POST /v1/scrub."""
+    import sqlite3
+    from datetime import datetime, timezone
+
+    import hermes.workspaces as ws_mod
+    from hermes.workspaces import create_workspace
+
+    monkeypatch.setenv("HERMES_DATA_DIR", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("HERMES_REGISTRY_DB", str(tmp_path / "workspaces" / "registry.db"))
+    ws_mod._DEFAULT_DATA_DIR = str(tmp_path / "workspaces")
+    ws_mod._DEFAULT_REGISTRY_DB = str(tmp_path / "workspaces" / "registry.db")
+    ws_mod._chain_cache.clear()
+    ws_mod._vault_cache.clear()
+
+    _ws, api_key = create_workspace(
+        "trial-ws-quota", "Trial WS", "t@test.com", plan="trial"
+    )
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(tmp_path / "workspaces" / "registry.db"))
+    conn.execute(
+        "INSERT INTO trial_quota (workspace_id, scans_used, first_scan_at, extended_by) "
+        "VALUES (?, ?, ?, 0)",
+        ("trial-ws-quota", 5, now),
+    )
+    conn.commit()
+    conn.close()
+
+    response = client.post(
+        "/v1/scrub",
+        headers={"X-API-Key": api_key},
+        json={"payload": "Patient SSN is 123-45-6789."},
+    )
+    assert response.status_code == 429
+    assert "Trial scan quota exhausted" in response.json()["detail"]
+
+
+def test_scrub_ignores_quota_for_production_workspace(tmp_path, monkeypatch):
+    """Production workspace with no trial_quota row succeeds on POST /v1/scrub."""
+    import sqlite3
+    from datetime import datetime, timezone
+
+    import hermes.workspaces as ws_mod
+    from hermes.workspaces import create_workspace
+
+    monkeypatch.setenv("HERMES_DATA_DIR", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("HERMES_REGISTRY_DB", str(tmp_path / "workspaces" / "registry.db"))
+    ws_mod._DEFAULT_DATA_DIR = str(tmp_path / "workspaces")
+    ws_mod._DEFAULT_REGISTRY_DB = str(tmp_path / "workspaces" / "registry.db")
+    ws_mod._chain_cache.clear()
+    ws_mod._vault_cache.clear()
+
+    _ws, api_key = create_workspace(
+        "prod-ws-scrub", "Prod WS", "p@test.com", plan="production"
+    )
+
+    # Exhausted quota on another workspace must not block production scrub.
+    now = datetime.now(timezone.utc).isoformat()
+    conn = sqlite3.connect(str(tmp_path / "workspaces" / "registry.db"))
+    conn.execute(
+        "INSERT INTO trial_quota (workspace_id, scans_used, first_scan_at, extended_by) "
+        "VALUES (?, ?, ?, 0)",
+        ("default", 5, now),
+    )
+    conn.commit()
+    conn.close()
+
+    response = client.post(
+        "/v1/scrub",
+        headers={"X-API-Key": api_key},
+        json={"payload": "Patient SSN is 123-45-6789."},
+    )
+    assert response.status_code == 200
+    assert "[REDACTED_SSN]" in response.json()["clean_text"]

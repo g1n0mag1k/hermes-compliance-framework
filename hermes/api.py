@@ -298,6 +298,22 @@ def _canary_payload() -> str:
     return "\n".join(f"{e['flag']}: {e['value']}" for e in CANARY_CORPUS)
 
 
+def _has_trial_quota_row(workspace_id: str) -> bool:
+    """Return True if workspace has a trial_quota row (trial tenant, not production)."""
+    import hermes.workspaces as ws_mod
+
+    with ws_mod._registry_lock:
+        conn = ws_mod._get_registry_conn()
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM trial_quota WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchone()
+            return row is not None
+        finally:
+            conn.close()
+
+
 # -------------------------------------------------------------------------
 # ENDPOINTS
 # -------------------------------------------------------------------------
@@ -317,9 +333,34 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks, wor
     Synchronous endpoint execution. FastAPI delegates this to a
     background threadpool to cleanly respect our _PIPELINE_LOCK.
     """
+    from hermes.workspaces import get_trial_quota, increment_trial_quota
+
+    scans_used, first_scan_at, _ = get_trial_quota(workspace.workspace_id)
+    has_trial_row = _has_trial_quota_row(workspace.workspace_id)
+    in_trial = (
+        has_trial_row
+        and scans_used is not None
+        and scans_used < TRIAL_SCAN_LIMIT
+        and not _trial_window_expired(first_scan_at)
+    )
+
+    if in_trial:
+        if scans_used >= TRIAL_SCAN_LIMIT or _trial_window_expired(first_scan_at):
+            raise HTTPException(
+                status_code=429,
+                detail="Trial scan quota exhausted — use /v1/trial-scan or upgrade",
+            )
+    elif has_trial_row:
+        raise HTTPException(
+            status_code=429,
+            detail="Trial scan quota exhausted — use /v1/trial-scan or upgrade",
+        )
+
     txn_id = f"txn_api_{uuid.uuid4().hex[:12]}"
     result = scrub_payload(transaction_id=txn_id, text=request.payload)
     receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result, workspace=workspace)
+    if in_trial:
+        increment_trial_quota(workspace.workspace_id)
     background_tasks.add_task(dispatch_webhook, receipt)
     background_tasks.add_task(dispatch_drata_cct, receipt)
     return ScrubResponse(
