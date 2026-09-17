@@ -97,6 +97,7 @@ class VaultEntry:
     pii_type: str
     encrypted_value: str
     transaction_id: str
+    workspace_id: str = "default"
     created_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -116,15 +117,25 @@ def _init_db(conn: sqlite3.Connection) -> None:
             pii_type          TEXT NOT NULL,
             encrypted_value   TEXT NOT NULL,
             transaction_id    TEXT NOT NULL,
-            created_at        TEXT NOT NULL
+            created_at        TEXT NOT NULL,
+            workspace_id      TEXT NOT NULL DEFAULT 'default'
         )
     """)
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(vault_entries)")
+    }
+    if "workspace_id" not in columns:
+        conn.execute("""
+            ALTER TABLE vault_entries
+            ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default'
+        """)
     conn.commit()
 
 
 def _load_all_entries(conn: sqlite3.Connection) -> Dict[str, VaultEntry]:
     rows = conn.execute(
-        "SELECT token, pii_type, encrypted_value, transaction_id, created_at "
+        "SELECT token, pii_type, encrypted_value, transaction_id, "
+        "created_at, workspace_id "
         "FROM vault_entries"
     ).fetchall()
     return {
@@ -134,6 +145,7 @@ def _load_all_entries(conn: sqlite3.Connection) -> Dict[str, VaultEntry]:
             encrypted_value=row[2],
             transaction_id=row[3],
             created_at=row[4],
+            workspace_id=row[5],
         )
         for row in rows
     }
@@ -149,7 +161,13 @@ class TokenVault:
         self._store: Dict[str, VaultEntry] = _load_all_entries(conn)
         conn.close()
 
-    def store(self, pii_type: str, original_value: str, transaction_id: str) -> str:
+    def store(
+        self,
+        pii_type: str,
+        original_value: str,
+        transaction_id: str,
+        workspace_id: str = "default",
+    ) -> str:
         token = _generate_token(pii_type, original_value)
         encrypted = _aesgcm_encrypt(original_value, VAULT_KEY)
         entry = VaultEntry(
@@ -157,6 +175,7 @@ class TokenVault:
             pii_type=pii_type,
             encrypted_value=encrypted,
             transaction_id=transaction_id,
+            workspace_id=workspace_id,
         )
         with self._lock:
             self._store[token] = entry
@@ -171,32 +190,65 @@ class TokenVault:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO vault_entries
-                        (token, pii_type, encrypted_value, transaction_id, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                        (token, pii_type, encrypted_value, transaction_id,
+                         created_at, workspace_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (entry.token, entry.pii_type, entry.encrypted_value,
-                     entry.transaction_id, entry.created_at),
+                     entry.transaction_id, entry.created_at, entry.workspace_id),
                 )
         finally:
             conn.close()
 
-    def retrieve(self, token: str) -> Optional[str]:
+    def retrieve(self, token: str, workspace_id: str = "default") -> Optional[str]:
         """Decrypt and return original value. Raises InvalidTag if tampered."""
         with self._lock:
-            entry = self._store.get(token)
-        if entry is None:
+            conn = sqlite3.connect(self._db_path)
+            try:
+                row = conn.execute(
+                    "SELECT encrypted_value FROM vault_entries "
+                    "WHERE token = ? AND workspace_id = ?",
+                    (token, workspace_id),
+                ).fetchone()
+            finally:
+                conn.close()
+        if row is None:
             return None
-        return _aesgcm_decrypt(entry.encrypted_value, VAULT_KEY)
+        return _aesgcm_decrypt(row[0], VAULT_KEY)
 
-    def retrieve_entry(self, token: str) -> Optional[VaultEntry]:
+    def retrieve_entry(
+        self, token: str, workspace_id: str = "default"
+    ) -> Optional[VaultEntry]:
         with self._lock:
-            return self._store.get(token)
+            conn = sqlite3.connect(self._db_path)
+            try:
+                row = conn.execute(
+                    "SELECT token, pii_type, encrypted_value, transaction_id, "
+                    "created_at, workspace_id FROM vault_entries "
+                    "WHERE token = ? AND workspace_id = ?",
+                    (token, workspace_id),
+                ).fetchone()
+            finally:
+                conn.close()
+        if row is None:
+            return None
+        return VaultEntry(
+            token=row[0],
+            pii_type=row[1],
+            encrypted_value=row[2],
+            transaction_id=row[3],
+            created_at=row[4],
+            workspace_id=row[5],
+        )
 
-    def purge_transaction(self, transaction_id: str) -> int:
+    def purge_transaction(
+        self, transaction_id: str, workspace_id: str = "default"
+    ) -> int:
         with self._lock:
             keys_to_remove = [
                 k for k, v in self._store.items()
                 if v.transaction_id == transaction_id
+                and v.workspace_id == workspace_id
             ]
             for k in keys_to_remove:
                 del self._store[k]
