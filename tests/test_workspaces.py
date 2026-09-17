@@ -198,3 +198,16 @@ class TestPerWorkspaceChainAndVault:
         vault2 = get_vault_for_workspace(ws2)
         assert vault1 is not vault2
         assert vault1._db_path != vault2._db_path
+
+    def test_workspace_vault_is_isolated(self):
+        ws1, _ = create_workspace("vault-iso-1", "V1", "a@test.com")
+        ws2, _ = create_workspace("vault-iso-2", "V2", "b@test.com")
+        vault1 = get_vault_for_workspace(ws1)
+        vault2 = get_vault_for_workspace(ws2)
+        token = vault1.store(
+            "SSN",
+            "372-18-5421",
+            "txn_iso",
+            workspace_id=ws1.workspace_id,
+        )
+        assert vault2.retrieve(token, workspace_id=ws2.workspace_id) is None
