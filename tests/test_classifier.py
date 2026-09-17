@@ -302,11 +302,16 @@ def test_9xx_area_code_not_redacted() -> None:
 
 def test_occurrence_gap_detected_when_date_survives() -> None:
     """Post-scan pass reports a gap when a triggered DATE flag still has a
-    surviving MM/DD/YYYY in clean_text (detector ran ≠ all occurrences caught)."""
+    surviving MM/DD/YYYY in clean_text (detector ran ≠ all occurrences caught).
+
+    Reproduces Massimiliano Brighindi's blind-test finding: spaCy may catch
+    one date and miss 03/14/1978 while still reporting HIPAA_PHI_DATE executed.
+    """
     from hermes.classifier import (
         CFR_CITATION_MAP,
         FlagEntry,
         _verify_occurrence_completeness,
+        scrub_payload,
     )
 
     flags = {
@@ -315,13 +320,22 @@ def test_occurrence_gap_detected_when_date_survives() -> None:
             cfr_citation=CFR_CITATION_MAP["HIPAA_PHI_DATE"],
         )
     }
-    # Simulates spaCy catching one date and redacting it while another
-    # occurrence (03/14/1978) remains in the egress text.
+    # Unit: simulator of partial redaction leaving a slash-date behind.
     clean_text = "Visit noted; DOB remains 03/14/1978 after partial scrub."
     gaps = _verify_occurrence_completeness(clean_text, flags)
 
     assert CFR_CITATION_MAP["HIPAA_PHI_DATE"] in gaps
     assert gaps[CFR_CITATION_MAP["HIPAA_PHI_DATE"]] >= 1
+
+    # End-to-end: one spaCy-catchable date + surviving 03/14/1978.
+    result = scrub_payload(
+        "test_occurrence_gap_date",
+        "Seen on January 15 2020. Also DOB 03/14/1978 on file.",
+    )
+    assert "HIPAA_PHI_DATE" in result.audit_log.flags_triggered
+    assert "03/14/1978" in result.clean_text
+    assert CFR_CITATION_MAP["HIPAA_PHI_DATE"] in result.occurrence_gaps
+    assert result.occurrence_gaps[CFR_CITATION_MAP["HIPAA_PHI_DATE"]] >= 1
 
 
 def test_occurrence_gap_empty_when_all_redacted() -> None:
@@ -349,16 +363,18 @@ def test_occurrence_gap_empty_when_all_redacted() -> None:
     assert gaps == {}
 
     # End-to-end: a fully-redacted scrub must also report empty gaps.
+    # Use Month DD YYYY — spaCy reliably redacts this form (unlike MM/DD/YYYY).
     result = scrub_payload(
         "test_occurrence_empty",
-        "Patient DOB is 03/14/1978 and SSN is 372-18-5421.",
+        "Patient DOB is March 14 1978 and SSN is 372-18-5421.",
     )
-    if "HIPAA_PHI_DATE" in result.audit_log.flags_triggered:
-        assert CFR_CITATION_MAP["HIPAA_PHI_DATE"] not in result.occurrence_gaps
-    if "HIPAA_SSN" in result.audit_log.flags_triggered:
-        assert CFR_CITATION_MAP["HIPAA_SSN"] not in result.occurrence_gaps
-    assert "03/14/1978" not in result.clean_text
+    assert "HIPAA_PHI_DATE" in result.audit_log.flags_triggered
+    assert "HIPAA_SSN" in result.audit_log.flags_triggered
+    assert result.occurrence_gaps == {}
+    assert "March 14 1978" not in result.clean_text
     assert "372-18-5421" not in result.clean_text
+    assert "[REDACTED_DATE]" in result.clean_text
+    assert "[REDACTED_SSN]" in result.clean_text
 
 
 def test_zero_pii_egress_false_when_occurrence_gap_exists(tmp_path) -> None:
