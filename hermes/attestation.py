@@ -83,6 +83,10 @@ class ComplianceReceipt:
     declared_scope: List[str]
     evidence_incomplete_categories: List[str]
     detectors_executed: Dict[str, str]
+    # Post-scan occurrence gaps: CFR → surviving PHI count in clean_text
+    # for categories that flags_triggered declared. Signed into receipt_hash
+    # so incompleteness is tamper-evident. Empty dict = no gaps found.
+    occurrence_gaps: Dict[str, int] = field(default_factory=dict)
     # --- Mutable chain metadata (outside signature envelope) ---
     # superseded_by: null = authoritative. Populated = hash of superseding
     # receipt. A verifier MUST NOT treat this receipt as standalone
@@ -281,13 +285,17 @@ class AttestationChain:
         char_count_out: int,
         downstream_target: Optional[str] = None,
         detectors_executed: Optional[Dict[str, str]] = None,
+        occurrence_gaps: Optional[Dict[str, int]] = None,
     ) -> ComplianceReceipt:
         evidence_incomplete = list(NOT_COVERED_CFRS)
         detectors_executed = detectors_executed or {}
+        occurrence_gaps = dict(occurrence_gaps or {})
         pii_detected = list(flags_triggered.keys())
         pii_redacted = list(flags_redacted.keys())
-        # COUNT PARITY: compare full dicts (keys AND counts), not just key sets
-        zero_egress = flags_triggered == flags_redacted
+        # COUNT PARITY: compare full dicts (keys AND counts), not just key sets.
+        # OCCURRENCE GAPS: surviving PHI in clean_text falsifies zero-egress
+        # even when flags_triggered == flags_redacted (false sufficiency).
+        zero_egress = flags_triggered == flags_redacted and not occurrence_gaps
 
         with self._lock:
             position = len(self._chain)
@@ -320,6 +328,7 @@ class AttestationChain:
                 "declared_scope": COVERED_CFRS,
                 "evidence_incomplete_categories": evidence_incomplete,
                 "detectors_executed": detectors_executed,
+                "occurrence_gaps": occurrence_gaps,
             }
 
             signature = self._sign_receipt(sign_content)

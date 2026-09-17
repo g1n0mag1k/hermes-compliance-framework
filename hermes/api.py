@@ -71,6 +71,7 @@ class ComplianceReceiptOut(BaseModel):
     declared_scope: List[str]
     evidence_incomplete_categories: List[str]
     detectors_executed: Dict[str, str]
+    occurrence_gaps: Dict[str, int] = Field(default_factory=dict)
 
 
 class ScrubResponse(BaseModel):
@@ -139,6 +140,9 @@ def _issue_scrub_attestation(
     flags = _flags_to_counts(result.audit_log.flags_triggered)
     redacted = _flags_to_counts(result.audit_log.flags_redacted)
     chain = _get_chain(workspace) if workspace else ATTESTATION_CHAIN
+    # occurrence_gaps from post-scan verification: non-empty forces
+    # zero_pii_egress_confirmed=False inside chain.issue() regardless of
+    # flags_triggered == flags_redacted count parity.
     return chain.issue(
         transaction_id=transaction_id,
         flags_triggered=flags,
@@ -147,6 +151,7 @@ def _issue_scrub_attestation(
         char_count_out=result.audit_log.redacted_char_count,
         downstream_target=None,
         detectors_executed=result.detectors_executed,
+        occurrence_gaps=result.occurrence_gaps,
     )
 
 

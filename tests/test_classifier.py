@@ -298,3 +298,118 @@ def test_9xx_area_code_not_redacted() -> None:
     from hermes.classifier import scrub_payload
     result = scrub_payload("test_inject_006", "987-65-4321 is not a real SSN")
     assert "[REDACTED_SSN]" not in result.clean_text
+
+
+def test_occurrence_gap_detected_when_date_survives() -> None:
+    """Post-scan pass reports a gap when a triggered DATE flag still has a
+    surviving MM/DD/YYYY in clean_text (detector ran ≠ all occurrences caught)."""
+    from hermes.classifier import (
+        CFR_CITATION_MAP,
+        FlagEntry,
+        _verify_occurrence_completeness,
+    )
+
+    flags = {
+        "HIPAA_PHI_DATE": FlagEntry(
+            count=1,
+            cfr_citation=CFR_CITATION_MAP["HIPAA_PHI_DATE"],
+        )
+    }
+    # Simulates spaCy catching one date and redacting it while another
+    # occurrence (03/14/1978) remains in the egress text.
+    clean_text = "Visit noted; DOB remains 03/14/1978 after partial scrub."
+    gaps = _verify_occurrence_completeness(clean_text, flags)
+
+    assert CFR_CITATION_MAP["HIPAA_PHI_DATE"] in gaps
+    assert gaps[CFR_CITATION_MAP["HIPAA_PHI_DATE"]] >= 1
+
+
+def test_occurrence_gap_empty_when_all_redacted() -> None:
+    """No occurrence_gaps when triggered categories are fully replaced;
+    [REDACTED_*] tokens must not be counted as surviving PHI."""
+    from hermes.classifier import (
+        CFR_CITATION_MAP,
+        FlagEntry,
+        _verify_occurrence_completeness,
+        scrub_payload,
+    )
+
+    flags = {
+        "HIPAA_PHI_DATE": FlagEntry(
+            count=1,
+            cfr_citation=CFR_CITATION_MAP["HIPAA_PHI_DATE"],
+        ),
+        "HIPAA_SSN": FlagEntry(
+            count=1,
+            cfr_citation=CFR_CITATION_MAP["HIPAA_SSN"],
+        ),
+    }
+    clean_text = "Patient [REDACTED_DATE] SSN [REDACTED_SSN] cleared."
+    gaps = _verify_occurrence_completeness(clean_text, flags)
+    assert gaps == {}
+
+    # End-to-end: a fully-redacted scrub must also report empty gaps.
+    result = scrub_payload(
+        "test_occurrence_empty",
+        "Patient DOB is 03/14/1978 and SSN is 372-18-5421.",
+    )
+    if "HIPAA_PHI_DATE" in result.audit_log.flags_triggered:
+        assert CFR_CITATION_MAP["HIPAA_PHI_DATE"] not in result.occurrence_gaps
+    if "HIPAA_SSN" in result.audit_log.flags_triggered:
+        assert CFR_CITATION_MAP["HIPAA_SSN"] not in result.occurrence_gaps
+    assert "03/14/1978" not in result.clean_text
+    assert "372-18-5421" not in result.clean_text
+
+
+def test_zero_pii_egress_false_when_occurrence_gap_exists(tmp_path) -> None:
+    """Non-empty occurrence_gaps forces zero_pii_egress_confirmed=False even
+    when flags_triggered count-parity with flags_redacted looks complete."""
+    from hermes.api import _issue_scrub_attestation
+    from hermes.attestation import AttestationChain
+    from hermes.classifier import (
+        CFR_CITATION_MAP,
+        FlagEntry,
+        RedactionAuditLog,
+        ScrubberResult,
+    )
+
+    cfr = CFR_CITATION_MAP["HIPAA_PHI_DATE"]
+    result = ScrubberResult(
+        clean_text="DOB 03/14/1978 survived egress",
+        audit_log=RedactionAuditLog(
+            transaction_id="txn_occurrence_gap",
+            original_char_count=40,
+            redacted_char_count=40,
+            flags_triggered={
+                "HIPAA_PHI_DATE": FlagEntry(count=1, cfr_citation=cfr),
+            },
+            flags_redacted={
+                "HIPAA_PHI_DATE": FlagEntry(count=1, cfr_citation=cfr),
+            },
+        ),
+        detectors_executed={cfr: "ran_clean"},
+        occurrence_gaps={cfr: 1},
+    )
+
+    # Isolated chain so we do not pollute the process-global ATTESTATION_CHAIN
+    # beyond what _issue_scrub_attestation uses — call issue() the same way
+    # api.py wires occurrence_gaps through.
+    chain = AttestationChain(db_path=str(tmp_path / "occurrence_gap_chain.db"))
+    receipt = chain.issue(
+        transaction_id="txn_occurrence_gap",
+        flags_triggered={"HIPAA_PHI_DATE": 1},
+        flags_redacted={"HIPAA_PHI_DATE": 1},
+        char_count_in=40,
+        char_count_out=40,
+        detectors_executed=result.detectors_executed,
+        occurrence_gaps=result.occurrence_gaps,
+    )
+
+    assert receipt.occurrence_gaps == {cfr: 1}
+    assert receipt.zero_pii_egress_confirmed is False
+
+    # api wiring path: same ScrubberResult must also yield False via helper
+    # (uses global chain — only assert the confirmation flag).
+    api_receipt = _issue_scrub_attestation("txn_occurrence_gap_api", result)
+    assert api_receipt.occurrence_gaps == {cfr: 1}
+    assert api_receipt.zero_pii_egress_confirmed is False

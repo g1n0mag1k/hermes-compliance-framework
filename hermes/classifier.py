@@ -408,6 +408,15 @@ class ScrubberResult(BaseModel):
             "silent failure must be distinguishable from a clean scan."
         ),
     )
+    occurrence_gaps: Dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "Post-scan occurrence verification: CFR citation → count of "
+            "surviving PHI patterns in clean_text for categories that "
+            "flags_triggered declared as detected. Non-empty means "
+            "detector_executed ≠ all occurrences caught."
+        ),
+    )
 
 # -------------------------------------------------------------------------
 # DETERMINISTIC VALIDATORS
@@ -680,6 +689,81 @@ def _run_stage(fn, *args) -> Tuple[str, str]:
         return fn(*args), DETECTOR_RAN_CLEAN
     except Exception:
         return args[0] if args else "", DETECTOR_RAN_ERROR
+
+
+# -------------------------------------------------------------------------
+# POST-SCAN OCCURRENCE VERIFICATION
+# Closes the false-sufficiency gap: detector_executed=True does not prove
+# every applicable occurrence was caught. Only checks categories that
+# flags_triggered already declared — never evidence_incomplete categories.
+# -------------------------------------------------------------------------
+_REDACTED_TOKEN_RE = re.compile(r"\[REDACTED_[^\]]+\]")
+
+_OCCURRENCE_DATE_PATTERNS = [
+    re.compile(r"\b\d{1,2}/\d{1,2}/\d{4}\b"),  # MM/DD/YYYY
+    re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),  # YYYY-MM-DD
+    re.compile(
+        r"\b(?:January|February|March|April|May|June|July|August|September|"
+        r"October|November|December)\s+\d{1,2}\s+\d{4}\b",
+        re.IGNORECASE,
+    ),  # Month DD YYYY
+    re.compile(
+        r"\b\d{1,2}\s+(?:January|February|March|April|May|June|July|August|"
+        r"September|October|November|December)\s+\d{4}\b",
+        re.IGNORECASE,
+    ),  # DD Month YYYY
+]
+
+_OCCURRENCE_SSN_RE = re.compile(r"\d{3}-\d{2}-\d{4}")
+_OCCURRENCE_EMAIL_RE = re.compile(r"\S+@\S+\.\S+")
+_OCCURRENCE_PHONE_RE = re.compile(
+    r"(?<!\d)(?:\+?1[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}(?!\d)"
+)
+_OCCURRENCE_MRN_RE = re.compile(
+    r"\b(?:MRN|Medical\s+Record\s+(?:Number|No\.?|#)|Patient\s+(?:ID|Number|No\.?))"
+    r"[\s:#]*\d{6,10}\b",
+    re.IGNORECASE,
+)
+
+# Flag → (CFR citation, list of occurrence patterns to check in clean_text)
+_OCCURRENCE_CHECKS: Dict[str, Tuple[str, List[re.Pattern]]] = {
+    "HIPAA_PHI_DATE": (CFR_CITATION_MAP["HIPAA_PHI_DATE"], _OCCURRENCE_DATE_PATTERNS),
+    "HIPAA_SSN": (CFR_CITATION_MAP["HIPAA_SSN"], [_OCCURRENCE_SSN_RE]),
+    "HIPAA_PHI_EMAIL": (CFR_CITATION_MAP["HIPAA_PHI_EMAIL"], [_OCCURRENCE_EMAIL_RE]),
+    "HIPAA_PHI_PHONE": (CFR_CITATION_MAP["HIPAA_PHI_PHONE"], [_OCCURRENCE_PHONE_RE]),
+    "HIPAA_PHI_MRN": (CFR_CITATION_MAP["HIPAA_PHI_MRN"], [_OCCURRENCE_MRN_RE]),
+}
+
+
+def _verify_occurrence_completeness(
+    clean_text: str,
+    flags: Dict[str, FlagEntry],
+) -> Dict[str, int]:
+    """Post-scan check: for each triggered flag category, count surviving
+    PHI-like patterns still present in clean_text.
+
+    Only categories present in ``flags`` (flags_triggered) are checked —
+    we verify that what we declared we caught was actually caught, not that
+    we catch undeclared categories. Replacement tokens like [REDACTED_DATE]
+    are stripped before matching so they never inflate occurrence_gaps.
+    """
+    probe_text = _REDACTED_TOKEN_RE.sub(" ", clean_text)
+    occurrence_gaps: Dict[str, int] = {}
+
+    for flag_name in flags:
+        check = _OCCURRENCE_CHECKS.get(flag_name)
+        if check is None:
+            continue
+        cfr_citation, patterns = check
+        surviving = 0
+        for pattern in patterns:
+            surviving += len(pattern.findall(probe_text))
+        if surviving > 0:
+            occurrence_gaps[cfr_citation] = (
+                occurrence_gaps.get(cfr_citation, 0) + surviving
+            )
+
+    return occurrence_gaps
 
 
 # -------------------------------------------------------------------------
@@ -994,6 +1078,11 @@ def _scrub_payload_impl(
     detectors_executed["45 CFR §164.514(b)(2)(i)(N)"] = presidio_status  # URL (Presidio)
     detectors_executed["45 CFR §164.514(b)(2)(i)(O)"] = presidio_status  # IP (Presidio)
 
+    # 2b. POST-SCAN OCCURRENCE VERIFICATION — after all detection stages,
+    # before ScrubberResult is returned. Proves occurrence completeness
+    # for triggered categories, not merely detector execution.
+    occurrence_gaps = _verify_occurrence_completeness(clean_text, flags)
+
     # 3. AUDIT PAYLOAD
     audit_log = RedactionAuditLog(
         transaction_id=transaction_id,
@@ -1003,4 +1092,9 @@ def _scrub_payload_impl(
         flags_redacted=redacted_flags,
     )
 
-    return ScrubberResult(clean_text=clean_text, audit_log=audit_log, detectors_executed=detectors_executed)
+    return ScrubberResult(
+        clean_text=clean_text,
+        audit_log=audit_log,
+        detectors_executed=detectors_executed,
+        occurrence_gaps=occurrence_gaps,
+    )
