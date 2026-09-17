@@ -13,16 +13,19 @@ def test_scrub_payload_reversible_inserts_vault_tokens() -> None:
     entry = _ssn_entry()
     text = f"Patient SSN: {entry['value']}"
     txn = "txn_reversible_ssn"
-    before = VAULT.size()
 
     result = scrub_payload_reversible(transaction_id=txn, text=text)
 
     assert entry["value"] not in result.clean_text
     assert "[REDACTED_SSN]" not in result.clean_text
     assert "HIPAA_SSN" in result.audit_log.flags_triggered
-    # Vault grew and clean_text contains a vault-shaped token
-    assert VAULT.size() >= before + 1
+    # Token is in clean text and retrievable from vault
     assert "[REDACTED_HIPAA_SSN_" in result.clean_text
+    # Extract token and verify vault can retrieve the original value
+    start = result.clean_text.index("[REDACTED_HIPAA_SSN_")
+    end = result.clean_text.index("]", start) + 1
+    token = result.clean_text[start:end]
+    assert VAULT.retrieve(token) == entry["value"]
 
 
 def test_scrub_payload_reversible_roundtrips_via_vault() -> None:

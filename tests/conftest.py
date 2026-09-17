@@ -13,6 +13,9 @@ unaffected by this default.
 
 The same pattern is applied for HERMES_CANARY_DB_PATH so importing
 `hermes.auditor` never writes hermes_canary.db into the working directory.
+
+Workspace registry is also pointed at a temp directory so the multi-tenant
+model never writes registry.db into the repo during test runs.
 """
 import os
 import tempfile
@@ -22,4 +25,10 @@ os.environ.setdefault("HERMES_DB_PATH", os.path.join(_TEST_DB_DIR, "singleton_he
 os.environ.setdefault(
     "HERMES_CANARY_DB_PATH",
     os.path.join(_TEST_DB_DIR, "singleton_hermes_canary.db"),
+)
+# Workspace registry isolation — prevents test quota from accumulating in repo
+os.environ.setdefault("HERMES_DATA_DIR", os.path.join(_TEST_DB_DIR, "workspaces"))
+os.environ.setdefault(
+    "HERMES_REGISTRY_DB",
+    os.path.join(_TEST_DB_DIR, "workspaces", "registry.db"),
 )

@@ -160,7 +160,25 @@ class TokenVault:
         )
         with self._lock:
             self._store[token] = entry
+            self._persist(entry)
         return token
+
+    def _persist(self, entry: VaultEntry) -> None:
+        """Write a vault entry to SQLite. Called while holding self._lock."""
+        conn = sqlite3.connect(self._db_path)
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO vault_entries
+                        (token, pii_type, encrypted_value, transaction_id, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (entry.token, entry.pii_type, entry.encrypted_value,
+                     entry.transaction_id, entry.created_at),
+                )
+        finally:
+            conn.close()
 
     def retrieve(self, token: str) -> Optional[str]:
         """Decrypt and return original value. Raises InvalidTag if tampered."""

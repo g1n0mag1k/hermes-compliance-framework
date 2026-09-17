@@ -122,14 +122,24 @@ def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
     }
 
 
+def _get_chain(workspace):
+    """Return the AttestationChain for a workspace (or global for legacy)."""
+    if isinstance(workspace, _LegacyWorkspace):
+        return ATTESTATION_CHAIN
+    from hermes.workspaces import get_chain_for_workspace
+    return get_chain_for_workspace(workspace)
+
+
 def _issue_scrub_attestation(
     transaction_id: str,
     result: ScrubberResult,
+    workspace=None,
 ) -> ComplianceReceipt:
     """Issue a hash-chained compliance receipt for a /v1/scrub call."""
     flags = _flags_to_counts(result.audit_log.flags_triggered)
     redacted = _flags_to_counts(result.audit_log.flags_redacted)
-    return ATTESTATION_CHAIN.issue(
+    chain = _get_chain(workspace) if workspace else ATTESTATION_CHAIN
+    return chain.issue(
         transaction_id=transaction_id,
         flags_triggered=flags,
         flags_redacted=redacted,
@@ -141,11 +151,38 @@ def _issue_scrub_attestation(
 
 
 def verify_api_key(x_api_key: str = Header(...)):
-    """Simulates multi-tenant RMM authentication for MSP pilot deployments."""
+    """
+    Workspace-aware authentication.
+
+    Looks up the workspace by API key in the registry. Falls back to the
+    legacy HERMES_API_KEY env var for backward-compatible single-tenant
+    deployments. Raises 401 if no match is found.
+    """
+    from hermes.workspaces import get_workspace_by_api_key, get_workspace
+
+    # Try workspace registry first
+    workspace = get_workspace_by_api_key(x_api_key)
+    if workspace is not None:
+        return workspace
+
+    # Legacy fallback: single HERMES_API_KEY env var
     expected_key = os.environ.get(API_KEY_ENV_VAR)
-    if not expected_key or not hmac.compare_digest(x_api_key, expected_key):
-        raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing API Key")
-    return x_api_key
+    if expected_key and hmac.compare_digest(x_api_key, expected_key):
+        ws = get_workspace("default")
+        if ws is not None:
+            return ws
+        return _LegacyWorkspace()
+
+    raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing API Key")
+
+
+class _LegacyWorkspace:
+    """Synthetic workspace wrapping the legacy global chain/vault."""
+    workspace_id = "default"
+    name = "Default"
+    owner_email = ""
+    plan = "production"
+    parent_workspace_id = None
 
 
 # -------------------------------------------------------------------------
@@ -269,16 +306,15 @@ def health_check():
     "/v1/scrub",
     response_model=ScrubResponse,
     tags=["Pipeline"],
-    dependencies=[Depends(verify_api_key)],
 )
-def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks):
+def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks, workspace=Depends(verify_api_key)):
     """
     Synchronous endpoint execution. FastAPI delegates this to a
     background threadpool to cleanly respect our _PIPELINE_LOCK.
     """
     txn_id = f"txn_api_{uuid.uuid4().hex[:12]}"
     result = scrub_payload(transaction_id=txn_id, text=request.payload)
-    receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result)
+    receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result, workspace=workspace)
     background_tasks.add_task(dispatch_webhook, receipt)
     background_tasks.add_task(dispatch_drata_cct, receipt)
     return ScrubResponse(
@@ -292,14 +328,14 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks):
     "/v1/review",
     response_model=HumanReviewReceiptOut,
     tags=["Pipeline"],
-    dependencies=[Depends(verify_api_key)],
 )
-def review_endpoint(request: ReviewRequest):
+def review_endpoint(request: ReviewRequest, workspace=Depends(verify_api_key)):
     """Record a human review/override decision for a prior /v1/scrub
     transaction, chained into the same AttestationChain as tamper-evident
     proof that a control was actually looked at by a person."""
     try:
-        review = ATTESTATION_CHAIN.issue_review(
+        chain = _get_chain(workspace)
+        review = chain.issue_review(
             transaction_id=request.transaction_id,
             reviewed_by=request.reviewed_by,
             decision=request.decision,
@@ -317,13 +353,14 @@ def review_endpoint(request: ReviewRequest):
     "/v1/status",
     response_model=StatusResponse,
     tags=["System"],
-    dependencies=[Depends(verify_api_key)],
 )
-def status_endpoint():
+def status_endpoint(workspace=Depends(verify_api_key)):
     """Dashboard data source — aggregate attestation-chain metrics for MSP UI."""
-    chain = ATTESTATION_CHAIN.export_chain()
+    chain_obj = _get_chain(workspace)
+    chain = chain_obj.export_chain()
     total_scans = len(chain)
-    scans_used, first_scan_at, _extended = _get_trial_quota()
+    from hermes.workspaces import get_trial_quota as _ws_trial_quota
+    scans_used, first_scan_at, _extended = _ws_trial_quota(workspace.workspace_id)
     scans_remaining = max(TRIAL_SCAN_LIMIT - scans_used, 0)
     expires_at = _trial_expires_at(first_scan_at)
     active = _trial_active(scans_used, first_scan_at)
@@ -376,7 +413,7 @@ def status_endpoint():
         critical_findings_open=critical_findings_open,
         evidence_current_as_of=latest["issued_at"],
         chain_integrity=(
-            "verified" if ATTESTATION_CHAIN.verify_chain() else "no_data"
+            "verified" if chain_obj.verify_chain() else "no_data"
         ),
         scans_used=scans_used,
         scans_remaining=scans_remaining,
@@ -389,11 +426,11 @@ def status_endpoint():
     "/v1/trial-scan",
     response_model=ScrubResponse,
     tags=["Pipeline"],
-    dependencies=[Depends(verify_api_key)],
 )
-def trial_scan_endpoint(background_tasks: BackgroundTasks):
+def trial_scan_endpoint(background_tasks: BackgroundTasks, workspace=Depends(verify_api_key)):
     """Run a fixed canary PHI scan subject to persistent trial quota limits."""
-    scans_used, first_scan_at, _extended = _get_trial_quota()
+    from hermes.workspaces import get_trial_quota as _ws_trial_quota, increment_trial_quota as _ws_increment
+    scans_used, first_scan_at, _extended = _ws_trial_quota(workspace.workspace_id)
     if scans_used >= TRIAL_SCAN_LIMIT or _trial_window_expired(first_scan_at):
         raise HTTPException(
             status_code=429,
@@ -403,12 +440,12 @@ def trial_scan_endpoint(background_tasks: BackgroundTasks):
     txn_id = f"txn_trial_{uuid.uuid4().hex[:12]}"
     try:
         result = scrub_payload(transaction_id=txn_id, text=_canary_payload())
-        receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result)
+        receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result, workspace=workspace)
     except Exception as exc:
         # Never increment quota on error / failed scan
         raise HTTPException(status_code=500, detail="Trial scan failed") from exc
 
-    _increment_trial_quota()
+    _ws_increment(workspace.workspace_id)
     background_tasks.add_task(dispatch_webhook, receipt)
     background_tasks.add_task(dispatch_drata_cct, receipt)
     return ScrubResponse(
@@ -418,7 +455,90 @@ def trial_scan_endpoint(background_tasks: BackgroundTasks):
     )
 
 
-# Serve React dashboard — API routes take priority
+# -------------------------------------------------------------------------
+# WORKSPACE MANAGEMENT ENDPOINTS
+# -------------------------------------------------------------------------
+
+class WorkspaceCreateRequest(BaseModel):
+    workspace_id: str = Field(..., min_length=3, max_length=64, pattern=r'^[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]$')
+    name: str = Field(..., min_length=1, max_length=120)
+    owner_email: str = Field(..., min_length=3)
+    plan: str = Field(default="trial")
+    parent_workspace_id: Optional[str] = None
+
+
+class WorkspaceOut(BaseModel):
+    workspace_id: str
+    name: str
+    owner_email: str
+    created_at: str
+    plan: str
+    parent_workspace_id: Optional[str]
+
+
+class WorkspaceCreateResponse(BaseModel):
+    workspace: WorkspaceOut
+    api_key: str   # shown ONCE — never retrievable again
+
+
+@app.post("/v1/workspaces", response_model=WorkspaceCreateResponse, tags=["Workspaces"])
+def create_workspace_endpoint(request: WorkspaceCreateRequest):
+    """Create a new tenant workspace and return its one-time API key."""
+    from hermes.workspaces import create_workspace
+    try:
+        workspace, raw_key = create_workspace(
+            workspace_id=request.workspace_id,
+            name=request.name,
+            owner_email=request.owner_email,
+            plan=request.plan,
+            parent_workspace_id=request.parent_workspace_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return WorkspaceCreateResponse(
+        workspace=WorkspaceOut(
+            workspace_id=workspace.workspace_id,
+            name=workspace.name,
+            owner_email=workspace.owner_email,
+            created_at=workspace.created_at,
+            plan=workspace.plan,
+            parent_workspace_id=workspace.parent_workspace_id,
+        ),
+        api_key=raw_key,
+    )
+
+
+@app.get("/v1/workspaces", response_model=List[WorkspaceOut], tags=["Workspaces"])
+def list_workspaces_endpoint(workspace=Depends(verify_api_key)):
+    """List all workspaces. MSPs see their own client workspaces."""
+    from hermes.workspaces import list_workspaces
+    workspaces = list_workspaces(parent_workspace_id=workspace.workspace_id)
+    return [
+        WorkspaceOut(
+            workspace_id=w.workspace_id,
+            name=w.name,
+            owner_email=w.owner_email,
+            created_at=w.created_at,
+            plan=w.plan,
+            parent_workspace_id=w.parent_workspace_id,
+        )
+        for w in workspaces
+    ]
+
+
+@app.post("/v1/workspaces/{workspace_id}/rotate-key", tags=["Workspaces"])
+def rotate_key_endpoint(workspace_id: str, workspace=Depends(verify_api_key)):
+    """Rotate the API key for a workspace. Returns new key once."""
+    if workspace.workspace_id != workspace_id and workspace.parent_workspace_id != workspace_id:
+        raise HTTPException(status_code=403, detail="Cannot rotate a key you do not own.")
+    from hermes.workspaces import rotate_api_key
+    new_key = rotate_api_key(workspace_id)
+    return {"workspace_id": workspace_id, "api_key": new_key}
+
+
+# Serve React dashboard — API routes take priority, static files fall through
 _dashboard_dist = Path(__file__).parent.parent / "dashboard" / "dist"
 if _dashboard_dist.exists():
-    app.frontend("/", directory=_dashboard_dist)
+    from starlette.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=str(_dashboard_dist), html=True), name="dashboard")

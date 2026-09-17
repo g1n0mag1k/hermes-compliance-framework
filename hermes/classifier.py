@@ -84,7 +84,7 @@ DECLARED_SCOPE: list[dict] = [
 # Pre-computed sets for O(1) receipt generation
 COVERED_FLAGS:    frozenset = frozenset(e["flag"]      for e in DECLARED_SCOPE if e["status"] == "covered")
 COVERED_CFRS:     list[str] = [e["cfr"]               for e in DECLARED_SCOPE if e["status"] == "covered"]
-NOT_COVERED_CFRS: list[str] = [e["cfr"]               for e in DECLARED_SCOPE if e["status"] == "not_covered"]
+NOT_COVERED_CFRS: list[str] = [e["cfr"]               for e in DECLARED_SCOPE if e["status"] != "covered"]
 
 # -------------------------------------------------------------------------
 # DETERMINISTIC REGEX PATTERNS

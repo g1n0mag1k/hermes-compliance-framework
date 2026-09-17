@@ -321,9 +321,18 @@ def test_trial_scan_returns_429_when_quota_exhausted(tmp_path, monkeypatch):
     """After 5 successful trial scans, the 6th returns 429 and does not increment."""
     from hermes.attestation import AttestationChain
     from hermes import api as api_mod
+    import hermes.workspaces as ws_mod
 
     db_path = str(tmp_path / "quota_exhaust_hermes_chain.db")
     monkeypatch.setenv("HERMES_DB_PATH", db_path)
+    # Point workspace registry to tmp
+    monkeypatch.setenv("HERMES_DATA_DIR", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("HERMES_REGISTRY_DB", str(tmp_path / "workspaces" / "registry.db"))
+    ws_mod._DEFAULT_DATA_DIR = str(tmp_path / "workspaces")
+    ws_mod._DEFAULT_REGISTRY_DB = str(tmp_path / "workspaces" / "registry.db")
+    ws_mod._chain_cache.clear()
+    ws_mod._vault_cache.clear()
+
     chain = AttestationChain(db_path=db_path)
     monkeypatch.setattr(api_mod, "ATTESTATION_CHAIN", chain)
 
@@ -344,14 +353,21 @@ def test_trial_scan_returns_429_when_quota_exhausted(tmp_path, monkeypatch):
 
 
 def test_trial_quota_persists_after_simulated_restart(tmp_path, monkeypatch):
-    """Quota in hermes_chain.db survives a new AttestationChain on the same path."""
+    """Quota survives a new AttestationChain on the same path."""
     from hermes.attestation import AttestationChain
     from hermes import api as api_mod
+    import hermes.workspaces as ws_mod
+    from hermes.workspaces import get_trial_quota
 
     db_path = str(tmp_path / "restart_hermes_chain.db")
     monkeypatch.setenv("HERMES_DB_PATH", db_path)
+    monkeypatch.setenv("HERMES_DATA_DIR", str(tmp_path / "workspaces"))
+    monkeypatch.setenv("HERMES_REGISTRY_DB", str(tmp_path / "workspaces" / "registry.db"))
+    ws_mod._DEFAULT_DATA_DIR = str(tmp_path / "workspaces")
+    ws_mod._DEFAULT_REGISTRY_DB = str(tmp_path / "workspaces" / "registry.db")
+    ws_mod._chain_cache.clear()
+    ws_mod._vault_cache.clear()
 
-    # Fresh chain on the isolated DB path (simulates process start).
     chain = AttestationChain(db_path=db_path)
     monkeypatch.setattr(api_mod, "ATTESTATION_CHAIN", chain)
 
@@ -359,15 +375,15 @@ def test_trial_quota_persists_after_simulated_restart(tmp_path, monkeypatch):
     response = client.post("/v1/trial-scan", headers=headers)
     assert response.status_code == 200
 
-    scans_used, first_scan_at, _ = api_mod._get_trial_quota()
+    scans_used, first_scan_at, _ = get_trial_quota("default")
     assert scans_used == 1
     assert first_scan_at
 
-    # Simulated restart: new AttestationChain handle, same SQLite file.
+    # Simulated restart: new AttestationChain handle, same SQLite file
     restarted = AttestationChain(db_path=db_path)
     monkeypatch.setattr(api_mod, "ATTESTATION_CHAIN", restarted)
 
-    scans_used_after, first_after, _ = api_mod._get_trial_quota()
+    scans_used_after, first_after, _ = get_trial_quota("default")
     assert scans_used_after == 1
     assert first_after == first_scan_at
 
