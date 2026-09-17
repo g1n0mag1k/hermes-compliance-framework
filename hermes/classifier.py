@@ -750,11 +750,8 @@ def _verify_occurrence_completeness(
     probe_text = _REDACTED_TOKEN_RE.sub(" ", clean_text)
     occurrence_gaps: Dict[str, int] = {}
 
-    for flag_name in flags:
-        check = _OCCURRENCE_CHECKS.get(flag_name)
-        if check is None:
-            continue
-        cfr_citation, patterns = check
+    for flag_name, (cfr_citation, patterns) in _OCCURRENCE_CHECKS.items():
+        _ = flag_name  # scan all categories, not just triggered ones
         surviving = 0
         for pattern in patterns:
             surviving += len(pattern.findall(probe_text))
