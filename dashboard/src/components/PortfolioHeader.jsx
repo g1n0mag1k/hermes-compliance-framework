@@ -1,5 +1,6 @@
 import React from 'react'
 import StatCard from './StatCard.jsx'
+import TrialScanButton from './TrialScanButton.jsx'
 
 function timeAgo(isoString) {
   if (!isoString) return '—'
@@ -10,7 +11,7 @@ function timeAgo(isoString) {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
-export default function PortfolioHeader({ status }) {
+export default function PortfolioHeader({ status, onScanComplete }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -23,9 +24,12 @@ export default function PortfolioHeader({ status }) {
             <p className="text-xs text-slate-500">PHI Detection Dashboard</p>
           </div>
         </div>
-        <span className="text-xs text-slate-400">
-          hermesrelay.dev · Sui-Generis LLC
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-slate-400">
+            hermesrelay.dev · Sui-Generis LLC
+          </span>
+          <TrialScanButton onComplete={onScanComplete} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

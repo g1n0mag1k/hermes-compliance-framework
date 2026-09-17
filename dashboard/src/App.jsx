@@ -78,7 +78,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {view === 'portfolio' ? (
           <>
-            <PortfolioHeader status={status} />
+            <PortfolioHeader status={status} onScanComplete={load} />
             <ClientTable
               status={status}
               onClientClick={() => setView('client')}
