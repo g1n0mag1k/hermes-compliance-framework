@@ -4,7 +4,7 @@
  * Combines what would otherwise be two separate sections (Solution +
  * Architecture) into one cohesive block, because the product *is* the
  * architecture. The three pillars line up 1:1 with the three claims in the
- * h2 ("Deterministic. Zero-egress. Court-defensible by design.") so the
+ * h2 ("Deterministic. Zero-egress. Audit-ready by design.") so the
  * eye can map headline → evidence at a glance.
  *
  * Layout:
@@ -34,11 +34,11 @@ const PILLARS: readonly Pillar[] = [
     label: "METHOD",
     headline: "Deterministic",
     body:
-      "Regex and a fixed-version spaCy model detect 18 of 18 HIPAA Safe Harbor identifier categories — SSN, MRN, fax, payment cards, names, dates, addresses, phone, email, IP, URL, account numbers, health plan beneficiary numbers, and VINs — cited to 45 CFR §164.514(b)(2)(i). Never a hosted LLM: the same input produces the same output, every run.",
+      "Regex and a fixed-version spaCy model detect 16 of 18 HIPAA Safe Harbor identifier categories — 16 via direct text detection, and 2 (biometric identifiers and full-face photographs) via text reference detection only, with a disclosed limitation that binary content cannot be inspected by a text pipeline — SSN, MRN, fax, payment cards, names, dates, addresses, phone, email, IP, URL, account numbers, health plan beneficiary numbers, and VINs — cited to 45 CFR §164.514(b)(2)(i). Never a hosted LLM: the same input produces the same output, every run.",
   },
   {
     label: "EVIDENCE",
-    headline: "Court-defensible",
+    headline: "Audit-ready",
     body:
       "Each decision is recorded as a per-token, CFR-cited event and sealed into a SHA-256 hash chain. The result is an unbroken, tamper-evident record an OCR investigator can verify byte by byte.",
   },
@@ -70,7 +70,7 @@ export function Solution() {
         <h2 className="font-display text-h2 text-ink mt-8 max-w-[22ch]">
           Deterministic. Zero-egress.
           <br />
-          Court-defensible by design.
+          Audit-ready by design.
         </h2>
 
         <div className="mt-16 grid gap-6 md:grid-cols-3">
