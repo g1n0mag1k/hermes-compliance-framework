@@ -528,8 +528,15 @@ class WorkspaceCreateResponse(BaseModel):
 
 
 @app.post("/v1/workspaces", response_model=WorkspaceCreateResponse, tags=["Workspaces"])
-def create_workspace_endpoint(request: WorkspaceCreateRequest):
+def create_workspace_endpoint(
+    request: WorkspaceCreateRequest,
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+):
     """Create a new tenant workspace and return its one-time API key."""
+    expected = os.environ.get("HERMES_ADMIN_TOKEN")
+    if not expected or not hmac.compare_digest(x_admin_token or "", expected):
+        raise HTTPException(status_code=401, detail="Admin token required to create workspaces")
+
     from hermes.workspaces import create_workspace
     try:
         workspace, raw_key = create_workspace(

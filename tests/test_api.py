@@ -467,3 +467,29 @@ def test_scrub_ignores_quota_for_production_workspace(tmp_path, monkeypatch):
     )
     assert response.status_code == 200
     assert "[REDACTED_SSN]" in response.json()["clean_text"]
+
+
+def test_create_workspace_requires_admin_token():
+    response = client.post(
+        "/v1/workspaces",
+        json={
+            "workspace_id": "test-no-auth",
+            "name": "Test",
+            "owner_email": "test@example.com",
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_create_workspace_with_wrong_admin_token(monkeypatch):
+    monkeypatch.setenv("HERMES_ADMIN_TOKEN", "correct-token")
+    response = client.post(
+        "/v1/workspaces",
+        json={
+            "workspace_id": "test-wrong-token",
+            "name": "Test",
+            "owner_email": "test@example.com",
+        },
+        headers={"X-Admin-Token": "wrong-token"},
+    )
+    assert response.status_code == 401
