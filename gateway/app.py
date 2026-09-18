@@ -1,0 +1,206 @@
+from __future__ import annotations
+
+import os
+import time
+from typing import Optional
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
+
+from hermes.classifier import DetectorFailureError, scrub_payload
+from hermes.workspaces import Workspace, get_workspace_by_api_key
+
+from gateway import __version__
+from gateway.evidence import get_v2_chain_head
+from gateway.pipeline import GatewayPipeline, GatewayRequest
+from gateway.policy import PolicyEngine, reload_policy
+from gateway.providers import PROVIDER_REGISTRY, resolve_provider, validate_path
+
+app = FastAPI(
+    title="Hermes Relay Gateway",
+    description="Fail-closed AI PHI enforcement gateway",
+    version=__version__,
+)
+
+_start_time = time.time()
+_stats = {
+    "requests_total": 0,
+    "requests_allowed": 0,
+    "requests_redacted": 0,
+    "requests_blocked": 0,
+    "phi_events_total": 0,
+    "detector_errors_total": 0,
+}
+_pipeline = GatewayPipeline()
+
+
+def _authenticate(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> Workspace:
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
+    workspace = get_workspace_by_api_key(x_api_key)
+    if workspace is None:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return workspace
+
+
+def _record_stats(decision: str, phi_detected: bool, detector_error: bool) -> None:
+    _stats["requests_total"] += 1
+    if decision == "ALLOW":
+        _stats["requests_allowed"] += 1
+    elif decision == "REDACT":
+        _stats["requests_redacted"] += 1
+    elif decision == "BLOCK":
+        _stats["requests_blocked"] += 1
+    if phi_detected:
+        _stats["phi_events_total"] += 1
+    if detector_error:
+        _stats["detector_errors_total"] += 1
+
+
+@app.post("/gateway/{provider_id}/{path:path}")
+async def gateway_relay(
+    provider_id: str,
+    path: str,
+    request: Request,
+    workspace: Workspace = Depends(_authenticate),
+) -> Response:
+    try:
+        resolve_provider(provider_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    provider = resolve_provider(provider_id)
+    full_path = path if path.startswith("/") else f"/{path}"
+
+    if not validate_path(provider, full_path):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path {full_path!r} not allowed for provider {provider_id!r}",
+        )
+
+    body_bytes = await request.body()
+    query_string = str(request.url.query)
+    headers = {k: v for k, v in request.headers.items()}
+    content_type = headers.get("content-type", "")
+
+    gateway_request = GatewayRequest(
+        workspace_id=workspace.workspace_id,
+        provider_id=provider_id,
+        method=request.method,
+        path=full_path,
+        query_string=query_string,
+        headers=headers,
+        body_bytes=body_bytes,
+        content_type=content_type,
+    )
+
+    try:
+        result = _pipeline.process(gateway_request, workspace)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    phi_detected = bool(result.receipt.payload.get("phi_categories_detected"))
+    _record_stats(result.decision.decision, phi_detected, result.detector_error)
+
+    if result.detector_error:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": {
+                    "message": "Request blocked — detector failure.",
+                    "type": "detector_failure",
+                    "code": "detector_error",
+                },
+                "transaction_id": result.transaction_id,
+                "receipt_digest": result.receipt.receipt_digest,
+            },
+        )
+
+    if result.decision.decision == "BLOCK":
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": {
+                    "message": "Request blocked — PHI policy violation.",
+                    "type": "policy_violation",
+                    "code": "phi_detected",
+                },
+                "transaction_id": result.transaction_id,
+                "receipt_digest": result.receipt.receipt_digest,
+            },
+        )
+
+    upstream = result.upstream_response
+    if upstream is None:
+        raise HTTPException(status_code=500, detail="Upstream response missing")
+
+    return Response(
+        content=upstream.content,
+        status_code=upstream.status_code,
+        headers=dict(upstream.headers),
+        media_type=upstream.headers.get("content-type"),
+    )
+
+
+@app.get("/gateway/health")
+async def gateway_health() -> JSONResponse:
+    components = {
+        "gateway_service": "healthy",
+        "policy_engine": "healthy",
+        "detector_state": "healthy",
+        "evidence_chain": "healthy",
+    }
+
+    try:
+        PolicyEngine("health-check").get_policy()
+    except Exception:
+        components["policy_engine"] = "degraded"
+
+    try:
+        scrub_payload("health_check", "test")
+    except DetectorFailureError:
+        components["detector_state"] = "degraded"
+
+    try:
+        get_v2_chain_head("__health_probe__")
+        components["evidence_chain"] = "healthy"
+    except Exception:
+        components["evidence_chain"] = "degraded"
+
+    provider_connectivity = {
+        provider_id: bool(os.environ.get(provider.credential_env))
+        for provider_id, provider in PROVIDER_REGISTRY.items()
+    }
+
+    all_healthy = (
+        all(status == "healthy" for status in components.values())
+        and all(provider_connectivity.values())
+    )
+
+    body = {
+        "gateway_service": components["gateway_service"],
+        "policy_engine": components["policy_engine"],
+        "detector_state": components["detector_state"],
+        "evidence_chain": components["evidence_chain"],
+        "provider_connectivity": provider_connectivity,
+    }
+    return JSONResponse(status_code=200 if all_healthy else 503, content=body)
+
+
+@app.get("/gateway/stats")
+async def gateway_stats() -> dict:
+    return {
+        **_stats,
+        "uptime_seconds": time.time() - _start_time,
+    }
+
+
+@app.post("/gateway/policy/reload")
+async def gateway_policy_reload(
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+) -> dict:
+    expected = os.environ.get("HERMES_ADMIN_TOKEN")
+    if not expected or x_admin_token != expected:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    reload_policy()
+    return {"status": "reloaded"}

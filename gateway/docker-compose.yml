@@ -1,0 +1,59 @@
+name: hermes-relay-full
+
+networks:
+  hermes-net:
+    driver: bridge
+
+volumes:
+  hermes_data:
+  caddy_data:
+  caddy_config:
+
+services:
+  hermes-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ../.env.hermes
+    volumes:
+      - hermes_data:/app/data
+    environment:
+      HERMES_DATA_DIR: /app/data/workspaces
+      HERMES_REGISTRY_DB: /app/data/workspaces/registry.db
+    networks:
+      - hermes-net
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  hermes-gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    restart: unless-stopped
+    env_file: ../.env.hermes
+    volumes:
+      - hermes_data:/app/data
+    environment:
+      HERMES_DATA_DIR: /app/data/workspaces
+      HERMES_REGISTRY_DB: /app/data/workspaces/registry.db
+      HERMES_GATEWAY_PORT: "8788"
+    networks:
+      - hermes-net
+    ports:
+      - "8788:8788"
+    depends_on:
+      hermes-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8788/gateway/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

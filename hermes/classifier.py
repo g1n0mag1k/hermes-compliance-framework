@@ -396,6 +396,14 @@ DETECTOR_RAN_ERROR = "ran_error"
 DETECTOR_NOT_RUN = "not_run"
 
 
+class DetectorFailureError(Exception):
+    """Raised when one or more PHI detectors fail during inspection.
+
+    Gateway enforcement treats this as fail-closed: the request must be
+    blocked rather than forwarded with unverified content.
+    """
+
+
 class ScrubberResult(BaseModel):
     clean_text: str
     audit_log: RedactionAuditLog
