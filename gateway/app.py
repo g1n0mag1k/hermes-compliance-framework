@@ -188,7 +188,7 @@ async def gateway_health() -> JSONResponse:
 
 
 @app.get("/gateway/stats")
-async def gateway_stats() -> dict:
+async def gateway_stats(workspace: Workspace = Depends(_authenticate)) -> dict:
     return {
         **_stats,
         "uptime_seconds": time.time() - _start_time,

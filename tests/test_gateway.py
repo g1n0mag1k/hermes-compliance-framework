@@ -561,8 +561,13 @@ def test_stats_increment_correctly(client, workspace, upstream_capture, monkeypa
     )
     clear_workspace_policy(ws.workspace_id)
 
-    stats = client.get("/gateway/stats").json()
+    stats = client.get("/gateway/stats", headers={"X-API-Key": api_key}).json()
     assert stats["requests_total"] == 3
     assert stats["requests_allowed"] == 1
     assert stats["requests_redacted"] == 1
     assert stats["requests_blocked"] == 1
+
+
+def test_gateway_stats_requires_auth(client):
+    response = client.get("/gateway/stats")
+    assert response.status_code == 401
