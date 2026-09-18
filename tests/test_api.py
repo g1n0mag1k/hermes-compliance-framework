@@ -1,3 +1,4 @@
+import datetime
 import hashlib
 import hmac
 import json
@@ -263,6 +264,51 @@ def test_status_endpoint_includes_trial_quota_fields():
     assert isinstance(data["scans_used"], int)
     assert isinstance(data["scans_remaining"], int)
     assert isinstance(data["trial_active"], bool)
+
+
+def test_scan_history_returns_seven_days_zero_seeded():
+    """GET /v1/scan-history must return exactly 7 entries even for a workspace with no scans."""
+    response = client.get(
+        "/v1/scan-history",
+        headers={"X-API-Key": os.environ["HERMES_API_KEY"]},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["days"] == 7
+    assert len(data["history"]) == 7
+    for entry in data["history"]:
+        assert "date" in entry
+        assert "scan_count" in entry
+        assert entry["scan_count"] >= 0
+
+
+def test_scan_history_requires_auth():
+    """GET /v1/scan-history must return 401 without API key."""
+    response = client.get("/v1/scan-history")
+    assert response.status_code == 422
+
+
+def test_scan_history_counts_scans_on_correct_date():
+    """Scans performed today must appear in today's bucket."""
+    headers = {"X-API-Key": os.environ["HERMES_API_KEY"]}
+    scrub_response = client.post(
+        "/v1/scrub",
+        headers=headers,
+        json={"payload": "Patient SSN: 372-18-5421"},
+    )
+    assert scrub_response.status_code == 200
+
+    history_response = client.get(
+        "/v1/scan-history",
+        headers=headers,
+    )
+    data = history_response.json()
+    today = datetime.date.today().isoformat()
+    today_entry = next(
+        (e for e in data["history"] if e["date"] == today), None
+    )
+    assert today_entry is not None
+    assert today_entry["scan_count"] >= 1
 
 
 def test_trial_scan_endpoint_requires_api_key():

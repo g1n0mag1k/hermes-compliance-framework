@@ -115,6 +115,17 @@ class StatusResponse(BaseModel):
     trial_expires_at: Optional[str] = None
 
 
+class ScanHistoryEntry(BaseModel):
+    date: str
+    scan_count: int
+
+
+class ScanHistoryResponse(BaseModel):
+    workspace_id: str
+    days: int
+    history: List[ScanHistoryEntry]
+
+
 def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
     """Map audit-log flag entries to per-flag counts for attestation issuance."""
     return {
@@ -465,6 +476,57 @@ def status_endpoint(workspace=Depends(verify_api_key)):
         scans_remaining=scans_remaining,
         trial_active=active,
         trial_expires_at=expires_at,
+    )
+
+
+@app.get(
+    "/v1/scan-history",
+    response_model=ScanHistoryResponse,
+    tags=["Status"],
+)
+def scan_history_endpoint(days: int = 7, workspace=Depends(verify_api_key)):
+    """Daily scan counts for the dashboard trend sparkline — zero-seeded by calendar day."""
+    if days < 1:
+        raise HTTPException(status_code=400, detail="days must be at least 1")
+
+    chain_obj = _get_chain(workspace)
+    db_path = chain_obj._db_path
+
+    today = datetime.now(timezone.utc).date()
+    date_range = [today - timedelta(days=offset) for offset in range(days - 1, -1, -1)]
+    start_cutoff = datetime.combine(date_range[0], datetime.min.time(), tzinfo=timezone.utc)
+
+    counts_by_date: Dict[str, int] = {d.isoformat(): 0 for d in date_range}
+
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        rows = conn.execute(
+            """
+            SELECT json_extract(receipt_json, '$.issued_at') AS issued_at
+            FROM receipts
+            WHERE json_extract(receipt_json, '$.issued_at') >= ?
+            """,
+            (start_cutoff.isoformat(),),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for (issued_at,) in rows:
+        if not issued_at:
+            continue
+        day_key = _parse_iso(issued_at).date().isoformat()
+        if day_key in counts_by_date:
+            counts_by_date[day_key] += 1
+
+    history = [
+        ScanHistoryEntry(date=day_key, scan_count=counts_by_date[day_key])
+        for day_key in (d.isoformat() for d in date_range)
+    ]
+
+    return ScanHistoryResponse(
+        workspace_id=workspace.workspace_id,
+        days=days,
+        history=history,
     )
 
 
