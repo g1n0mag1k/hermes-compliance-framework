@@ -96,3 +96,35 @@ Recursive JSON inspection covers tool arguments, nested blocks,
 streaming deltas — per Perplexity field spec Sept 17 2026
 
 Do not modify gateway/ without reading gateway/pipeline.py first.
+
+### Pricing (Updated Sept 17 2026)
+Small MSP (1-10 employees):
+  Free 30-Day Sprint
+  90-Day Pilot: $750/month ($2,250 total)
+  Founding Partner: $1,500/month locked 12 months
+
+Mid MSP (10-30 employees):
+  Free 30-Day Sprint
+  90-Day Pilot: $1,500/month ($4,500 total)
+  Founding Partner: $2,500/month locked 12 months
+
+Large MSP (30+ employees):
+  Free 30-Day Sprint
+  90-Day Pilot: $1,500/month ($4,500 total)
+  Founding Partner: $3,000/month locked 12 months
+
+### Pricing (Updated Sept 17 2026)
+Small MSP (1-10 employees):
+  Free 30-Day Sprint
+  90-Day Pilot: $750/month ($2,250 total)
+  Founding Partner: $1,500/month locked 12 months
+
+Mid MSP (10-30 employees):
+  Free 30-Day Sprint
+  90-Day Pilot: $1,500/month ($4,500 total)
+  Founding Partner: $2,500/month locked 12 months
+
+Large MSP (30+ employees):
+  Free 30-Day Sprint
+  90-Day Pilot: $1,500/month ($4,500 total)
+  Founding Partner: $3,000/month locked 12 months
