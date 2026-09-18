@@ -28,7 +28,7 @@ Every request is inspected before it reaches the model:
 - Clean request → forwarded to AI provider
 - Every decision → V2 cryptographic gateway receipt issued (local SQLite chain)
 - `/v1/scrub` evidence → may push to Drata CCT when configured (`HERMES_DRATA_CCT_URL`)
-- Gateway evidence → **local receipts only today** (see `docs/GATEWAY_EVIDENCE_EXPORT.md`)
+- Gateway evidence → V2 receipts stored locally **and** optionally exported via webhook/Drata when configured (see `docs/GATEWAY_EVIDENCE_EXPORT.md`)
 - Fail-closed for defined failure classes (detector/parse/binary/policy) — upstream transport failures are documented separately
 
 Supported providers:
@@ -130,7 +130,8 @@ under their Hermes Relay custom connection.
 | HERMES_VAULT_KEY | Yes (production) | AES-256-GCM vault key |
 | HERMES_DRATA_CCT_URL | Yes (Drata) | Drata CCT endpoint URL |
 | HERMES_DRATA_API_KEY | Yes (Drata) | Drata API key |
-| HERMES_WEBHOOK_URL | Optional | Generic SIEM/webhook endpoint |
+| HERMES_WEBHOOK_URL | Optional | Generic SIEM/webhook endpoint (scrub + gateway evidence) |
+| HERMES_GATEWAY_POLICY | Optional | Default `HIPAA_STRICT` (REDACT). Set `HIPAA_PRODUCTION_BLOCK` for BLOCK. |
 | HERMES_HOST | Optional | Server host (default: 127.0.0.1) |
 | HERMES_PORT | Optional | Server port (default: 8787) |
 

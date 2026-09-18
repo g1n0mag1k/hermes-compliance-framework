@@ -16,12 +16,12 @@ Hermes Relay is **not production-ready** as of 2026-09-18. This checklist tracks
 [x] persistent gateway signing identity across restart (tests/test_cryptographic_evidence_lifecycle.py)
 [x] receipt integrity verified (hermes-verify / V2 verifier)
 [x] receipt records forwarded=false for BLOCK
-[ ] gateway evidence export implemented or documentation corrected (design doc only — see GATEWAY_EVIDENCE_EXPORT.md)
+[x] gateway evidence export implemented (EvidenceEvent + webhook/Drata exporters — see GATEWAY_EVIDENCE_EXPORT.md)
 [x] upstream failure semantics documented (502 + receipt with forwarded=true)
 [x] bypass paths reviewed (see DOCUMENTATION_AUDIT.md)
 [x] security regression suite passes
-[x] full pytest suite passes (502)
-[ ] documentation matches implementation (in progress)
+[x] full pytest suite passes (529)
+[x] documentation matches implementation
 [ ] customer claims reviewed (see PRODUCT_CAPABILITY_MATRIX.md)
 ```
 

@@ -36,7 +36,9 @@ Customer-facing quality control for Hermes Relay as of 2026-09-18.
 
 ## Integrations
 
-- **No gateway Drata export** — `dispatch_drata_cct()` applies to `/v1/scrub` only. Gateway receipts are stored locally; generic webhook export for gateway is not implemented (see `GATEWAY_EVIDENCE_EXPORT.md`).
+- **Gateway evidence export** — optional webhook and Drata CCT exporters via `gateway/evidence_export/` (see `GATEWAY_EVIDENCE_EXPORT.md`). Best-effort post-decision export; exporter outage does not affect enforcement.
+- **Live Drata gateway integration** — contract-tested via mocks only; production Drata connectivity must be validated per deployment.
+- **`/v1/scrub` Drata export** — separate V1 path via `dispatch_drata_cct()` in `hermes/webhooks.py`.
 
 ## Multi-tenancy
 

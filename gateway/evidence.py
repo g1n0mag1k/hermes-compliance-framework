@@ -14,6 +14,7 @@ from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
 from hermes.workspaces import Workspace, get_chain_for_workspace
 
 from gateway import __version__
+from gateway.evidence_export.dispatch import try_export_evidence
 from gateway.exceptions import ReceiptPersistenceError
 from gateway.policy import EnforcementDecision, PolicyDecision
 
@@ -248,6 +249,8 @@ def issue_gateway_receipt(
 
     with _chain_lock:
         _v2_chain_heads[workspace.workspace_id] = receipt.receipt_digest
+
+    try_export_evidence(receipt, workspace.workspace_id)
 
     return receipt
 
