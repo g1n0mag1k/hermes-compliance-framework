@@ -455,6 +455,49 @@ def test_provider_response_headers_stripped(client, workspace, upstream_capture,
     assert "x-gateway-request-id" in {k.lower() for k in response.headers.keys()}
 
 
+def test_response_detector_failure_blocks_response(client, workspace, monkeypatch):
+    """If response body inspection raises DetectorFailureError, the response must be blocked."""
+    import gateway.inspector as inspector_mod
+    import gateway.pipeline as pipeline_mod
+
+    _, api_key = workspace
+    monkeypatch.setenv("HERMES_OPENAI_API_KEY", "test-key")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "SSN 372-18-5421"}}]},
+            headers={"content-type": "application/json"},
+        )
+
+    transport = httpx.MockTransport(handler)
+    gateway_app._pipeline = GatewayPipeline(
+        client_factory=lambda: httpx.Client(transport=transport)
+    )
+
+    call_count = {"n": 0}
+    original = inspector_mod.inspect_json_recursive
+
+    def patched(obj, txn_id):
+        call_count["n"] += 1
+        if call_count["n"] > 1:  # First call is request body, second is response body
+            raise DetectorFailureError("forced failure")
+        return original(obj, txn_id)
+
+    monkeypatch.setattr(pipeline_mod, "inspect_json_recursive", patched)
+
+    response = client.post(
+        "/gateway/openai/v1/chat/completions",
+        headers={"X-API-Key": api_key},
+        json={"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]},
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "detector_error"
+    assert "372-18-5421" not in response.text
+
+
 def test_response_phi_detected_and_redacted(client, workspace, monkeypatch):
     ws, api_key = workspace
     monkeypatch.setenv("HERMES_OPENAI_API_KEY", "test-openai-key")

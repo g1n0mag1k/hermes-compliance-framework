@@ -385,8 +385,39 @@ class GatewayPipeline:
                 )
                 _merge(r_trig, r_red, r_det)
                 response_body = json.dumps(sanitized_response).encode("utf-8")
-            except (json.JSONDecodeError, DetectorFailureError):
-                pass
+            except json.JSONDecodeError:
+                pass  # Non-JSON response body — pass through as-is
+            except DetectorFailureError:
+                # Detector failure on response body — fail closed.
+                # Issue a failure receipt and return a controlled error.
+                # Never return the raw upstream response body when detection fails.
+                detector_error = True
+                all_detectors_clean = False
+                decision = policy_engine.decide(
+                    flags_triggered,
+                    flags_redacted,
+                    False,
+                    content_type,
+                )
+                receipt = issue_gateway_receipt(
+                    workspace,
+                    transaction_id,
+                    decision,
+                    request.provider_id,
+                    request.path,
+                    flags_triggered,
+                    flags_redacted,
+                    detectors_executed,
+                )
+                return GatewayResponse(
+                    decision=decision,
+                    sanitized_body=None,
+                    upstream_response=None,
+                    receipt=receipt,
+                    transaction_id=transaction_id,
+                    gateway_request_id=gateway_request_id,
+                    detector_error=True,
+                )
 
         upstream_response.headers = httpx.Headers(filtered_headers)
         upstream_response._content = response_body
