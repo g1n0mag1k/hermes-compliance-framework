@@ -19,7 +19,7 @@ This project is pre-1.0 and under active solo development. Entries prioritize ac
 
 ### Changed
 - **Coverage: 3 of 18 → 8 of 18 HIPAA Safe Harbor identifier categories** now actively detected (names, dates, SSN, phone, email, URL, IP, address). Remaining 10 categories (fax, MRN, health plan beneficiary numbers, account numbers, certificate/license numbers, vehicle identifiers, device identifiers, biometric identifiers, full-face photos) remain on the roadmap and are documented as such.
-- `spacy` pinned to `3.8.13` (down from `>=3.8.14`) — required by `presidio-analyzer==2.2.363`'s dependency constraints.
+- `spacy` pinned to `3.8.16`, `presidio-analyzer` pinned to `2.2.364`.
 - `hermes/proxy.py` and `tests/test_api.py` updated to consume the new `FlagEntry` schema.
 
 ### Corrected — Landing Page & Documentation Accuracy Pass
@@ -41,13 +41,11 @@ Prior to this pass, several claims across the landing page, `README.md`, `BENCHM
 - Regulatory research independently verified via Perplexity Deep Research against primary sources (45 CFR §164.514(b)(2)(i), OCR guidance, peer-reviewed de-identification tool evaluations) — confirmed that partial Safe Harbor coverage does not meet the Safe Harbor de-identification standard, and that no automated system can honestly claim 100% detection. This finding directly informed the corrections above and the phased Presidio integration approach.
 
 ## Known Issues / Not Yet Implemented (as of this release)
-- `hermes/auditor.py` and `hermes/agent.py` are placeholder files — no logic implemented.
-- CER (Compliance Evidence Record), BAVR (Business Associate Technical Safeguard Verification Report), and CUAP (Cyber Insurance Underwriting Attestation Package) are named/designed artifacts with no generator implementation yet.
-- Hash-chained attestation (`AttestationChain` in `hermes/attestation.py`) is only wired into `hermes/proxy.py` (LLM proxy mode). The primary `/v1/scrub` endpoint returns per-request audit flags but does not yet write into the hash chain.
-- Reversible redaction vault (`hermes/vault.py`) is implemented but not called from the active scrub pipeline.
-- No multi-tenant isolation — single shared `HERMES_API_KEY` per deployment.
-- `HERMES_SIGNING_KEY` and `HERMES_VAULT_KEY` fall back to hardcoded development values if not set — must be explicitly configured before any pilot/production deployment (see `SECURITY.md`).
-- 10 of 18 HIPAA Safe Harbor identifier categories remain undetected: fax numbers, medical record numbers, health plan beneficiary numbers, account numbers, certificate/license numbers, vehicle identifiers, device identifiers, biometric identifiers, full-face photographs, and geographic subdivisions below the address level in some cases.
+- Categories P (Biometric identifiers) and Q (Full face photographs) are `reference_only`: text references to these categories are detected and flagged, but the binary content of actual biometric or image files cannot be inspected by a text pipeline. This is a structural limitation of the text-based architecture, not a gap to be closed by a regex.
+- `hermes/vault.py` reversible redaction vault: implemented and wired to `/v1/scrub` via `scrub_payload_reversible()`, but not the default scrub path. The default `/v1/scrub` uses irreversible static placeholders.
+- `HERMES_SIGNING_KEY` and `HERMES_VAULT_KEY` fall back to hardcoded development values if not set — must be explicitly configured before any pilot or production deployment (see `SECURITY.md`).
+- No multi-tenant RBAC — workspace isolation is implemented but all workspaces share the same deployed instance.
+- `HIPAA_PHI_BANK_NUMBER` (detected by Presidio's US_BANK_NUMBER recognizer) appears in receipts but has no entry in `DECLARED_SCOPE` — CFR citation is null in those receipt entries.
 
 ---
 
