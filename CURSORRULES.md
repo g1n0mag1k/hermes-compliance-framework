@@ -76,3 +76,23 @@ HERMES_VAULT_KEY      — AES-256-GCM vault key
 HERMES_WEBHOOK_URL    — existing generic webhook target
 HERMES_DRATA_CCT_URL  — Drata CCT endpoint (Step 1 target)
 HERMES_DRATA_API_KEY  — Drata API key for CCT auth (Step 1 target)
+
+### Gateway — AI Enforcement Proxy (ADDED Sept 17 2026)
+gateway/app.py              — FastAPI gateway application
+gateway/pipeline.py         — full intercept pipeline
+gateway/inspector.py        — recursive JSON field inspection
+gateway/providers.py        — OpenAI, Azure OpenAI, Anthropic
+gateway/policy.py           — allow/block/redact policy engine
+gateway/evidence.py         — evidence generation per decision
+gateway/credentials.py      — credential injection, auth stripping
+gateway/response_headers.py — provider disclosure header stripping
+gateway/Dockerfile          — container deployment
+tests/test_gateway.py       — 568 gateway tests
+
+Current test count: 438 passing
+Gateway supports: OpenAI, Azure OpenAI, Anthropic
+Auth: Bearer (OpenAI), api-key (Azure), x-api-key (Anthropic)
+Recursive JSON inspection covers tool arguments, nested blocks,
+streaming deltas — per Perplexity field spec Sept 17 2026
+
+Do not modify gateway/ without reading gateway/pipeline.py first.
