@@ -1,7 +1,7 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8787";
 const API_KEY = import.meta.env.VITE_API_KEY || "";
 
-export { API_URL };
+export { API_URL, API_KEY };
 
 export async function fetchStatus() {
   const response = await fetch(`${API_URL}/v1/status`, {
@@ -38,6 +38,38 @@ export async function runTrialScan() {
     err.status = response.status;
     err.detail = detail;
     throw err;
+  }
+
+  return response.json();
+}
+
+export async function fetchScanHistory(apiKey, days = 7) {
+  const response = await fetch(
+    `${API_URL}/v1/scan-history?days=${days}`,
+    {
+      headers: {
+        "X-API-Key": apiKey,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  if (!response.ok) {
+    throw new Error(`scan-history fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchWorkspaces() {
+  const response = await fetch(`${API_URL}/v1/workspaces`, {
+    method: "GET",
+    headers: {
+      "X-API-Key": API_KEY,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Workspaces request failed with HTTP ${response.status}`);
   }
 
   return response.json();

@@ -115,6 +115,17 @@ class StatusResponse(BaseModel):
     trial_expires_at: Optional[str] = None
 
 
+class ScanHistoryEntry(BaseModel):
+    date: str
+    scan_count: int
+
+
+class ScanHistoryResponse(BaseModel):
+    workspace_id: str
+    days: int
+    history: List[ScanHistoryEntry]
+
+
 def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
     """Map audit-log flag entries to per-flag counts for attestation issuance."""
     return {
@@ -468,6 +479,57 @@ def status_endpoint(workspace=Depends(verify_api_key)):
     )
 
 
+@app.get(
+    "/v1/scan-history",
+    response_model=ScanHistoryResponse,
+    tags=["Status"],
+)
+def scan_history_endpoint(days: int = 7, workspace=Depends(verify_api_key)):
+    """Daily scan counts for the dashboard trend sparkline — zero-seeded by calendar day."""
+    if days < 1:
+        raise HTTPException(status_code=400, detail="days must be at least 1")
+
+    chain_obj = _get_chain(workspace)
+    db_path = chain_obj._db_path
+
+    today = datetime.now(timezone.utc).date()
+    date_range = [today - timedelta(days=offset) for offset in range(days - 1, -1, -1)]
+    start_cutoff = datetime.combine(date_range[0], datetime.min.time(), tzinfo=timezone.utc)
+
+    counts_by_date: Dict[str, int] = {d.isoformat(): 0 for d in date_range}
+
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        rows = conn.execute(
+            """
+            SELECT json_extract(receipt_json, '$.issued_at') AS issued_at
+            FROM receipts
+            WHERE json_extract(receipt_json, '$.issued_at') >= ?
+            """,
+            (start_cutoff.isoformat(),),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for (issued_at,) in rows:
+        if not issued_at:
+            continue
+        day_key = _parse_iso(issued_at).date().isoformat()
+        if day_key in counts_by_date:
+            counts_by_date[day_key] += 1
+
+    history = [
+        ScanHistoryEntry(date=day_key, scan_count=counts_by_date[day_key])
+        for day_key in (d.isoformat() for d in date_range)
+    ]
+
+    return ScanHistoryResponse(
+        workspace_id=workspace.workspace_id,
+        days=days,
+        history=history,
+    )
+
+
 @app.post(
     "/v1/trial-scan",
     response_model=ScrubResponse,
@@ -583,9 +645,16 @@ def list_workspaces_endpoint(workspace=Depends(verify_api_key)):
 @app.post("/v1/workspaces/{workspace_id}/rotate-key", tags=["Workspaces"])
 def rotate_key_endpoint(workspace_id: str, workspace=Depends(verify_api_key)):
     """Rotate the API key for a workspace. Returns new key once."""
-    if workspace.workspace_id != workspace_id and workspace.parent_workspace_id != workspace_id:
+    from hermes.workspaces import can_access_workspace, get_workspace, rotate_api_key
+
+    target = get_workspace(workspace_id)
+    if target is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workspace '{workspace_id}' not found.",
+        )
+    if not can_access_workspace(workspace, target):
         raise HTTPException(status_code=403, detail="Cannot rotate a key you do not own.")
-    from hermes.workspaces import rotate_api_key
     new_key = rotate_api_key(workspace_id)
     return {"workspace_id": workspace_id, "api_key": new_key}
 

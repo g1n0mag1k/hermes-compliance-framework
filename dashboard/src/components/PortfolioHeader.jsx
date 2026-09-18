@@ -11,7 +11,9 @@ function timeAgo(isoString) {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
-export default function PortfolioHeader({ status, onScanComplete }) {
+export default function PortfolioHeader({ status, workspaces, onScanComplete }) {
+  const clientCount = workspaces?.length > 0 ? workspaces.length : 1
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -35,9 +37,9 @@ export default function PortfolioHeader({ status, onScanComplete }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatCard
           label="Clients Protected"
-          value="1"
+          value={String(clientCount)}
           color="verified"
-          sub="Self-deployment active"
+          sub={clientCount === 1 ? 'Self-deployment active' : 'Active client workspaces'}
         />
         <StatCard
           label="PHI Classes Caught Today"

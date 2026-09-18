@@ -17,7 +17,7 @@ function timeAgo(isoString) {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
-export default function ClientTable({ status, onClientClick }) {
+export default function ClientTable({ status, apiKey, onClientClick }) {
   const { label, color } = statusLabel(status)
 
   return (
@@ -72,7 +72,7 @@ export default function ClientTable({ status, onClientClick }) {
               {timeAgo(status?.evidence_current_as_of)}
             </td>
             <td className="px-5 py-4 w-24">
-              <TrendSparkline data={[1, 2, 1, 3, 2, 4, status?.total_scans ?? 1]} />
+              <TrendSparkline apiKey={apiKey} />
             </td>
             <td className="px-5 py-4 text-slate-500 text-xs">
               {status?.critical_findings_open > 0

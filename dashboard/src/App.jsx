@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react'
 import PortfolioHeader from './components/PortfolioHeader.jsx'
 import ClientTable from './components/ClientTable.jsx'
 import ClientDetail from './components/ClientDetail.jsx'
-import { fetchStatus, API_URL } from './lib/api.js'
+import { fetchStatus, fetchWorkspaces, API_URL, API_KEY } from './lib/api.js'
 
 export default function App() {
   const [status, setStatus] = useState(null)
+  const [workspaces, setWorkspaces] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [view, setView] = useState('portfolio')
@@ -22,8 +23,18 @@ export default function App() {
     }
   }
 
+  async function loadWorkspaces() {
+    try {
+      const data = await fetchWorkspaces()
+      setWorkspaces(data)
+    } catch {
+      setWorkspaces(null)
+    }
+  }
+
   useEffect(() => {
     load()
+    loadWorkspaces()
     const interval = setInterval(load, 30000)
     return () => clearInterval(interval)
   }, [])
@@ -78,9 +89,14 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {view === 'portfolio' ? (
           <>
-            <PortfolioHeader status={status} onScanComplete={load} />
+            <PortfolioHeader
+              status={status}
+              workspaces={workspaces}
+              onScanComplete={load}
+            />
             <ClientTable
               status={status}
+              apiKey={API_KEY}
               onClientClick={() => setView('client')}
             />
           </>
