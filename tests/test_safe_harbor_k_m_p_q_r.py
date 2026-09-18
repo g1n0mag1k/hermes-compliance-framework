@@ -109,7 +109,7 @@ class TestCategoryR:
 
 class TestDeclaredScopeCoverage:
     def test_declared_scope_18_categories(self):
-        assert len(DECLARED_SCOPE) == 18
+        assert len(DECLARED_SCOPE) == 19
 
     def test_all_18_have_status(self):
         assert all(

@@ -83,6 +83,11 @@ CANARY_CORPUS: List[Dict[str, str]] = [
         "value": "account number 123456789012",
     },
     {
+        "category": "45 CFR §164.514(b)(2)(i)(J)",
+        "flag": "HIPAA_PHI_BANK_NUMBER",
+        "value": "987654321098",
+    },
+    {
         "category": "45 CFR §164.514(b)(2)(i)(K)",
         "flag": "HIPAA_PHI_CERT_LICENSE",
         "value": "DEA: AB1234563",
