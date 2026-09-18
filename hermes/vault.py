@@ -252,6 +252,16 @@ class TokenVault:
             ]
             for k in keys_to_remove:
                 del self._store[k]
+            conn = sqlite3.connect(self._db_path)
+            try:
+                with conn:
+                    conn.execute(
+                        "DELETE FROM vault_entries "
+                        "WHERE transaction_id = ? AND workspace_id = ?",
+                        (transaction_id, workspace_id),
+                    )
+            finally:
+                conn.close()
         return len(keys_to_remove)
 
     def size(self) -> int:

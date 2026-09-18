@@ -69,3 +69,18 @@ def test_scrub_payload_reversible_audit_log_structure_matches_static() -> None:
             static.audit_log.flags_triggered[flag].count
             == reversible.audit_log.flags_triggered[flag].count
         )
+
+
+def test_purge_transaction_persists_across_restart(tmp_path):
+    """Purged tokens must not reappear after a new TokenVault instance loads the same DB."""
+    from hermes.vault import TokenVault
+    db = str(tmp_path / "vault_purge_test.db")
+    vault1 = TokenVault(db_path=db)
+    token = vault1.store("HIPAA_SSN", "372-18-5421", "txn_purge_test", workspace_id="ws1")
+    assert vault1.retrieve(token, workspace_id="ws1") == "372-18-5421"
+    purged = vault1.purge_transaction("txn_purge_test", workspace_id="ws1")
+    assert purged == 1
+
+    # Simulate restart: new instance reads same DB
+    vault2 = TokenVault(db_path=db)
+    assert vault2.retrieve(token, workspace_id="ws1") is None
