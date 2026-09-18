@@ -20,7 +20,7 @@ Hermes Relay is **not production-ready** as of 2026-09-18. This checklist tracks
 [x] upstream failure semantics documented (502 + receipt with forwarded=true)
 [x] bypass paths reviewed (see DOCUMENTATION_AUDIT.md)
 [x] security regression suite passes
-[x] full pytest suite passes (529)
+[x] full pytest suite passes (530)
 [x] documentation matches implementation
 [ ] customer claims reviewed (see PRODUCT_CAPABILITY_MATRIX.md)
 ```

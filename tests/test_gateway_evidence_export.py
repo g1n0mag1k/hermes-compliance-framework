@@ -273,7 +273,7 @@ def test_block_generates_evidence_upstream_not_contacted(
     )
 
     assert response.status_code == 403
-    assert upstream_capture["requests"] == []
+    assert len(upstream_capture["requests"]) == 0  # upstream.request_count == 0
     assert len(exported) == 1
     assert exported[0]["decision"] == "BLOCK"
     assert exported[0]["upstream_contacted"] is False
@@ -413,10 +413,30 @@ def test_drata_exporter_successful_submission(monkeypatch):
 
     assert result.success is True
     payload = mock_post.call_args[0][1]
-    assert payload["gateway_decision"] == "BLOCK"
-    assert payload["upstream_contacted"] is False
+    record = payload["data"]
+    assert record["gateway_decision"] == "BLOCK"
+    assert record["upstream_contacted"] is False
     serialized = json.dumps(payload)
     assert PHI_SSN not in serialized
+
+
+def test_drata_exporter_conforms_to_v2_api_contract(monkeypatch):
+    """Drata v2 Custom Data Records API requires top-level ``data`` key."""
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://public-api.drata.com/public/v2/custom-connections/123/resources/456/records")
+    event = _sample_event()
+
+    with patch(
+        "gateway.evidence_export.exporters._post_json",
+        return_value=(True, 1, None),
+    ) as mock_post:
+        DrataExporter().export(event)
+
+    payload = mock_post.call_args[0][1]
+    assert set(payload.keys()) == {"data"}
+    record = payload["data"]
+    assert record["id"] == event.event_id
+    assert record["gateway_decision"] == "BLOCK"
+    assert "cose_sign1_hex" not in record
 
 
 def test_drata_exporter_includes_bearer_token(monkeypatch):
@@ -517,6 +537,10 @@ def test_drata_payload_contains_no_phi_with_real_gateway_request(
     combined = " ".join(captured_payloads)
     for phi in (PHI_SSN, PHI_NAME, PHI_MRN, PHI_EMAIL, PHI_PHONE):
         assert phi not in combined
+    for payload_str in captured_payloads:
+        payload = json.loads(payload_str)
+        assert "data" in payload
+        assert "cose_sign1_hex" not in payload["data"]
 
 
 # -------------------------------------------------------------------------

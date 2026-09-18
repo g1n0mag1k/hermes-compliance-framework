@@ -12,8 +12,8 @@
 
 | Metric | Count |
 |---|---|
-| **Collected** | 502 |
-| **Passed** | 502 |
+| **Collected** | 530 |
+| **Passed** | 530 |
 | **Failed** | 0 |
 | **Skipped** | 0 |
 | **Errors** | 0 |
@@ -34,4 +34,4 @@
 ## Notes
 
 - Do not infer pass counts from `def test_` grep alone — always run pytest collection and execution.
-- Test floor after this audit: **502** (must not decrease).
+- Test floor after gateway evidence export: **530** (must not decrease).

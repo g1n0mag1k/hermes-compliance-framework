@@ -78,7 +78,7 @@ Expected output:
     HERMES_API_KEY=your-secure-api-key-here
     HERMES_SIGNING_KEY=your-64-char-hex-signing-key-here
     HERMES_VAULT_KEY=your-64-char-hex-vault-key-here
-    HERMES_DRATA_CCT_URL=https://api.drata.com/public/custom-connection/YOUR_CONNECTION_ID/data
+    HERMES_DRATA_CCT_URL=https://public-api.drata.com/public/v2/custom-connections/YOUR_CONNECTION_ID/resources/YOUR_RESOURCE_ID/records
     HERMES_DRATA_API_KEY=your-drata-api-key-here
 
 Generate secure keys:

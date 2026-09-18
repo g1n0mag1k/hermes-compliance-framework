@@ -52,9 +52,65 @@ Unset exporter URLs = no-op for that exporter. Gateway enforcement works without
 ```bash
 # Optional gateway evidence export (same vars as /v1/scrub)
 HERMES_WEBHOOK_URL=https://your-siem.example/webhook
-HERMES_DRATA_CCT_URL=https://api.drata.com/public/custom-connection/YOUR_ID/data
+HERMES_DRATA_CCT_URL=https://public-api.drata.com/public/v2/custom-connections/{connectionId}/resources/{resourceId}/records
 HERMES_DRATA_API_KEY=your-drata-api-key
 ```
+
+## Drata CCT — what Hermes sends
+
+Hermes posts to the **full URL** configured in `HERMES_DRATA_CCT_URL` (Drata v2 Custom Data Records upsert endpoint). Request shape:
+
+```http
+POST {HERMES_DRATA_CCT_URL}
+Authorization: Bearer {HERMES_DRATA_API_KEY}
+Content-Type: application/json
+X-Idempotency-Key: {event_id}
+User-Agent: hermes-gateway-drata-cct/1.0
+```
+
+Body (top-level `data` key required by Drata v2 API):
+
+```json
+{
+  "data": {
+    "id": "<event_id>",
+    "timestamp": "<ISO 8601 UTC>",
+    "transaction_id": "<gw_* id>",
+    "receipt_id": "<receipt id>",
+    "event_id": "<uuid>",
+    "event_type": "gateway_enforcement",
+    "source": "hermes-gateway",
+    "workspace_id": "<workspace id>",
+    "gateway_decision": "ALLOW|REDACT|BLOCK",
+    "upstream_contacted": true,
+    "upstream_provider": "openai|azure_openai|anthropic",
+    "endpoint_path": "/v1/chat/completions",
+    "phi_categories_detected": ["HIPAA_SSN"],
+    "phi_categories_redacted": [],
+    "policy_id": "<policy id>",
+    "policy_version": "<semver>",
+    "policy_digest": "<hex>",
+    "receipt_digest": "<hex>",
+    "prev_receipt_digest": "<hex or null>",
+    "gateway_sequence": 0,
+    "failure_class": null,
+    "gateway_version": "<semver>",
+    "signature_algorithm": "EdDSA"
+  }
+}
+```
+
+### What Hermes does NOT send to Drata
+
+- Raw request or response bodies
+- Prompts, completions, or message content
+- PHI values (SSN, names, MRNs, emails, phone numbers, etc.)
+- Detector snippets or redacted text
+- Full COSE_Sign1 envelope (`cose_sign1_hex` is webhook-only; Drata receives digests only)
+- API keys, vault keys, or signing key material
+- Upstream provider credentials
+
+Category names (e.g. `HIPAA_SSN`) and counts of categories are metadata — not PHI values.
 
 ## Upstream contacted semantics
 
@@ -72,7 +128,7 @@ HERMES_DRATA_API_KEY=your-drata-api-key
 
 ## Limitations (not implemented)
 
-- Live Drata connectivity verified only via mock/contract tests in CI
+- Live Drata connectivity verified only via contract/mock tests in CI (not a live Drata tenant)
 - No immutable external storage (WORM/TSA/SCITT)
 - No streaming enforcement evidence
 - SQLite receipt storage remains mutable local filesystem

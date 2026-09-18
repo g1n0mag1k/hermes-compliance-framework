@@ -132,9 +132,10 @@ class DrataExporter:
         return bool(os.environ.get(DRATA_CCT_URL_ENV))
 
     @staticmethod
-    def build_drata_payload(event: EvidenceEvent) -> dict:
-        """Map EvidenceEvent to Drata Custom Connections and Tests JSON contract."""
+    def build_drata_record(event: EvidenceEvent) -> dict:
+        """Map EvidenceEvent to a Drata Custom Data Record (metadata-only fields)."""
         return {
+            "id": event.event_id,
             "timestamp": event.timestamp,
             "transaction_id": event.transaction_id,
             "receipt_id": event.receipt_id,
@@ -158,6 +159,16 @@ class DrataExporter:
             "gateway_version": event.gateway_version,
             "signature_algorithm": event.signature_algorithm,
         }
+
+    @staticmethod
+    def build_drata_payload(event: EvidenceEvent) -> dict:
+        """
+        Wrap the record in Drata v2 Custom Data Records request body.
+
+        POST /custom-connections/{connectionId}/resources/{resourceId}/records
+        requires a top-level ``data`` key (object or array).
+        """
+        return {"data": DrataExporter.build_drata_record(event)}
 
     def export(self, event: EvidenceEvent) -> ExportResult:
         url = os.environ.get(DRATA_CCT_URL_ENV)
