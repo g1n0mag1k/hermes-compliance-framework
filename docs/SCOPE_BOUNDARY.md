@@ -48,16 +48,16 @@ precisely to make this distinction machine-readable and auditor-verifiable.
 | §164.514(b)(2)(i)(H) | Medical record numbers | Covered | Regex |
 | §164.514(b)(2)(i)(I) | Health plan beneficiary numbers | Covered | Regex |
 | §164.514(b)(2)(i)(J) | Account numbers | Covered | Regex |
-| §164.514(b)(2)(i)(K) | Certificate/license numbers | Not covered | Too variable by issuing authority |
+| §164.514(b)(2)(i)(K) | Certificate/license numbers | Covered | regex+checksum |
 | §164.514(b)(2)(i)(L) | Vehicle identifiers/VINs | Covered | Regex |
-| §164.514(b)(2)(i)(M) | Device identifiers/serial numbers | Not covered | Too broad without manufacturer context |
+| §164.514(b)(2)(i)(M) | Device identifiers/serial numbers | Covered | regex+checksum |
 | §164.514(b)(2)(i)(N) | Web URLs | Covered | Presidio |
 | §164.514(b)(2)(i)(O) | IP addresses | Covered | Presidio |
 | §164.514(b)(2)(i)(P) | Biometric identifiers | Not covered | Not a text/regex problem |
 | §164.514(b)(2)(i)(Q) | Full face photographs | Not covered | Not a text/regex problem |
-| §164.514(b)(2)(i)(R) | Other unique identifiers | Not covered | Catch-all requiring human judgment |
+| §164.514(b)(2)(i)(R) | Other unique identifiers | Covered | regex |
 
-**Coverage: 13 of 18 Safe Harbor identifier categories.**
+**Coverage: 16 of 18 Safe Harbor identifier categories.**
 
 ---
 
@@ -70,7 +70,7 @@ precisely to make this distinction machine-readable and auditor-verifiable.
 
 ## What Hermes Does Claim
 
-- Every payload is scanned against all 13 covered categories on every call.
+- Every payload is scanned against all 16 covered categories on every call.
 - Every redaction decision is recorded in a CFR-cited, SHA-256 hash-chained,
   cryptographically signed attestation receipt.
 - The receipt is tamper-evident -- verify_chain() checks signature integrity,
@@ -86,7 +86,7 @@ Treat Hermes as a strong, auditable first layer for PHI reduction in AI
 pipelines. For complete Safe Harbor de-identification, combine Hermes with:
 
 - Human review of high-stakes payloads
-- Domain-specific controls for uncovered categories (K, M, P, Q, R)
+- Domain-specific controls for reference-only categories (P, Q)
 - Your own risk assessment per 45 CFR 164.514(b)(1) expert determination
 
 ---
@@ -155,14 +155,7 @@ mentioned in text, but narrative references like "patient's daughter is a
 nurse at Vanderbilt" pass clean. The family relationship context is not
 detected.
 
-### 7. Attestation chain is in-memory only (Gap 14)
-
-ATTESTATION_CHAIN is a module-level singleton. Every API restart wipes it.
-verify_chain() always returns True on a fresh start. An auditor asking for
-30 days of receipts gets nothing. Chain persistence to disk or a database
-is a deployment requirement not yet implemented.
-
-### 8. Non-Western name recall (Gap 15)
+### 7. Non-Western name recall (Gap 15)
 
 spaCy en_core_web_sm is trained predominantly on English news text with
 Western names. Names like "Nguyen Van An", "Mohammed Al-Rashid", or
@@ -170,7 +163,7 @@ Western names. Names like "Nguyen Van An", "Mohammed Al-Rashid", or
 For MSPs serving diverse patient populations this is a real coverage gap.
 The upgrade path is a multilingual NER model or scispaCy.
 
-### 9. Single-threaded pipeline under concurrent load (Gap 16)
+### 8. Single-threaded pipeline under concurrent load (Gap 16)
 
 _PIPELINE_LOCK is a single threading lock shared across spaCy and Presidio.
 Every scrub request waits for the lock. Under concurrent load this becomes

@@ -152,7 +152,7 @@ A `/v1/scrub` response's `compliance_receipt` has these fields:
 | `previous_receipt_hash` | The prior chain item's hash — this is the actual chain link. |
 | `receipt_hash` | This receipt's own HMAC-SHA256 signature, covering every other field. |
 | `chain_position` | Zero-indexed position in the attestation chain. |
-| `declared_scope` | CFR citations for every category Hermes actively checks (13 of 18 HIPAA Safe Harbor categories — see §10). |
+| `declared_scope` | CFR citations for every category Hermes actively checks (16 of 18 HIPAA Safe Harbor categories — see §10). |
 | `evidence_incomplete_categories` | CFR citations for categories **not** checked. Absence of a flag here is not evidence of absence — this list exists specifically so that distinction is machine-readable. |
 | `detectors_executed` | Per-category tri-state status: `"ran_clean"` (executed, nothing wrong), `"ran_error"` (executed, threw an exception, caught), or `"not_run"`. A silently-failed detector is never indistinguishable from a clean scan. |
 
@@ -234,9 +234,10 @@ running an out-of-process `verify_chain()` check.
 Hermes Relay makes narrow, explicit claims by design — see
 [`docs/SCOPE_BOUNDARY.md`](./SCOPE_BOUNDARY.md) for the full list, including:
 
-- 13 of 18 HIPAA Safe Harbor identifier categories are covered; 5 are not
-  (certificate/license numbers, device identifiers, biometric identifiers,
-  full-face photographs, and the "other unique identifiers" catch-all).
+- 16 of 18 HIPAA Safe Harbor identifier categories are covered;
+  P (biometric identifiers) and Q (full face photographs) are
+  reference_only — text references detected, binary content not
+  inspectable by a text pipeline
 - Quasi-identifier combinations (e.g. gender + birth date + ZIP) are not
   detected — each identifier is redacted in isolation.
 - The NER model (`en_core_web_sm`) is a general-purpose English model, not
