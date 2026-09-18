@@ -21,7 +21,7 @@ Cloud-based competitors detect PHI. None of them can prove what they did with it
 
 Every scan generates a **Compliance Evidence Record** — a structured audit artifact with hash-chained compliance receipts that documents:
 
-- Which **PHI identifiers** were found, across **13 of 18** HIPAA Safe Harbor categories covered today
+- Which **PHI identifiers** were found, across **16 of 18** HIPAA Safe Harbor categories covered today
 - Which detection method fired for each hit (spaCy NER / Presidio / regex / Luhn checksum)
 - What action was taken (redaction to typed placeholders)
 - The cryptographic link between compliance receipts via HMAC-SHA256 attestation chain
@@ -48,10 +48,10 @@ This record is what your OCR investigator reads. No other tool in this category 
 
 ## Compliance Coverage
 
-Hermes covers **13 of 18** HIPAA Safe Harbor identifier categories today.  
+Hermes covers **16 of 18** HIPAA Safe Harbor identifier categories today.  
 Detection is not exhaustive — partial coverage is intentional and documented in every attestation receipt via `declared_scope` and `evidence_incomplete_categories` fields.
 
-**Active today — 13 of 18 Safe Harbor categories**
+**Active today — 16 of 18 Safe Harbor categories**
 
 | CFR Citation | Category | Detection Method |
 |---|---|---|
@@ -65,22 +65,24 @@ Detection is not exhaustive — partial coverage is intentional and documented i
 | 45 CFR §164.514(b)(2)(i)(H) | Medical record numbers | regex |
 | 45 CFR §164.514(b)(2)(i)(I) | Health plan beneficiary numbers | regex |
 | 45 CFR §164.514(b)(2)(i)(J) | Account numbers | regex |
-| 45 CFR §164.514(b)(2)(i)(L) | Vehicle identifiers / VINs | regex |
+| 45 CFR §164.514(b)(2)(i)(K) | Certificate/license numbers | regex+checksum |
+| 45 CFR §164.514(b)(2)(i)(L) | Vehicle identifiers/VINs | regex |
+| 45 CFR §164.514(b)(2)(i)(M) | Device identifiers | regex+checksum |
 | 45 CFR §164.514(b)(2)(i)(N) | Web URLs | Presidio |
 | 45 CFR §164.514(b)(2)(i)(O) | IP addresses | Presidio |
+| 45 CFR §164.514(b)(2)(i)(R) | Other unique identifiers | regex |
 | — | PCI payment card numbers | regex + Luhn checksum (not a Safe Harbor category) |
 
-**Not yet covered — 5 of 18 Safe Harbor categories**
+**Reference only — 2 of 18 Safe Harbor categories**
 
 | CFR Citation | Category |
 |---|---|
-| 45 CFR §164.514(b)(2)(i)(K) | Certificate / license numbers |
-| 45 CFR §164.514(b)(2)(i)(M) | Device identifiers / serial numbers |
 | 45 CFR §164.514(b)(2)(i)(P) | Biometric identifiers |
 | 45 CFR §164.514(b)(2)(i)(Q) | Full face photographs |
-| 45 CFR §164.514(b)(2)(i)(R) | Other unique identifiers |
 
-Every attestation receipt embeds `declared_scope` (the 13 covered CFR citations) and `evidence_incomplete_categories` (the 5 not covered) so the boundary of evidence is machine-readable. "Scanned and found nothing" and "never in scope" are always distinguishable.
+Text references to these categories are detected (`reference_only`). Binary content (actual biometric files, image files) cannot be inspected by a text pipeline.
+
+Every attestation receipt embeds `declared_scope` (the 16 covered CFR citations) and `evidence_incomplete_categories` (the 2 reference-only categories) so the boundary of evidence is machine-readable. "Scanned and found nothing" and "never in scope" are always distinguishable.
 
 **Additional detections (not Safe Harbor categories)**
 - GPS coordinates / latitude-longitude (regex)
