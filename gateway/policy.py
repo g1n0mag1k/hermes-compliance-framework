@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Literal
 import hashlib
 import json
+import os
 
 PolicyDecision = Literal["ALLOW", "REDACT", "BLOCK"]
 
@@ -48,7 +49,35 @@ HIPAA_STRICT = Policy(
     approved_providers=["openai", "azure_openai", "anthropic"],
 )
 
-_active_policy: Policy = HIPAA_STRICT
+# Explicit production blocking profile — PHI detected → BLOCK (never silent REDACT).
+HIPAA_PRODUCTION_BLOCK = Policy(
+    policy_id="HIPAA_PRODUCTION_BLOCK",
+    policy_version="1.0.0",
+    text_action="BLOCK",
+    binary_action="BLOCK",
+    on_detector_error="BLOCK",
+    on_parse_error="BLOCK",
+    approved_providers=["openai", "azure_openai", "anthropic"],
+)
+
+_POLICY_BY_ID = {
+    "HIPAA_STRICT": HIPAA_STRICT,
+    "HIPAA_PRODUCTION_BLOCK": HIPAA_PRODUCTION_BLOCK,
+}
+
+
+def _policy_from_env() -> Policy:
+    policy_id = os.environ.get("HERMES_GATEWAY_POLICY", "HIPAA_STRICT")
+    policy = _POLICY_BY_ID.get(policy_id)
+    if policy is None:
+        raise RuntimeError(
+            f"Unknown HERMES_GATEWAY_POLICY {policy_id!r}. "
+            f"Supported: {sorted(_POLICY_BY_ID)}"
+        )
+    return policy
+
+
+_active_policy: Policy = _policy_from_env()
 
 
 @dataclass
@@ -154,9 +183,9 @@ class PolicyEngine:
 
 
 def reload_policy() -> None:
-    """Hot-reload the active gateway policy from HIPAA_STRICT defaults."""
+    """Hot-reload the active gateway policy from environment defaults."""
     global _active_policy
-    _active_policy = HIPAA_STRICT
+    _active_policy = _policy_from_env()
 
 
 def set_workspace_policy(workspace_id: str, policy: Policy) -> None:

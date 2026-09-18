@@ -24,11 +24,12 @@ Every scan generates a signed, hash-chained compliance receipt documenting:
 Hermes now includes a transparent AI enforcement gateway. Instead of requiring applications to call /v1/scrub explicitly, the gateway sits between your client's applications and their AI provider — OpenAI, Azure OpenAI, or Anthropic.
 
 Every request is inspected before it reaches the model:
-- PHI detected → redacted or blocked
+- PHI detected → redacted or blocked according to policy (default dev: REDACT; design partner: BLOCK via `HERMES_GATEWAY_POLICY=HIPAA_PRODUCTION_BLOCK`)
 - Clean request → forwarded to AI provider
-- Every decision → cryptographic receipt issued
-- Evidence → pushed to Drata CCT automatically
-- Fail-closed → if Hermes errors, request blocked
+- Every decision → V2 cryptographic gateway receipt issued (local SQLite chain)
+- `/v1/scrub` evidence → may push to Drata CCT when configured (`HERMES_DRATA_CCT_URL`)
+- Gateway evidence → **local receipts only today** (see `docs/GATEWAY_EVIDENCE_EXPORT.md`)
+- Fail-closed for defined failure classes (detector/parse/binary/policy) — upstream transport failures are documented separately
 
 Supported providers:
 - OpenAI (/v1/chat/completions, /v1/assistants, /v1/threads, /v1/audio/transcriptions)

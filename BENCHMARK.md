@@ -34,7 +34,7 @@ Hermes v1.0.0 actively detects: **SSN** (regex), **payment card numbers** (regex
 | Reversible redaction (token vault) | 🔜 Roadmap | ❌ | ❌ | ❌ | ❌ |
 | Cryptographic compliance receipts  | ✅ Proxy | ❌ | ❌ | ❌ | ❌ |
 | Zero-trust LLM proxy mode          | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Hash-chained immutable audit log   | ✅ Proxy | ❌ | ❌ | ❌ | ❌ |
+| Hash-chained tamper-evident audit log | ✅ Proxy | ❌ | ❌ | ❌ | ❌ |
 | Zero data egress (fully local)     | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Open source + self-hostable        | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Luhn checksum PAN validation       | ✅ | ❌ | ✅ | ✅ | ✅ |

@@ -219,4 +219,55 @@ Send within **24 hours** of the demo:
 | Pilot offer | 11–13 min | They ask about a specific client or timeline |
 | Close | 13–15 min | They name a client or agree to a follow-up call |
 
-**Before the meeting:** Export `HERMES_API_KEY`, confirm `curl` returns 200, refresh dashboard so portfolio view looks populated, and queue Drata tab only if you know they use Drata.
+**Before the meeting:** Export `HERMES_API_KEY`, confirm gateway at `:8788` and scrub API at `:8787`, refresh dashboard so portfolio view looks populated. Queue Drata tab only if they use Drata **and** you are demoing `/v1/scrub` (gateway receipts are local-only today).
+
+---
+
+## Gateway demo addendum (minutes 5–12 when showing inline enforcement)
+
+Run gateway on `:8788` with workspace API key `$GATEWAY_API_KEY`.
+
+### 1. Clean request — what Hermes sends
+
+```bash
+curl -s -X POST http://127.0.0.1:8788/gateway/openai/v1/chat/completions \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Explain HIPAA minimum necessary."}]}'
+```
+
+> "Here is what Hermes sends — unchanged clean content reaches the provider."
+
+### 2. PHI + REDACT (default HIPAA_STRICT)
+
+```bash
+curl -s -X POST http://127.0.0.1:8788/gateway/openai/v1/chat/completions \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Patient SSN is 123-45-6789"}]}'
+```
+
+> "Here is what Hermes sends — SSN redacted to `[REDACTED_SSN]`. Hermes default policy redacts; blocking is a separate explicit policy."
+
+### 3. PHI + BLOCK (design-partner profile)
+
+Set `HERMES_GATEWAY_POLICY=HIPAA_PRODUCTION_BLOCK` or workspace BLOCK policy.
+
+```bash
+curl -s -X POST http://127.0.0.1:8788/gateway/openai/v1/chat/completions \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Patient SSN is 123-45-6789"}]}'
+```
+
+> "Here is what Hermes blocks — HTTP 403, upstream receives nothing. Receipt shows `forwarded: false`."
+
+### 4. Receipt verification
+
+Export latest receipt COSE bytes from workspace SQLite and run:
+
+```bash
+hermes-verify receipt receipt.cose --public-key gateway-public.pem
+```
+
+> "Here is how you independently verify that evidence — VALID or INVALID with policy digest and decision, no PHI values exposed."

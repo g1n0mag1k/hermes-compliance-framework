@@ -31,6 +31,10 @@ been scrubbed.
 | `HERMES_VAULT_KEY` | **Required in production.** Must be exactly 64 hex characters (32 bytes) — used directly as an AES-256-GCM key. | Encryption key for `hermes/vault.py`'s token vault. Same fail-fast behavior as `HERMES_SIGNING_KEY`: required and validated for length in production, insecure dev default with a warning otherwise. |
 | `HERMES_ENV` | Optional. `development` (default) or `production`. | Switches the fail-fast behavior above. Setting this to `production` without also setting `HERMES_SIGNING_KEY` and `HERMES_VAULT_KEY` will crash the process on startup — that's intentional, not a bug. |
 | `HERMES_DB_PATH` | Optional. Default: `hermes_chain.db` in the working directory. | Path to the SQLite database backing the attestation chain. The chain reloads from this file on every process start, so this is what makes receipts survive a restart — pointing two processes at the same path means they share one chain. |
+| `HERMES_GATEWAY_KEYSTORE_PATH` | **Required in production** for gateway service. | Encrypted Ed25519 keystore for V2 gateway receipt signing. |
+| `HERMES_GATEWAY_KEYSTORE_PASSPHRASE` | **Required in production** for gateway service. | Passphrase for gateway keystore decryption. |
+| `HERMES_GATEWAY_POLICY` | Optional. Default: `HIPAA_STRICT` (REDACT on PHI). | Set to `HIPAA_PRODUCTION_BLOCK` for design-partner BLOCK profile. |
+| `HERMES_OPENAI_API_KEY` / `HERMES_ANTHROPIC_API_KEY` / Azure vars | Required for gateway upstream calls. | Injected by gateway; client Authorization headers are stripped. |
 
 Generate a signing/vault key locally with:
 

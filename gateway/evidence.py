@@ -14,6 +14,7 @@ from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
 from hermes.workspaces import Workspace, get_chain_for_workspace
 
 from gateway import __version__
+from gateway.exceptions import ReceiptPersistenceError
 from gateway.policy import EnforcementDecision, PolicyDecision
 
 _GATEWAY_RECEIPTS_SCHEMA = """
@@ -34,7 +35,26 @@ _v2_chain_heads: dict[str, Optional[str]] = {}
 _chain_lock = threading.Lock()
 
 
+def _is_production_env() -> bool:
+    return os.environ.get("HERMES_ENV", "development") == "production"
+
+
+def validate_gateway_signing_config() -> None:
+    """Fail fast in production when no persistent gateway signing key is configured."""
+    if not _is_production_env():
+        return
+    keystore_path = os.environ.get("HERMES_GATEWAY_KEYSTORE_PATH")
+    keystore_passphrase = os.environ.get("HERMES_GATEWAY_KEYSTORE_PASSPHRASE")
+    if not keystore_path or not keystore_passphrase:
+        raise RuntimeError(
+            "HERMES_GATEWAY_KEYSTORE_PATH and HERMES_GATEWAY_KEYSTORE_PASSPHRASE "
+            "are required when HERMES_ENV=production. Ephemeral gateway signing "
+            "keys are not permitted in production."
+        )
+
+
 def _load_signer_from_env() -> SoftwareSignerEd25519:
+    validate_gateway_signing_config()
     keystore_path = os.environ.get("HERMES_GATEWAY_KEYSTORE_PATH")
     keystore_passphrase = os.environ.get("HERMES_GATEWAY_KEYSTORE_PASSPHRASE")
     if keystore_path and keystore_passphrase:
@@ -150,6 +170,11 @@ def _persist_gateway_receipt(
                     created_at,
                 ),
             )
+    except Exception as exc:
+        raise ReceiptPersistenceError(
+            receipt,
+            f"Gateway receipt persistence failed: {exc}",
+        ) from exc
     finally:
         conn.close()
 
@@ -163,6 +188,10 @@ def issue_gateway_receipt(
     flags_triggered: dict[str, int],
     flags_redacted: dict[str, int],
     detectors_executed: dict[str, str],
+    *,
+    forwarded: bool = False,
+    upstream_status: Optional[int] = None,
+    failure_class: Optional[str] = None,
 ) -> ReceiptV2:
     """Issue a V2 COSE_Sign1 receipt linked to the workspace receipt chain."""
     get_chain_for_workspace(workspace)
@@ -177,6 +206,8 @@ def issue_gateway_receipt(
     payload = {
         "transaction_id": transaction_id,
         "gateway_decision": _decision_label(decision.decision),
+        "decision": decision.decision,
+        "forwarded": forwarded,
         "upstream_provider": provider_id,
         "endpoint_path": endpoint_path,
         "phi_categories_detected": sorted(flags_triggered.keys()),
@@ -192,16 +223,28 @@ def issue_gateway_receipt(
         "all_detectors_clean": decision.all_detectors_clean,
         "gateway_sequence": gateway_sequence,
     }
+    if upstream_status is not None:
+        payload["upstream_status"] = upstream_status
+    if failure_class is not None:
+        payload["failure_class"] = failure_class
 
     builder = ReceiptV2Builder(_GATEWAY_SIGNER)
     receipt = builder.build(payload, prev_receipt_digest=prev_digest)
 
-    _persist_gateway_receipt(
-        workspace,
-        receipt,
-        gateway_sequence,
-        transaction_id,
-    )
+    try:
+        _persist_gateway_receipt(
+            workspace,
+            receipt,
+            gateway_sequence,
+            transaction_id,
+        )
+    except ReceiptPersistenceError:
+        raise
+    except Exception as exc:
+        raise ReceiptPersistenceError(
+            receipt,
+            f"Gateway receipt persistence failed: {exc}",
+        ) from exc
 
     with _chain_lock:
         _v2_chain_heads[workspace.workspace_id] = receipt.receipt_digest

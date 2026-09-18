@@ -1,7 +1,8 @@
 # Hermes — PHI Compliance Infrastructure
 
-**Deterministic, zero-egress PHI/PII/PCI scrubbing  
-with cryptographic compliance evidence records.**
+**Deterministic, zero-egress PHI/PII detection with cryptographically verifiable compliance evidence.**
+
+Hermes Relay is a runtime AI gateway that inspects AI requests for PHI before they reach supported AI providers (OpenAI, Azure OpenAI, Anthropic), applies deterministic **redaction or blocking** policies, and generates cryptographically verifiable enforcement receipts.
 
 Built for MSPs serving HIPAA-covered entities.
 
@@ -38,7 +39,9 @@ This record is what your OCR investigator reads. No other tool in this category 
 
 **Deterministic.** Rule-based hybrid engine: spaCy NER + Presidio + regex + Luhn checksum. Every classification decision is explainable to the token level. No ML black box. No confidence score an auditor cannot verify.
 
-**Hash-chained.** Every `/v1/scrub` call and every `/v1/review` human review event issues a compliance receipt cryptographically linked to the prior receipt via HMAC-SHA256. The chain is persisted in SQLite and independently verifiable — no Hermes dependency required to prove integrity.
+**Hash-chained.** Every `/v1/scrub` call, `/v1/review` event, and gateway enforcement decision issues a compliance receipt cryptographically linked to prior receipts. V1 scrub receipts use HMAC-SHA256; gateway receipts use V2 COSE_Sign1 signatures. Chains persist in SQLite and are independently verifiable.
+
+**Gateway enforcement.** Traffic routed through the Hermes Gateway (`:8788`) is inspected before forward. Default dev policy (`HIPAA_STRICT`) **redacts** detected PHI; production design-partner profile (`HIPAA_PRODUCTION_BLOCK`) **blocks** detected PHI with zero upstream bytes on BLOCK decisions.
 
 **Reversible (roadmap).** A token vault module exists (AES-256-GCM) for typed placeholders with key-controlled restoration. Integration with the scrub pipeline is in active development — current redactions use static placeholders (`[REDACTED_SSN]`, `[REDACTED_PAN]`, etc.).
 
@@ -117,7 +120,8 @@ Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriti
 - HMAC-SHA256 attestation chain — SQLite persistence
 - AES-256-GCM token vault (vault.py — roadmap integration)
 - ReportLab PDF evidence report generation
-- Zero-trust LLM proxy (OpenAI, Anthropic, Ollama)
+- AI enforcement gateway (OpenAI, Azure OpenAI, Anthropic)
+- Legacy scrub proxy paths (OpenAI, Anthropic, Ollama — separate from gateway)
 - Generic JSON webhook dispatcher (Splunk HEC, SIEM, DLP)
 - Docker / GHCR
 - Render (API + Streamlit demo) / Netlify (landing page)

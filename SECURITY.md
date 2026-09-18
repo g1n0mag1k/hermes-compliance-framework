@@ -41,7 +41,9 @@ Dependabot and other automated scanners will periodically flag vulnerabilities i
 - **Zero-egress core:** The `/v1/scrub` endpoint and `hermes/classifier.py` make no external network calls. All PHI detection runs against local models (spaCy `en_core_web_sm`, Microsoft Presidio's `AnalyzerEngine`) inside the deployment environment.
 - **Proxy mode network egress:** `hermes/proxy.py` (`ProxyRelay`) is the one component that makes outbound calls, by design — it forwards *already-scrubbed* payloads to an upstream LLM target (OpenAI, Anthropic, Ollama, or a custom endpoint). Unscrubbed PHI is never forwarded; scrubbing happens before the outbound request is constructed.
 - **Signing keys:** `HERMES_SIGNING_KEY` (attestation receipts) and `HERMES_VAULT_KEY` (reversible redaction vault) fall back to a hardcoded development key if not set via environment variable. **This fallback is not safe for production deployment.** Both must be set to a securely generated value before any pilot or production use. This is called out explicitly here because it is easy to miss.
-- **API authentication:** `/v1/scrub` requires `X-API-Key` matching `HERMES_API_KEY`. There is currently no rate limiting, no key rotation mechanism, and no multi-tenant key isolation — single shared key per deployment. Multi-tenant isolation is on the roadmap, not yet implemented.
+- **Gateway signing keys:** Gateway V2 receipts require `HERMES_GATEWAY_KEYSTORE_PATH` and `HERMES_GATEWAY_KEYSTORE_PASSPHRASE` when `HERMES_ENV=production`. Ephemeral Ed25519 keys are generated in development/test only. Restarting without a persistent keystore creates a new signing identity and breaks verification of prior gateway receipts.
+- **API authentication:** `/v1/scrub` requires `X-API-Key` matching `HERMES_API_KEY`. Gateway routes require workspace `X-API-Key`. There is currently no rate limiting and no automated key rotation.
+- **Workspace isolation:** Multiple workspaces per deployment are supported with per-workspace receipt chains. Deployments remain single-customer-environment (not multi-tenant SaaS).
 
 ## Supported Versions
 

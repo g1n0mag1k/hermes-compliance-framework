@@ -13,6 +13,7 @@ from hermes.workspaces import Workspace
 
 from gateway.credentials import inject_provider_credentials, strip_client_auth_headers
 from gateway.evidence import issue_gateway_receipt
+from gateway.exceptions import ReceiptPersistenceError, UpstreamTransportFailure
 from gateway.inspector import (
     inspect_json_recursive,
     inspect_query_string,
@@ -45,6 +46,8 @@ class GatewayResponse:
     transaction_id: str
     gateway_request_id: str
     detector_error: bool = False
+    upstream_failure: Optional[UpstreamTransportFailure] = None
+    receipt_persistence_failed: bool = False
 
 
 class GatewayPipeline:
@@ -55,6 +58,122 @@ class GatewayPipeline:
     ) -> None:
         self._timeout = timeout
         self._client_factory = client_factory or (lambda: httpx.Client(timeout=timeout))
+
+    def _evaluate_policy(
+        self,
+        policy_engine: PolicyEngine,
+        flags_triggered: dict[str, int],
+        flags_redacted: dict[str, int],
+        all_detectors_clean: bool,
+        content_type: str,
+        *,
+        parse_error: bool = False,
+        has_binary_content: bool = False,
+    ) -> EnforcementDecision:
+        try:
+            return policy_engine.decide(
+                flags_triggered,
+                flags_redacted,
+                all_detectors_clean,
+                content_type,
+                parse_error=parse_error,
+                has_binary_content=has_binary_content,
+            )
+        except Exception:
+            policy = policy_engine.get_policy()
+            return EnforcementDecision(
+                decision="BLOCK",
+                reasons=["Policy evaluation failure"],
+                policy_id=policy.policy_id,
+                policy_version=policy.policy_version,
+                policy_digest=policy.digest,
+                content_types_inspected=[content_type] if content_type and not has_binary_content else [],
+                content_types_not_inspected=[content_type] if content_type and has_binary_content else [],
+                all_detectors_clean=False,
+            )
+
+    def _block_response(
+        self,
+        workspace: Workspace,
+        transaction_id: str,
+        gateway_request_id: str,
+        decision: EnforcementDecision,
+        provider_id: str,
+        path: str,
+        flags_triggered: dict[str, int],
+        flags_redacted: dict[str, int],
+        detectors_executed: dict[str, str],
+        *,
+        detector_error: bool = False,
+    ) -> GatewayResponse:
+        try:
+            receipt = issue_gateway_receipt(
+                workspace,
+                transaction_id,
+                decision,
+                provider_id,
+                path,
+                flags_triggered,
+                flags_redacted,
+                detectors_executed,
+                forwarded=False,
+            )
+            persistence_failed = False
+        except ReceiptPersistenceError as exc:
+            receipt = exc.receipt
+            persistence_failed = True
+        return GatewayResponse(
+            decision=decision,
+            sanitized_body=None,
+            upstream_response=None,
+            receipt=receipt,
+            transaction_id=transaction_id,
+            gateway_request_id=gateway_request_id,
+            detector_error=detector_error,
+            receipt_persistence_failed=persistence_failed,
+        )
+
+    def _upstream_failure_response(
+        self,
+        workspace: Workspace,
+        transaction_id: str,
+        gateway_request_id: str,
+        decision: EnforcementDecision,
+        provider_id: str,
+        path: str,
+        flags_triggered: dict[str, int],
+        flags_redacted: dict[str, int],
+        detectors_executed: dict[str, str],
+        failure: UpstreamTransportFailure,
+    ) -> GatewayResponse:
+        try:
+            receipt = issue_gateway_receipt(
+                workspace,
+                transaction_id,
+                decision,
+                provider_id,
+                path,
+                flags_triggered,
+                flags_redacted,
+                detectors_executed,
+                forwarded=True,
+                upstream_status=failure.upstream_status,
+                failure_class=failure.kind,
+            )
+            persistence_failed = False
+        except ReceiptPersistenceError as exc:
+            receipt = exc.receipt
+            persistence_failed = True
+        return GatewayResponse(
+            decision=decision,
+            sanitized_body=None,
+            upstream_response=None,
+            receipt=receipt,
+            transaction_id=transaction_id,
+            gateway_request_id=gateway_request_id,
+            upstream_failure=failure,
+            receipt_persistence_failed=persistence_failed,
+        )
 
     def process(self, request: GatewayRequest, workspace: Workspace) -> GatewayResponse:
         transaction_id = f"gw_{uuid.uuid4().hex[:12]}"
@@ -119,23 +238,20 @@ class GatewayPipeline:
             )
 
         if not validate_path(provider, request.path):
-            raise ValueError(f"Path {request.path!r} not allowed for provider {request.provider_id!r}")
-
-        content_type = request.content_type or ""
-        has_binary = is_binary_content_type(content_type)
-
-        # 2. Check content-type — if binary apply binary_action immediately
-        if has_binary:
-            decision = policy_engine.decide(
-                flags_triggered,
-                flags_redacted,
-                all_detectors_clean,
-                content_type,
-                has_binary_content=True,
+            decision = EnforcementDecision(
+                decision="BLOCK",
+                reasons=[f"Path {request.path!r} not allowed for provider {request.provider_id!r}"],
+                policy_id=policy.policy_id,
+                policy_version=policy.policy_version,
+                policy_digest=policy.digest,
+                content_types_inspected=[],
+                content_types_not_inspected=[],
+                all_detectors_clean=True,
             )
-            receipt = issue_gateway_receipt(
+            return self._block_response(
                 workspace,
                 transaction_id,
+                gateway_request_id,
                 decision,
                 request.provider_id,
                 request.path,
@@ -143,13 +259,30 @@ class GatewayPipeline:
                 flags_redacted,
                 detectors_executed,
             )
-            return GatewayResponse(
-                decision=decision,
-                sanitized_body=None,
-                upstream_response=None,
-                receipt=receipt,
-                transaction_id=transaction_id,
-                gateway_request_id=gateway_request_id,
+
+        content_type = request.content_type or ""
+        has_binary = is_binary_content_type(content_type)
+
+        # 2. Check content-type — if binary apply binary_action immediately
+        if has_binary:
+            decision = self._evaluate_policy(
+                policy_engine,
+                flags_triggered,
+                flags_redacted,
+                all_detectors_clean,
+                content_type,
+                has_binary_content=True,
+            )
+            return self._block_response(
+                workspace,
+                transaction_id,
+                gateway_request_id,
+                decision,
+                request.provider_id,
+                request.path,
+                flags_triggered,
+                flags_redacted,
+                detectors_executed,
             )
 
         parsed_body: Optional[object] = None
@@ -163,30 +296,24 @@ class GatewayPipeline:
                 parse_error = True
 
         if parse_error:
-            decision = policy_engine.decide(
+            decision = self._evaluate_policy(
+                policy_engine,
                 flags_triggered,
                 flags_redacted,
                 all_detectors_clean,
                 content_type,
                 parse_error=True,
             )
-            receipt = issue_gateway_receipt(
+            return self._block_response(
                 workspace,
                 transaction_id,
+                gateway_request_id,
                 decision,
                 request.provider_id,
                 request.path,
                 flags_triggered,
                 flags_redacted,
                 detectors_executed,
-            )
-            return GatewayResponse(
-                decision=decision,
-                sanitized_body=None,
-                upstream_response=None,
-                receipt=receipt,
-                transaction_id=transaction_id,
-                gateway_request_id=gateway_request_id,
             )
 
         # 4. Inspect query string
@@ -201,29 +328,23 @@ class GatewayPipeline:
             except DetectorFailureError:
                 all_detectors_clean = False
                 detector_error = True
-                decision = policy_engine.decide(
+                decision = self._evaluate_policy(
+                    policy_engine,
                     flags_triggered,
                     flags_redacted,
                     False,
                     content_type,
                 )
-                receipt = issue_gateway_receipt(
+                return self._block_response(
                     workspace,
                     transaction_id,
+                    gateway_request_id,
                     decision,
                     request.provider_id,
                     request.path,
                     flags_triggered,
                     flags_redacted,
                     detectors_executed,
-                )
-                return GatewayResponse(
-                    decision=decision,
-                    sanitized_body=None,
-                    upstream_response=None,
-                    receipt=receipt,
-                    transaction_id=transaction_id,
-                    gateway_request_id=gateway_request_id,
                     detector_error=True,
                 )
 
@@ -239,29 +360,23 @@ class GatewayPipeline:
             except DetectorFailureError:
                 all_detectors_clean = False
                 detector_error = True
-                decision = policy_engine.decide(
+                decision = self._evaluate_policy(
+                    policy_engine,
                     flags_triggered,
                     flags_redacted,
                     False,
                     content_type,
                 )
-                receipt = issue_gateway_receipt(
+                return self._block_response(
                     workspace,
                     transaction_id,
+                    gateway_request_id,
                     decision,
                     request.provider_id,
                     request.path,
                     flags_triggered,
                     flags_redacted,
                     detectors_executed,
-                )
-                return GatewayResponse(
-                    decision=decision,
-                    sanitized_body=None,
-                    upstream_response=None,
-                    receipt=receipt,
-                    transaction_id=transaction_id,
-                    gateway_request_id=gateway_request_id,
                     detector_error=True,
                 )
 
@@ -272,34 +387,29 @@ class GatewayPipeline:
         except DetectorFailureError:
             all_detectors_clean = False
             detector_error = True
-            decision = policy_engine.decide(
+            decision = self._evaluate_policy(
+                policy_engine,
                 flags_triggered,
                 flags_redacted,
                 False,
                 content_type,
             )
-            receipt = issue_gateway_receipt(
+            return self._block_response(
                 workspace,
                 transaction_id,
+                gateway_request_id,
                 decision,
                 request.provider_id,
                 request.path,
                 flags_triggered,
                 flags_redacted,
                 detectors_executed,
-            )
-            return GatewayResponse(
-                decision=decision,
-                sanitized_body=None,
-                upstream_response=None,
-                receipt=receipt,
-                transaction_id=transaction_id,
-                gateway_request_id=gateway_request_id,
                 detector_error=True,
             )
 
         # 7. Apply PolicyEngine.decide()
-        decision = policy_engine.decide(
+        decision = self._evaluate_policy(
+            policy_engine,
             flags_triggered,
             flags_redacted,
             all_detectors_clean,
@@ -308,23 +418,16 @@ class GatewayPipeline:
 
         # 8. If BLOCK: issue receipt, return WITHOUT forwarding
         if decision.decision == "BLOCK":
-            receipt = issue_gateway_receipt(
+            return self._block_response(
                 workspace,
                 transaction_id,
+                gateway_request_id,
                 decision,
                 request.provider_id,
                 request.path,
                 flags_triggered,
                 flags_redacted,
                 detectors_executed,
-            )
-            return GatewayResponse(
-                decision=decision,
-                sanitized_body=None,
-                upstream_response=None,
-                receipt=receipt,
-                transaction_id=transaction_id,
-                gateway_request_id=gateway_request_id,
                 detector_error=detector_error,
             )
 
@@ -357,12 +460,79 @@ class GatewayPipeline:
             upstream_url = f"{upstream_url}{request.path}"
 
         # 14. Forward to provider via httpx
-        with self._client_factory() as client:
-            upstream_response = client.request(
-                method=request.method,
-                url=upstream_url,
-                headers=forward_headers,
-                content=forward_body,
+        try:
+            with self._client_factory() as client:
+                upstream_response = client.request(
+                    method=request.method,
+                    url=upstream_url,
+                    headers=forward_headers,
+                    content=forward_body,
+                )
+        except httpx.TimeoutException as exc:
+            return self._upstream_failure_response(
+                workspace,
+                transaction_id,
+                gateway_request_id,
+                decision,
+                request.provider_id,
+                request.path,
+                flags_triggered,
+                flags_redacted,
+                detectors_executed,
+                UpstreamTransportFailure(
+                    kind="upstream_timeout",
+                    message=f"Upstream provider timed out: {exc}",
+                ),
+            )
+        except httpx.ConnectError as exc:
+            return self._upstream_failure_response(
+                workspace,
+                transaction_id,
+                gateway_request_id,
+                decision,
+                request.provider_id,
+                request.path,
+                flags_triggered,
+                flags_redacted,
+                detectors_executed,
+                UpstreamTransportFailure(
+                    kind="upstream_connect_error",
+                    message=f"Upstream connection failed: {exc}",
+                ),
+            )
+        except httpx.RequestError as exc:
+            return self._upstream_failure_response(
+                workspace,
+                transaction_id,
+                gateway_request_id,
+                decision,
+                request.provider_id,
+                request.path,
+                flags_triggered,
+                flags_redacted,
+                detectors_executed,
+                UpstreamTransportFailure(
+                    kind="upstream_request_error",
+                    message=f"Upstream request failed: {exc}",
+                ),
+            )
+
+        if upstream_response.status_code >= 500:
+            return self._upstream_failure_response(
+                workspace,
+                transaction_id,
+                gateway_request_id,
+                decision,
+                request.provider_id,
+                request.path,
+                flags_triggered,
+                flags_redacted,
+                detectors_executed,
+                UpstreamTransportFailure(
+                    kind="upstream_http_5xx",
+                    message=f"Upstream returned HTTP {upstream_response.status_code}",
+                    upstream_status=upstream_response.status_code,
+                ),
             )
 
         # 15. Receive upstream response
@@ -388,12 +558,10 @@ class GatewayPipeline:
             except json.JSONDecodeError:
                 pass  # Non-JSON response body — pass through as-is
             except DetectorFailureError:
-                # Detector failure on response body — fail closed.
-                # Issue a failure receipt and return a controlled error.
-                # Never return the raw upstream response body when detection fails.
                 detector_error = True
                 all_detectors_clean = False
-                decision = policy_engine.decide(
+                decision = self._evaluate_policy(
+                    policy_engine,
                     flags_triggered,
                     flags_redacted,
                     False,
@@ -408,6 +576,8 @@ class GatewayPipeline:
                     flags_triggered,
                     flags_redacted,
                     detectors_executed,
+                    forwarded=True,
+                    failure_class="response_detector_failure",
                 )
                 return GatewayResponse(
                     decision=decision,
@@ -423,16 +593,23 @@ class GatewayPipeline:
         upstream_response._content = response_body
 
         # 18. issue_gateway_receipt()
-        receipt = issue_gateway_receipt(
-            workspace,
-            transaction_id,
-            decision,
-            request.provider_id,
-            request.path,
-            flags_triggered,
-            flags_redacted,
-            detectors_executed,
-        )
+        persistence_failed = False
+        try:
+            receipt = issue_gateway_receipt(
+                workspace,
+                transaction_id,
+                decision,
+                request.provider_id,
+                request.path,
+                flags_triggered,
+                flags_redacted,
+                detectors_executed,
+                forwarded=True,
+                upstream_status=upstream_response.status_code,
+            )
+        except ReceiptPersistenceError as exc:
+            receipt = exc.receipt
+            persistence_failed = True
 
         # 19. Return GatewayResponse
         return GatewayResponse(
@@ -443,4 +620,5 @@ class GatewayPipeline:
             transaction_id=transaction_id,
             gateway_request_id=gateway_request_id,
             detector_error=detector_error,
+            receipt_persistence_failed=persistence_failed,
         )

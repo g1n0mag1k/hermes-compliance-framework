@@ -12,7 +12,7 @@ from hermes.classifier import DetectorFailureError, scrub_payload
 from hermes.workspaces import Workspace, get_workspace_by_api_key
 
 from gateway import __version__
-from gateway.evidence import get_v2_chain_head
+from gateway.evidence import get_v2_chain_head, validate_gateway_signing_config
 from gateway.pipeline import GatewayPipeline, GatewayRequest
 from gateway.policy import PolicyEngine, reload_policy
 from gateway.providers import PROVIDER_REGISTRY, resolve_provider, validate_path
@@ -33,6 +33,11 @@ _stats = {
     "detector_errors_total": 0,
 }
 _pipeline = GatewayPipeline()
+
+
+@app.on_event("startup")
+async def _validate_production_gateway_config() -> None:
+    validate_gateway_signing_config()
 
 
 def _authenticate(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> Workspace:
@@ -114,6 +119,41 @@ async def gateway_relay(
     phi_detected = bool(result.receipt.payload.get("phi_categories_detected"))
     _record_stats(result.decision.decision, phi_detected, result.detector_error)
 
+    if result.receipt_persistence_failed:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": {
+                    "message": (
+                        "Enforcement completed but evidence persistence failed. "
+                        "Receipt signature was computed but not stored."
+                    ),
+                    "type": "receipt_persistence_failure",
+                    "code": "evidence_persistence_error",
+                },
+                "transaction_id": result.transaction_id,
+                "receipt_digest": result.receipt.receipt_digest,
+                "forwarded": result.receipt.payload.get("forwarded", False),
+            },
+        )
+
+    if result.upstream_failure is not None:
+        failure = result.upstream_failure
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": {
+                    "message": failure.message,
+                    "type": failure.kind,
+                    "code": "upstream_transport_failure",
+                },
+                "transaction_id": result.transaction_id,
+                "receipt_digest": result.receipt.receipt_digest,
+                "forwarded": True,
+                "upstream_status": failure.upstream_status,
+            },
+        )
+
     if result.detector_error:
         return JSONResponse(
             status_code=503,
@@ -144,7 +184,18 @@ async def gateway_relay(
 
     upstream = result.upstream_response
     if upstream is None:
-        raise HTTPException(status_code=500, detail="Upstream response missing")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": {
+                    "message": "Gateway completed without an upstream response.",
+                    "type": "gateway_internal_error",
+                    "code": "missing_upstream_response",
+                },
+                "transaction_id": result.transaction_id,
+                "receipt_digest": result.receipt.receipt_digest,
+            },
+        )
 
     return Response(
         content=upstream.content,

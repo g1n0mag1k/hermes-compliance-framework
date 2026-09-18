@@ -55,9 +55,9 @@ Exit codes:
     receipt_cmd.add_argument(
         "--json",
         action="store_true",
-        default=True,
+        default=False,
         dest="output_json",
-        help="Output verification result as JSON (default: True).",
+        help="Output verification result as JSON (default is human-readable).",
     )
 
     return parser.parse_args(argv)
@@ -101,20 +101,47 @@ def main(argv: list[str] | None = None) -> int:
     # --- Verify ---
     result = verify_receipt(cose_bytes, public_key_pem)
 
-    # --- Output ---
-    output = {
-        "signature_valid": result.signature_valid,
-        "receipt_digest_valid": result.receipt_digest_valid,
-        "chain_link_valid": result.chain_link_valid,
-        "signer_key_id": result.signer_key_id,
-        "algorithm": result.algorithm,
-        "issued_at": result.issued_at,
-        "claims": result.claims,
-        "errors": result.errors,
-        "warnings": result.warnings,
-        "fully_valid": result.fully_valid,
-    }
-    print(json.dumps(output, indent=2))
+    claims = result.claims
+
+    if not args.output_json:
+        status = "VALID" if result.fully_valid else "INVALID"
+        print(status)
+        print(f"signature_valid: {result.signature_valid}")
+        print(f"receipt_digest_valid: {result.receipt_digest_valid}")
+        print(f"chain_link_valid: {result.chain_link_valid}")
+        print(f"signer_key_id: {result.signer_key_id or 'n/a'}")
+        print(f"algorithm: {result.algorithm or 'n/a'}")
+        print(f"issued_at: {result.issued_at or 'n/a'}")
+        print(f"workspace_id: {claims.get('workspace_id', 'n/a')}")
+        print(f"provider: {claims.get('upstream_provider', 'n/a')}")
+        print(f"decision: {claims.get('decision', claims.get('gateway_decision', 'n/a'))}")
+        print(f"forwarded: {claims.get('forwarded', 'n/a')}")
+        print(f"policy_id: {claims.get('policy_id', 'n/a')}")
+        print(f"policy_version: {claims.get('policy_version', 'n/a')}")
+        print(f"policy_digest: {claims.get('policy_digest', 'n/a')}")
+        if result.errors:
+            print("errors:")
+            for err in result.errors:
+                print(f"  - {err}")
+        if result.warnings:
+            print("warnings:")
+            for warn in result.warnings:
+                print(f"  - {warn}")
+    else:
+        output = {
+            "status": "VALID" if result.fully_valid else "INVALID",
+            "signature_valid": result.signature_valid,
+            "receipt_digest_valid": result.receipt_digest_valid,
+            "chain_link_valid": result.chain_link_valid,
+            "signer_key_id": result.signer_key_id,
+            "algorithm": result.algorithm,
+            "issued_at": result.issued_at,
+            "claims": claims,
+            "errors": result.errors,
+            "warnings": result.warnings,
+            "fully_valid": result.fully_valid,
+        }
+        print(json.dumps(output, indent=2))
 
     # Exit code
     if result.errors and any(

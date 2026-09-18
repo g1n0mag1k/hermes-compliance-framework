@@ -255,7 +255,7 @@ class TestCLI:
             ed25519_signer.public_key_manifest()["public_key_pem"], ".pem"
         )
         try:
-            main(["receipt", cose_path, "--public-key", key_path])
+            main(["receipt", cose_path, "--public-key", key_path, "--json"])
             captured = capsys.readouterr()
             parsed = json.loads(captured.out)
             assert "signature_valid" in parsed
