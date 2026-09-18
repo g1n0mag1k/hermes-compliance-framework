@@ -19,6 +19,35 @@ Every scan generates a signed, hash-chained compliance receipt documenting:
 
 ---
 
+## The AI Gateway
+
+Hermes now includes a transparent AI enforcement gateway. Instead of requiring applications to call /v1/scrub explicitly, the gateway sits between your client's applications and their AI provider — OpenAI, Azure OpenAI, or Anthropic.
+
+Every request is inspected before it reaches the model:
+- PHI detected → redacted or blocked
+- Clean request → forwarded to AI provider
+- Every decision → cryptographic receipt issued
+- Evidence → pushed to Drata CCT automatically
+- Fail-closed → if Hermes errors, request blocked
+
+Supported providers:
+- OpenAI (/v1/chat/completions, /v1/assistants, /v1/threads, /v1/audio/transcriptions)
+- Azure OpenAI (/openai/deployments/, /openai/v1/)
+- Anthropic (/v1/messages, /v1/messages/batches)
+
+Gateway configuration (add to ~/.env.hermes):
+  HERMES_OPENAI_API_KEY=your-openai-key
+  HERMES_ANTHROPIC_API_KEY=your-anthropic-key
+  HERMES_AZURE_OPENAI_KEY=your-azure-key
+  HERMES_AZURE_OPENAI_ENDPOINT=your-azure-endpoint
+
+Start the gateway:
+  hermes-relay serve --gateway
+
+Provider disclosure protection: Hermes strips all provider-identifying response headers so clients cannot detect which AI provider is behind the gateway.
+
+---
+
 ## Step 1 — Install Hermes Relay
 
 On the client machine:
