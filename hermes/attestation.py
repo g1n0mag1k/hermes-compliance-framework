@@ -144,6 +144,7 @@ class AttestationChain:
         self._load_from_db()
 
     def _init_db(self) -> None:
+        self._conn.execute("PRAGMA journal_mode=WAL")
         with self._conn:
             self._conn.execute(
                 """

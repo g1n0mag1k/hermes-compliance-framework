@@ -1,41 +1,78 @@
 # AGENTS.md
 
-## Cursor Cloud specific instructions
+## Build rule
 
-### Project overview
-`hermes-compliance-framework` is a pure-Python project (Python 3.12). It is an
-early-stage codebase: the package modules (`hermes/__init__.py`, `hermes/agent.py`,
-`hermes/classifier.py`, `hermes/auditor.py`) and the entrypoint `demo.py` are still
-empty placeholders, so there is no runnable application UI or implemented redaction
-logic yet. Dependencies, a `pytest` suite (`tests/`), and tooling config now exist.
-Per the README, the intended product is a Streamlit-based PHI-redaction middleware
-layer; that UI does not exist yet. It is a single Python package plus a `demo.py`
-entrypoint — there is no separate backend/frontend service.
+Always read `CURSORRULES.md` before touching any code. It defines build order, hard constraints, and current project state.
 
-### Environment / dependencies
-- The startup update script creates/refreshes a virtualenv at `.venv` and installs
-  `requirements.txt` (runtime: spacy, streamlit, pydantic) and `requirements-dev.txt`
-  (pytest, pytest-cov). Use this interpreter: `.venv/bin/python` (and `.venv/bin/pip`).
-- Creating the venv requires the system package `python3.12-venv` (provided by the VM
-  snapshot, not the update script). If `python3 -m venv .venv` ever fails with an
-  `ensurepip is not available` error, install it with
-  `sudo apt-get update && sudo apt-get install -y python3.12-venv` and recreate the venv.
-- The README mentions Redis and the spaCy `en-core-web-lg` model, but no current code
-  imports/uses them, so neither is required to run the tests or the entrypoint today.
+## Project overview
 
-### Run / verify
-- Run the entrypoint: `.venv/bin/python demo.py` (currently a no-op since `demo.py` is empty).
-- Import smoke check: `.venv/bin/python -c "import hermes, spacy, streamlit, pydantic"`.
-- Syntax/compile check across the package: `.venv/bin/python -m compileall hermes demo.py`.
-- The Streamlit CLI is installed (`.venv/bin/streamlit --version`), but there is no
-  Streamlit app module to run yet.
+Hermes Relay is a local-first PHI enforcement gateway for MSPs serving HIPAA-covered entities. It provides deterministic PHI/PII detection, redaction, and cryptographically signed compliance evidence — without sending PHI to external infrastructure.
 
-### Lint / test
-- Tests: `.venv/bin/python -m pytest` (config in `pytest.ini`, tests live in `tests/`).
-  Coverage: `.venv/bin/python -m pytest --cov=hermes`.
-- No local linter is configured to run here. Static analysis is wired through DeepSource
-  (`.deepsource.toml`, python + secrets analyzers) and a `pip-audit` GitHub Action
-  (`.github/workflows/dependency-audit.yml`) that runs on PRs to `main`; these run in CI,
-  not locally.
-- When introducing new runtime deps, add them to `requirements.txt` (dev/test deps to
-  `requirements-dev.txt`) so the update script installs them automatically.
+The repository contains two FastAPI services:
+
+| Service | Path | Default port | Role |
+|---------|------|--------------|------|
+| Hermes Relay API | `hermes/` | 8787 | PHI scrubbing (`/v1/scrub`), human review (`/v1/review`), HMAC attestation chain, webhooks |
+| AI Enforcement Gateway | `gateway/` | 8788 | Fail-closed proxy for OpenAI, Azure OpenAI, and Anthropic — inspects and redacts PHI in outbound AI requests |
+
+Additional components: React dashboard (`dashboard/`), Next.js landing page (`landing/`), CLI entry points (`hermes-relay`, `hermes-verify` via `pyproject.toml`).
+
+## Environment
+
+- **Python:** 3.12
+- **Virtualenv:** `.venv` (created by the Cloud Agent update script)
+- **Runtime deps:** `requirements.txt`
+- **Dev/test deps:** `requirements-dev.txt`
+
+Use `.venv/bin/python` and `.venv/bin/pip` for all commands.
+
+### Required environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `HERMES_API_KEY` | Tenant auth for `/v1/scrub` and `/v1/review` |
+| `HERMES_SIGNING_KEY` | HMAC signing key for the attestation chain (hex string) |
+| `HERMES_VAULT_KEY` | AES-256-GCM key for the reversible token vault |
+
+See `CURSORRULES.md` for optional variables (`HERMES_WEBHOOK_URL`, Drata CCT, gateway settings, etc.).
+
+## Run / verify
+
+```bash
+# Hermes Relay API (port 8787)
+.venv/bin/hermes-relay serve
+
+# Gateway (port 8788)
+.venv/bin/uvicorn gateway.app:app --host 127.0.0.1 --port 8788
+```
+
+Import smoke check:
+
+```bash
+.venv/bin/python -c "import hermes, gateway, fastapi, pydantic"
+```
+
+## Tests
+
+```bash
+.venv/bin/python -m pytest
+```
+
+Target: **438+ tests passing, 0 failures**. The test floor must never decrease.
+
+Coverage (optional):
+
+```bash
+.venv/bin/python -m pytest --cov=hermes
+```
+
+## Key modules
+
+- `hermes/classifier.py` — PHI detection engine (spaCy NER, Presidio, regex, Luhn)
+- `hermes/attestation.py` — HMAC-SHA256 compliance receipt chain (SQLite)
+- `hermes/api.py` — FastAPI application and `/v1/*` endpoints
+- `gateway/pipeline.py` — Gateway intercept pipeline (read before modifying `gateway/`)
+
+## Dependencies
+
+All runtime dependencies use exact version pins (`==`). When adding deps, update both `requirements.txt` and `pyproject.toml`.
