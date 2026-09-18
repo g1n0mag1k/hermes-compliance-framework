@@ -241,6 +241,20 @@ def get_workspace_by_api_key(raw_api_key: str) -> Optional[Workspace]:
     )
 
 
+def can_access_workspace(caller: Workspace, target: Workspace) -> bool:
+    """
+    Return True when caller may act on target's resources.
+
+    A workspace may access itself. A parent may access its direct children.
+    All other combinations (child→parent, siblings, unrelated) are denied.
+    """
+    if caller.workspace_id == target.workspace_id:
+        return True
+    if target.parent_workspace_id == caller.workspace_id:
+        return True
+    return False
+
+
 def get_workspace(workspace_id: str) -> Optional[Workspace]:
     """Look up a workspace by its ID."""
     with _registry_lock:

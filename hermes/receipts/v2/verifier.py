@@ -268,3 +268,67 @@ def verify_receipt(
     # else: chain_link_valid stays None (chain head / no link present)
 
     return result
+
+
+@dataclass
+class ChainVerificationResult:
+    valid: bool
+    errors: list[str] = field(default_factory=list)
+
+
+def verify_receipt_chain(
+    cose_bytes_list: list[bytes],
+    public_key_pem: str,
+    expected_workspace_id: Optional[str] = None,
+) -> ChainVerificationResult:
+    """
+    Verify an ordered sequence of V2 gateway receipts forms a valid chain.
+
+    Checks individual receipt signatures, digest linkage, monotonic
+    gateway_sequence (0, 1, 2, …), and optional workspace_id consistency.
+    """
+    errors: list[str] = []
+    if not cose_bytes_list:
+        return ChainVerificationResult(valid=False, errors=["empty receipt chain"])
+
+    prev_digest: Optional[str] = None
+    for index, cose_bytes in enumerate(cose_bytes_list):
+        result = verify_receipt(cose_bytes, public_key_pem)
+        if not result.fully_valid:
+            errors.append(
+                f"receipt {index} failed verification: "
+                + "; ".join(result.errors or ["invalid receipt"])
+            )
+            continue
+
+        claims = result.claims
+        sequence = claims.get("gateway_sequence")
+        if sequence != index:
+            errors.append(
+                f"gateway_sequence at index {index}: expected {index}, got {sequence!r}"
+            )
+
+        current_prev = claims.get("_hermes_prev_receipt_digest")
+        if index == 0:
+            if current_prev is not None and current_prev != "0" * 64:
+                errors.append(
+                    "first receipt prev_receipt_digest must be None or "
+                    f"{'0' * 64}, got {current_prev!r}"
+                )
+        elif current_prev != prev_digest:
+            errors.append(
+                f"chain break at index {index}: prev_receipt_digest "
+                f"{current_prev!r} != prior digest {prev_digest!r}"
+            )
+
+        if expected_workspace_id is not None:
+            workspace_id = claims.get("workspace_id")
+            if workspace_id != expected_workspace_id:
+                errors.append(
+                    f"workspace_id mismatch at index {index}: "
+                    f"expected {expected_workspace_id!r}, got {workspace_id!r}"
+                )
+
+        prev_digest = receipt_digest_hex(claims)
+
+    return ChainVerificationResult(valid=len(errors) == 0, errors=errors)

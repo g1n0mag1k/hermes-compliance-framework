@@ -583,9 +583,16 @@ def list_workspaces_endpoint(workspace=Depends(verify_api_key)):
 @app.post("/v1/workspaces/{workspace_id}/rotate-key", tags=["Workspaces"])
 def rotate_key_endpoint(workspace_id: str, workspace=Depends(verify_api_key)):
     """Rotate the API key for a workspace. Returns new key once."""
-    if workspace.workspace_id != workspace_id and workspace.parent_workspace_id != workspace_id:
+    from hermes.workspaces import can_access_workspace, get_workspace, rotate_api_key
+
+    target = get_workspace(workspace_id)
+    if target is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workspace '{workspace_id}' not found.",
+        )
+    if not can_access_workspace(workspace, target):
         raise HTTPException(status_code=403, detail="Cannot rotate a key you do not own.")
-    from hermes.workspaces import rotate_api_key
     new_key = rotate_api_key(workspace_id)
     return {"workspace_id": workspace_id, "api_key": new_key}
 
