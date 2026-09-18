@@ -47,7 +47,7 @@ before the payload ever leaves the customer's network.
 │               ┌──────────▼──────┐   ┌─────────────▼──────┐      │  │
 │               │   Classifier    │   │   Attestation       │      │  │
 │               │  spaCy NER +    │   │  HMAC-SHA256 chain  │      │  │
-│               │  Regex Patterns │   │  (proxy mode today) │      │  │
+│               │  Regex Patterns │   │  SQLite persistence │      │  │
 │               └─────────────────┘   └────────────────────┘      │  │
 │                                                                   │  │
 │                    tmpfs /tmp · UID 10001 · no internet           │  │
@@ -65,13 +65,16 @@ before the payload ever leaves the customer's network.
 
 **Data flow in plain terms:**
 1. Client sends raw text payload to Hermes API (authenticated)
-2. Classifier identifies core PHI/PII: SSN and PAN via regex 
-   (+ Luhn for cards); PERSON, DATE, and ORG via spaCy NER
+2. Classifier scans for 16 of 18 HIPAA Safe Harbor categories 
+   (spaCy NER, Presidio, regex, and checksum-validated patterns); 
+   PAN via regex with Luhn validation
 3. Sensitive tokens are replaced with typed placeholders 
-   (`[REDACTED_SSN]`, `[REDACTED_PAN]`, `[REDACTED_PERSON]`, etc.)
-4. `/v1/scrub` returns structured audit flags and counts; 
-   LLM proxy mode additionally issues HMAC-SHA256 chained 
-   compliance receipts via the attestation module
+   (`[REDACTED_SSN]`, `[REDACTED_PAN]`, `[REDACTED_PERSON]`, etc.). 
+   Vault implemented (AES-256-GCM); default scrub path uses irreversible 
+   placeholders. Reversible scrub available via `scrub_payload_reversible()`.
+4. `/v1/scrub` returns structured audit flags and counts, and 
+   issues HMAC-SHA256 chained compliance receipts via the 
+   attestation module
 5. Redacted payload is returned — this is what reaches the AI pipeline
 6. No sensitive data ever touches an external network
 
@@ -106,23 +109,35 @@ before the payload ever leaves the customer's network.
 
 ### HIPAA (Health Insurance Portability and Accountability Act)
 
-**Current detection scope** — core identifiers only. Full 
-18-category Safe Harbor coverage is in active development.
+**Current detection scope** — 16 of 18 Safe Harbor categories 
+covered per `DECLARED_SCOPE` in `hermes/classifier.py`. Categories 
+(P) and (Q) are text-reference only; binary image/biometric content 
+is not inspected.
 
 | PHI Category | Detection Method | Status |
 |---|---|---|
-| SSN (Social Security Number) | Regex with invalid-range guards | ✅ Active |
-| Person names | spaCy `en_core_web_sm` NER (`PERSON`) | ✅ Active |
-| Dates | spaCy `en_core_web_sm` NER (`DATE`) | ✅ Active |
-| Organization names | spaCy `en_core_web_sm` NER (`ORG`) | ✅ Active |
-| Phone, email, fax, addresses, MRN, IP, URLs, and remaining Safe Harbor categories | Classifier pattern registry | 🔜 Roadmap |
+| Names | spaCy NER | ✅ Active |
+| Geographic subdivisions | Presidio | ✅ Active |
+| Dates | spaCy NER | ✅ Active |
+| Telephone numbers | Presidio | ✅ Active |
+| Fax numbers | regex | ✅ Active |
+| Email addresses | Presidio | ✅ Active |
+| Social security numbers | regex | ✅ Active |
+| Medical record numbers | regex | ✅ Active |
+| Health plan beneficiary numbers | regex | ✅ Active |
+| Account numbers | regex | ✅ Active |
+| Certificate/license numbers | regex+checksum | ✅ Active |
+| Vehicle identifiers/VINs | regex | ✅ Active |
+| Device identifiers | regex+checksum | ✅ Active |
+| Web URLs | Presidio | ✅ Active |
+| IP addresses | Presidio | ✅ Active |
+| Biometric identifiers | regex+denylist | reference_only (text only) |
+| Full face photographs | regex | reference_only (text only) |
+| Other unique identifiers | regex | ✅ Active |
 
-**Not detected today:** phone numbers, email addresses, 
-medical record numbers, street addresses, IP addresses, 
-URLs, and other Safe Harbor identifier categories.
-
-**Audit flag:** `HIPAA_SSN`, `HIPAA_PHI_PERSON`, 
-`HIPAA_PHI_DATE`, `HIPAA_PHI_ORG` logged per detection event.
+**Audit flags:** per-category flags (e.g. `HIPAA_SSN`, 
+`HIPAA_PHI_PERSON`, `HIPAA_PHI_PHONE`, `HIPAA_PHI_MRN`) logged 
+with CFR citations on every detection event.
 
 ### PCI-DSS (Payment Card Industry Data Security Standard)
 | PAN Pattern | Detection Method | Status |
@@ -137,9 +152,8 @@ URLs, and other Safe Harbor identifier categories.
 ## Audit Trail Methodology
 
 `/v1/scrub` returns a `RedactionAuditLog` with transaction ID, 
-character counts, and per-class flag counts. LLM proxy mode 
-additionally issues tamper-evident compliance receipts chained 
-via HMAC-SHA256:
+character counts, and per-class flag counts, and issues 
+tamper-evident compliance receipts chained via HMAC-SHA256:
 
 ```
 Receipt N:
@@ -153,12 +167,9 @@ Receipt N:
 
 **Why this matters for compliance:**
 - Demonstrates to auditors that the system was operating at a specific moment
-- Chain linkage in proxy mode means retroactive receipt modification is cryptographically detectable
+- Chain linkage means retroactive receipt modification is cryptographically detectable
 - Supports HIPAA audit trail requirements and PCI-DSS Requirement 10 (log monitoring)
 - Fully local — no dependency on a third-party SIEM
-
-Hash-chained receipts on every scrub endpoint (not just proxy 
-mode) are on the roadmap.
 
 ---
 
@@ -166,12 +177,10 @@ mode) are on the roadmap.
 
 | Limitation | Context | Roadmap Response |
 |---|---|---|
-| English-only NER | spaCy `en_core_web_sm` is English | Multi-language model support in v1.1 |
-| PHI category coverage | SSN, PAN, PERSON/DATE/ORG today; phone, email, MRN, addresses, and remaining Safe Harbor categories pending | Classifier pattern registry expansion toward full 18-category Safe Harbor |
-| No streaming support | Single-shot scrub only | Streaming endpoint for LLM proxy mode |
+| Binary content inspection (P/Q) | Biometric identifiers and full-face photographs: text references only; binary image/biometric payloads not inspected | Content-channel inspection for embedded media |
 | Single-tenant per deployment | No multi-tenant RBAC yet | Per-tenant API keys + scoped audit logs |
-| Reversible redaction | Token vault module exists; not wired to `/v1/scrub` | Vault integration with scrub pipeline |
-| Hash-chained audit on all endpoints | Attestation chain active in LLM proxy mode only | Extend HMAC receipt chain to `/v1/scrub` |
+| English-only NER | spaCy `en_core_web_sm` is English | Multi-language model support in v1.1 |
+| No streaming support | Single-shot scrub only | Streaming endpoint for LLM proxy mode |
 
 ---
 
