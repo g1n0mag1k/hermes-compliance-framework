@@ -649,3 +649,28 @@ def test_stats_increment_correctly(client, workspace, upstream_capture, monkeypa
 def test_gateway_stats_requires_auth(client):
     response = client.get("/gateway/stats")
     assert response.status_code == 401
+
+
+def test_policy_reload_wrong_token(client, monkeypatch):
+    monkeypatch.setenv("HERMES_ADMIN_TOKEN", "correct-secret")
+    response = client.post(
+        "/gateway/policy/reload",
+        headers={"X-Admin-Token": "wrong-secret"},
+    )
+    assert response.status_code == 401
+
+
+def test_policy_reload_no_token(client, monkeypatch):
+    monkeypatch.setenv("HERMES_ADMIN_TOKEN", "correct-secret")
+    response = client.post("/gateway/policy/reload")
+    assert response.status_code == 401
+
+
+def test_policy_reload_correct_token(client, monkeypatch):
+    monkeypatch.setenv("HERMES_ADMIN_TOKEN", "correct-secret")
+    response = client.post(
+        "/gateway/policy/reload",
+        headers={"X-Admin-Token": "correct-secret"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "reloaded"

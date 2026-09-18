@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 import time
 from typing import Optional
@@ -55,6 +56,17 @@ def _record_stats(decision: str, phi_detected: bool, detector_error: bool) -> No
         _stats["phi_events_total"] += 1
     if detector_error:
         _stats["detector_errors_total"] += 1
+
+
+@app.post("/gateway/policy/reload")
+async def gateway_policy_reload(
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+) -> dict:
+    expected = os.environ.get("HERMES_ADMIN_TOKEN")
+    if not expected or not hmac.compare_digest(x_admin_token or "", expected):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    reload_policy()
+    return {"status": "reloaded"}
 
 
 @app.post("/gateway/{provider_id}/{path:path}")
@@ -193,14 +205,3 @@ async def gateway_stats(workspace: Workspace = Depends(_authenticate)) -> dict:
         **_stats,
         "uptime_seconds": time.time() - _start_time,
     }
-
-
-@app.post("/gateway/policy/reload")
-async def gateway_policy_reload(
-    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
-) -> dict:
-    expected = os.environ.get("HERMES_ADMIN_TOKEN")
-    if not expected or x_admin_token != expected:
-        raise HTTPException(status_code=401, detail="Invalid admin token")
-    reload_policy()
-    return {"status": "reloaded"}
