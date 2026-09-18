@@ -44,6 +44,13 @@ Gateway configuration (add to ~/.env.hermes):
 Start the gateway:
   hermes-relay serve --gateway
 
+### Starting both services
+
+    hermes-relay serve --both
+
+This starts the Hermes scrub API (port 8787) and the AI enforcement gateway
+(port 8788) together. Press Ctrl+C to stop both.
+
 Provider disclosure protection: Hermes strips all provider-identifying response headers so clients cannot detect which AI provider is behind the gateway.
 
 ---

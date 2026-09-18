@@ -8,6 +8,7 @@ Commands:
     hermes-relay version         Show version
 """
 import argparse
+import multiprocessing
 import os
 import subprocess
 import sys
@@ -33,13 +34,52 @@ SYSTEMD_SERVICE = textwrap.dedent("""\
 """)
 
 
-def cmd_serve(args):
-    """Start the Hermes Relay FastAPI server."""
+def _run_server(application, host, port):
     import uvicorn
+
+    uvicorn.run(application, host=host, port=port, reload=False)
+
+
+def cmd_serve(args):
+    """Start the Hermes Relay API, gateway, or both services."""
     host = os.environ.get("HERMES_HOST", "127.0.0.1")
-    port = int(os.environ.get("HERMES_PORT", "8787"))
-    print(f"Starting Hermes Relay on {host}:{port}")
-    uvicorn.run("hermes.api:app", host=host, port=port, reload=False)
+    hermes_port = int(os.environ.get("HERMES_PORT", "8787"))
+
+    if args.gateway:
+        print(f"Starting Hermes AI gateway on {host}:8788")
+        _run_server("gateway.app:app", host, 8788)
+        return
+
+    if args.both:
+        processes = [
+            multiprocessing.Process(
+                target=_run_server,
+                args=("hermes.api:app", host, hermes_port),
+            ),
+            multiprocessing.Process(
+                target=_run_server,
+                args=("gateway.app:app", host, 8788),
+            ),
+        ]
+        print(f"Starting Hermes Relay on {host}:{hermes_port}")
+        print(f"Starting Hermes AI gateway on {host}:8788")
+        for process in processes:
+            process.start()
+
+        try:
+            for process in processes:
+                process.join()
+        except KeyboardInterrupt:
+            print("Stopping Hermes Relay and AI gateway...")
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+            for process in processes:
+                process.join()
+        return
+
+    print(f"Starting Hermes Relay on {host}:{hermes_port}")
+    _run_server("hermes.api:app", host, hermes_port)
 
 
 def cmd_install_service(args):
@@ -106,7 +146,18 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("serve", help="Start the Hermes Relay API server")
+    serve_parser = subparsers.add_parser("serve", help="Start Hermes Relay services")
+    serve_modes = serve_parser.add_mutually_exclusive_group()
+    serve_modes.add_argument(
+        "--gateway",
+        action="store_true",
+        help="Start the AI enforcement gateway on port 8788",
+    )
+    serve_modes.add_argument(
+        "--both",
+        action="store_true",
+        help="Start the Hermes API and AI gateway together",
+    )
     subparsers.add_parser("install-service", help="Install and enable systemd user service")
     subparsers.add_parser("status", help="Show service status")
     subparsers.add_parser("version", help="Show version")
