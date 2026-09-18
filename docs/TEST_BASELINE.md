@@ -12,8 +12,8 @@
 
 | Metric | Count |
 |---|---|
-| **Collected** | 530 |
-| **Passed** | 530 |
+| **Collected** | 532 |
+| **Passed** | 532 |
 | **Failed** | 0 |
 | **Skipped** | 0 |
 | **Errors** | 0 |
@@ -23,7 +23,7 @@
 
 | Command | Result |
 |---|---|
-| `.venv/bin/python -m pytest -q tests/security/test_phi_never_egresses.py` | 16 passed |
+| `.venv/bin/python -m pytest -q tests/security/test_phi_never_egresses.py` | 18 passed |
 
 ## Known environment limitations
 
@@ -34,4 +34,4 @@
 ## Notes
 
 - Do not infer pass counts from `def test_` grep alone — always run pytest collection and execution.
-- Test floor after gateway evidence export: **530** (must not decrease).
+- Test floor after outreach readiness gate: **532** (must not decrease).

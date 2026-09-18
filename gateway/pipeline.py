@@ -218,23 +218,16 @@ class GatewayPipeline:
                 content_types_not_inspected=[],
                 all_detectors_clean=True,
             )
-            receipt = issue_gateway_receipt(
+            return self._block_response(
                 workspace,
                 transaction_id,
+                gateway_request_id,
                 decision,
                 request.provider_id,
                 request.path,
                 flags_triggered,
                 flags_redacted,
                 detectors_executed,
-            )
-            return GatewayResponse(
-                decision=decision,
-                sanitized_body=None,
-                upstream_response=None,
-                receipt=receipt,
-                transaction_id=transaction_id,
-                gateway_request_id=gateway_request_id,
             )
 
         if not validate_path(provider, request.path):

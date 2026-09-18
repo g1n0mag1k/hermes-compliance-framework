@@ -116,7 +116,7 @@ def main():
     print("=" * 60)
     print(" RESULT: PHI caught. Receipt signed. Chain updated.")
     print(" Zero PHI egress confirmed within declared scope.")
-    print(" This receipt is now pushing to Drata CCT automatically.")
+    print(" Receipt is hash-chained locally. Optional Drata/webhook export when configured.")
     print("=" * 60)
     print()
 

@@ -122,17 +122,17 @@ Ask:
 
 ### If yes
 
-> "Every scan we just ran pushed evidence automatically into their Drata dashboard. Zero manual collection. Their compliance team sees it without doing anything."
+> "Hermes can export metadata-only gateway enforcement evidence to Drata when you configure `HERMES_DRATA_CCT_URL`. The adapter is implemented and contract-tested; we validate live tenant connectivity during design-partner onboarding — I won't claim live Drata sync until we've run it in your environment."
 
-Optional: If you have Drata open in another tab, show the evidence record. If not, stay on the Hermes dashboard — the point is automatic push, not a live Drata login.
+Optional: If you have a validated Drata sandbox, show a gateway enforcement record. Otherwise show the Hermes receipt and `EvidenceEvent` schema from docs.
 
 ### If no
 
-> "We push to any webhook endpoint — Splunk, your SIEM, a compliance portal. The evidence goes where your workflow already is."
+> "We can push metadata-only evidence to any webhook — Splunk, your SIEM, a compliance portal. No prompts, no PHI values, just decision + policy digest + receipt digest."
 
 **Bridge to pilot:**
 
-> "Either way, the evidence leaves Hermes signed and chained. Your client doesn't have to change how they run compliance — we feed what they already use."
+> "Either way, enforcement receipts are signed and hash-chained locally. Export is optional, best-effort, and never affects whether Hermes blocks or forwards."
 
 ---
 
@@ -225,7 +225,15 @@ Send within **24 hours** of the demo:
 
 ## Gateway demo addendum (minutes 5–12 when showing inline enforcement)
 
-Run gateway on `:8788` with workspace API key `$GATEWAY_API_KEY`.
+**Quick scripted demo (recommended):**
+
+```bash
+.venv/bin/python gateway/demo.py
+```
+
+Shows scenarios A–D with `upstream.request_count` after each step (embedded mock upstream; synthetic data only).
+
+Run gateway on `:8788` with workspace API key `$GATEWAY_API_KEY` for live curl demos below.
 
 ### 1. Clean request — what Hermes sends
 

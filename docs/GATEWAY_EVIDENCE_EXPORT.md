@@ -128,7 +128,7 @@ Category names (e.g. `HIPAA_SSN`) and counts of categories are metadata — not 
 
 ## Limitations (not implemented)
 
-- Live Drata connectivity verified only via contract/mock tests in CI (not a live Drata tenant)
+- Drata adapter implemented and contract-tested; live tenant validation pending
 - No immutable external storage (WORM/TSA/SCITT)
 - No streaming enforcement evidence
 - SQLite receipt storage remains mutable local filesystem

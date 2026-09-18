@@ -65,7 +65,7 @@ KeyStore.create(Path('gateway.keystore'), b'your-strong-passphrase')
 
 ## Known limitations
 
-See `CURRENT_LIMITATIONS.md` — especially streaming, binary content, and no gateway Drata export.
+See `CURRENT_LIMITATIONS.md` — especially streaming, binary content, and live Drata tenant validation (adapter is contract-tested; live connectivity pending per deployment).
 
 ## Evidence verification
 

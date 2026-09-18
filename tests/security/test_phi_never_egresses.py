@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -317,6 +318,51 @@ def test_redact_policy_redacts_and_forwards(client, workspace, upstream_state):
     assert len(upstream_state["requests"]) == 1
     assert "123-45-6789" not in upstream_state["requests"][0]["body"]
     assert "[REDACTED_SSN]" in upstream_state["requests"][0]["body"]
+
+
+def test_unapproved_provider_blocked(client, workspace, upstream_state):
+    ws, api_key = workspace
+    restricted = Policy(
+        policy_id="OPENAI_ONLY",
+        policy_version="1.0.0",
+        text_action="BLOCK",
+        binary_action="BLOCK",
+        on_detector_error="BLOCK",
+        on_parse_error="BLOCK",
+        approved_providers=["openai"],
+    )
+    set_workspace_policy(ws.workspace_id, restricted)
+
+    response = client.post(
+        "/gateway/anthropic/v1/messages",
+        headers={"X-API-Key": api_key},
+        json={
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 64,
+            "messages": [{"role": "user", "content": "hello"}],
+        },
+    )
+    assert response.status_code == 403
+    assert len(upstream_state["requests"]) == 0
+    clear_workspace_policy(ws.workspace_id)
+
+
+def test_exporter_failure_blocked(client, workspace, upstream_state, monkeypatch):
+    _, api_key = workspace
+    monkeypatch.setenv("HERMES_WEBHOOK_URL", "https://example.com/webhook")
+
+    with patch(
+        "gateway.evidence_export.dispatch.build_evidence_event",
+        side_effect=RuntimeError("export exploded"),
+    ):
+        response = client.post(
+            "/gateway/openai/v1/chat/completions",
+            headers={"X-API-Key": api_key},
+            json=_chat("Patient SSN is 123-45-6789"),
+        )
+
+    assert response.status_code == 403
+    assert len(upstream_state["requests"]) == 0
 
 
 def test_block_receipt_records_forwarded_false(client, workspace, upstream_state):
