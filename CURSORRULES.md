@@ -12,7 +12,7 @@ Exit target: Drata or Nightfall acquisition
 ---
 
 ## Current State
-- 116 tests passing, 0 failures
+- 438 tests passing, 0 failures
 - 16 of 18 HIPAA Safe Harbor categories covered (P and Q are 
   reference_only — binary artifacts, acknowledged)
 - FastAPI /v1/scrub and /v1/review endpoints functional
@@ -48,7 +48,7 @@ PHI caught — receipt generated — evidence in Drata dashboard
 
 ## Hard Rules — Never Violate These
 
-- PYTEST MUST STAY GREEN. 116 tests is the floor. Never decrease.
+- PYTEST MUST STAY GREEN. 438 tests is the floor. Never decrease.
 - Never add external API calls to classifier.py or the scanner
 - Never remove HERMES_SIGNING_KEY or HERMES_API_KEY checks
 - Never add ML inference to the detection pipeline
@@ -96,22 +96,6 @@ Recursive JSON inspection covers tool arguments, nested blocks,
 streaming deltas — per Perplexity field spec Sept 17 2026
 
 Do not modify gateway/ without reading gateway/pipeline.py first.
-
-### Pricing (Updated Sept 17 2026)
-Small MSP (1-10 employees):
-  Free 30-Day Sprint
-  90-Day Pilot: $750/month ($2,250 total)
-  Founding Partner: $1,500/month locked 12 months
-
-Mid MSP (10-30 employees):
-  Free 30-Day Sprint
-  90-Day Pilot: $1,500/month ($4,500 total)
-  Founding Partner: $2,500/month locked 12 months
-
-Large MSP (30+ employees):
-  Free 30-Day Sprint
-  90-Day Pilot: $1,500/month ($4,500 total)
-  Founding Partner: $3,000/month locked 12 months
 
 ### Pricing (Updated Sept 17 2026)
 Small MSP (1-10 employees):
