@@ -344,6 +344,41 @@ def test_phi_in_query_string_detected(client, workspace, upstream_capture):
     assert len(upstream_capture["requests"]) == 1
 
 
+def test_query_string_phi_is_sanitized_before_forwarding(
+    client, workspace, upstream_capture, monkeypatch
+):
+    """PHI in query string must not reach the upstream URL."""
+    _, api_key = workspace
+    monkeypatch.setenv("HERMES_OPENAI_API_KEY", "test-key")
+
+    response = client.post(
+        "/gateway/openai/v1/chat/completions?debug_ssn=123-45-6789",
+        headers={"X-API-Key": api_key},
+        json={"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]},
+    )
+
+    # Regardless of status, the upstream request must not contain the raw SSN
+    assert len(upstream_capture["requests"]) >= 1
+    forwarded_url = upstream_capture["requests"][0]["url"]
+    assert "123-45-6789" not in forwarded_url
+
+
+def test_clean_query_string_passes_through(client, workspace, upstream_capture, monkeypatch):
+    """A clean query string should reach upstream unchanged."""
+    _, api_key = workspace
+    monkeypatch.setenv("HERMES_OPENAI_API_KEY", "test-key")
+
+    response = client.post(
+        "/gateway/openai/v1/chat/completions?stream=false",
+        headers={"X-API-Key": api_key},
+        json={"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]},
+    )
+
+    assert len(upstream_capture["requests"]) >= 1
+    forwarded_url = upstream_capture["requests"][0]["url"]
+    assert "stream=false" in forwarded_url
+
+
 def test_client_auth_header_stripped_from_upstream(
     client, workspace, upstream_capture, monkeypatch
 ):

@@ -190,9 +190,10 @@ class GatewayPipeline:
             )
 
         # 4. Inspect query string
+        sanitized_query = request.query_string
         if request.query_string:
             try:
-                _, q_trig, q_red, q_det = inspect_query_string(
+                sanitized_query, q_trig, q_red, q_det = inspect_query_string(
                     request.query_string,
                     transaction_id,
                 )
@@ -351,7 +352,7 @@ class GatewayPipeline:
 
         upstream_url = provider.effective_base_url()
         if request.query_string:
-            upstream_url = f"{upstream_url}{request.path}?{request.query_string}"
+            upstream_url = f"{upstream_url}{request.path}?{sanitized_query}"
         else:
             upstream_url = f"{upstream_url}{request.path}"
 
