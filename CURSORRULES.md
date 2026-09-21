@@ -12,7 +12,7 @@ Exit target: Drata or Nightfall acquisition
 ---
 
 ## Current State
-- 438 tests passing, 0 failures
+- 544 tests passing, 0 failures
 - 16 of 18 HIPAA Safe Harbor categories covered (P and Q are 
   reference_only — binary artifacts, acknowledged)
 - FastAPI /v1/scrub and /v1/review endpoints functional
@@ -48,7 +48,7 @@ PHI caught — receipt generated — evidence in Drata dashboard
 
 ## Hard Rules — Never Violate These
 
-- PYTEST MUST STAY GREEN. 438 tests is the floor. Never decrease.
+- PYTEST MUST STAY GREEN. 544 tests is the floor. Never decrease.
 - Never add external API calls to classifier.py or the scanner
 - Never remove HERMES_SIGNING_KEY or HERMES_API_KEY checks
 - Never add ML inference to the detection pipeline
@@ -89,7 +89,7 @@ gateway/response_headers.py — provider disclosure header stripping
 gateway/Dockerfile          — container deployment
 tests/test_gateway.py       — 568 gateway tests
 
-Current test count: 438 passing
+Current test count: 544 passing
 Gateway supports: OpenAI, Azure OpenAI, Anthropic
 Auth: Bearer (OpenAI), api-key (Azure), x-api-key (Anthropic)
 Recursive JSON inspection covers tool arguments, nested blocks,
