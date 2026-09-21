@@ -29,7 +29,7 @@ Every scan generates a **Compliance Evidence Record** — a structured audit art
 - Per-flag CFR citations in the audit log (`45 CFR §164.514(b)(2)(i)` letter per detection type)
 - Per-detector tri-state execution status (`ran_clean` / `ran_error` / `not_run`) — a silently failed detector is never indistinguishable from a clean scan
 
-This record is what your OCR investigator reads. No other tool in this category produces it at the zero-egress layer.
+This record is what your OCR investigator reads.
 
 ---
 
@@ -105,10 +105,10 @@ Per-scan evidence artifact. Contains classification flags, per-flag occurrence c
 When a scan result is reviewed by a person, a `HumanReviewReceipt` is issued and chained into the same attestation chain as the original scan — tamper-evident proof that a control was looked at by a human, not just that the automated scan ran. Supports `accepted`, `overridden`, and `escalated` decisions.
 
 **BA Technical Safeguard Verification Report (BAVR)**  
-Annual written verification of technical safeguards for covered entity clients. Satisfies the proposed 2026 HIPAA Security Rule BA verification mandate. Only producible by a zero-egress architecture — cloud-ML vendors cannot make this attestation honestly.
+Annual written verification of technical safeguards for covered entity clients. Designed to support annual BA verification workflows under proposed 2026 HIPAA Security Rule updates. Only producible by a zero-egress architecture — cloud-ML vendors cannot make this attestation honestly.
 
 **Cyber Insurance Underwriting Attestation Package (CUAP)**  
-Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriting control categories. Prevents policy rescission on PHI-handling attestations.
+Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriting control categories. Provides tamper-evident evidence records supporting PHI-handling attestation reviews.
 
 ---
 
