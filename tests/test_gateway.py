@@ -39,16 +39,7 @@ def isolated_gateway_env(tmp_path, monkeypatch):
 
     gateway_evidence.reset_v2_chains()
     gateway_policy.reload_policy()
-    gateway_app._stats.update(
-        {
-            "requests_total": 0,
-            "requests_allowed": 0,
-            "requests_redacted": 0,
-            "requests_blocked": 0,
-            "phi_events_total": 0,
-            "detector_errors_total": 0,
-        }
-    )
+    gateway_app._stats.clear()
     yield
 
 

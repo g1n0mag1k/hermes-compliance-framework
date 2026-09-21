@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import os
 import time
+from collections import defaultdict
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
@@ -24,14 +25,20 @@ app = FastAPI(
 )
 
 _start_time = time.time()
-_stats = {
-    "requests_total": 0,
-    "requests_allowed": 0,
-    "requests_redacted": 0,
-    "requests_blocked": 0,
-    "phi_events_total": 0,
-    "detector_errors_total": 0,
-}
+
+
+def _empty_stats() -> dict:
+    return {
+        "requests_total": 0,
+        "requests_allowed": 0,
+        "requests_redacted": 0,
+        "requests_blocked": 0,
+        "phi_events_total": 0,
+        "detector_errors_total": 0,
+    }
+
+
+_stats: defaultdict = defaultdict(_empty_stats)
 _pipeline = GatewayPipeline()
 
 
@@ -49,18 +56,24 @@ def _authenticate(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) ->
     return workspace
 
 
-def _record_stats(decision: str, phi_detected: bool, detector_error: bool) -> None:
-    _stats["requests_total"] += 1
+def _record_stats(
+    workspace_id: str,
+    decision: str,
+    phi_detected: bool,
+    detector_error: bool,
+) -> None:
+    stats = _stats[workspace_id]
+    stats["requests_total"] += 1
     if decision == "ALLOW":
-        _stats["requests_allowed"] += 1
+        stats["requests_allowed"] += 1
     elif decision == "REDACT":
-        _stats["requests_redacted"] += 1
+        stats["requests_redacted"] += 1
     elif decision == "BLOCK":
-        _stats["requests_blocked"] += 1
+        stats["requests_blocked"] += 1
     if phi_detected:
-        _stats["phi_events_total"] += 1
+        stats["phi_events_total"] += 1
     if detector_error:
-        _stats["detector_errors_total"] += 1
+        stats["detector_errors_total"] += 1
 
 
 @app.post("/gateway/policy/reload")
@@ -117,7 +130,12 @@ async def gateway_relay(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     phi_detected = bool(result.receipt.payload.get("phi_categories_detected"))
-    _record_stats(result.decision.decision, phi_detected, result.detector_error)
+    _record_stats(
+        workspace.workspace_id,
+        result.decision.decision,
+        phi_detected,
+        result.detector_error,
+    )
 
     if result.receipt_persistence_failed:
         return JSONResponse(
@@ -253,6 +271,6 @@ async def gateway_health() -> JSONResponse:
 @app.get("/gateway/stats")
 async def gateway_stats(workspace: Workspace = Depends(_authenticate)) -> dict:
     return {
-        **_stats,
+        **_stats[workspace.workspace_id],
         "uptime_seconds": time.time() - _start_time,
     }
