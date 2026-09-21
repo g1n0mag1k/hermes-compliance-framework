@@ -375,8 +375,11 @@ class GatewayPipeline:
 
         # 6. Inspect path for PHI
         try:
-            _, p_trig, p_red, p_det = inspect_string_value(request.path, transaction_id)
+            sanitized_path, p_trig, p_red, p_det = inspect_string_value(
+                request.path, transaction_id
+            )
             _merge(p_trig, p_red, p_det)
+            sanitized_path = sanitized_path if sanitized_path else request.path
         except DetectorFailureError:
             all_detectors_clean = False
             detector_error = True
@@ -448,9 +451,9 @@ class GatewayPipeline:
 
         upstream_url = provider.effective_base_url()
         if request.query_string:
-            upstream_url = f"{upstream_url}{request.path}?{sanitized_query}"
+            upstream_url = f"{upstream_url}{sanitized_path}?{sanitized_query}"
         else:
-            upstream_url = f"{upstream_url}{request.path}"
+            upstream_url = f"{upstream_url}{sanitized_path}"
 
         # 14. Forward to provider via httpx
         try:
