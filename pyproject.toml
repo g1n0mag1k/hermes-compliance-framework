@@ -39,5 +39,5 @@ hermes-verify = "hermes.receipts.v2.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["hermes*"]
+include = ["hermes*", "gateway*"]
 
