@@ -24,7 +24,7 @@ SYSTEMD_SERVICE = textwrap.dedent("""\
 
     [Service]
     Type=simple
-    ExecStart=hermes-relay serve
+    ExecStart=hermes-relay serve --both
     Restart=on-failure
     RestartSec=5
     Environment=HERMES_ENV=production
