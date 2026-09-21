@@ -253,9 +253,16 @@ async def gateway_health() -> JSONResponse:
         for provider_id, provider in PROVIDER_REGISTRY.items()
     }
 
+    configured_connectivity = {
+        provider_id: reachable
+        for provider_id, reachable in provider_connectivity.items()
+        if os.environ.get(PROVIDER_REGISTRY[provider_id].credential_env)
+    }
+
     all_healthy = (
         all(status == "healthy" for status in components.values())
-        and all(provider_connectivity.values())
+        and bool(configured_connectivity)
+        and all(configured_connectivity.values())
     )
 
     body = {
