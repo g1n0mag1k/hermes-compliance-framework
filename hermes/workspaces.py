@@ -58,6 +58,10 @@ def _registry_db_path() -> str:
 # Workspace dataclass
 # ---------------------------------------------------------------------------
 
+VALID_ROLES = frozenset({"msp_admin", "msp_tech", "client_readonly"})
+DEFAULT_ROLE = "msp_admin"
+
+
 @dataclass
 class Workspace:
     workspace_id: str
@@ -67,6 +71,7 @@ class Workspace:
     created_at: str
     plan: str                      # "trial" | "production" | "enterprise"
     parent_workspace_id: Optional[str]  # set when this workspace belongs to an MSP
+    role: str = DEFAULT_ROLE       # "msp_admin" | "msp_tech" | "client_readonly"
 
     @property
     def chain_db_path(self) -> str:
@@ -79,6 +84,20 @@ class Workspace:
     @property
     def canary_db_path(self) -> str:
         return str(_data_dir() / self.workspace_id / "canary.db")
+
+
+def _row_to_workspace(row: tuple) -> Workspace:
+    """Reconstruct a Workspace from a SELECT row that includes role."""
+    return Workspace(
+        workspace_id=row[0],
+        name=row[1],
+        owner_email=row[2],
+        api_key_hash=row[3],
+        created_at=row[4],
+        plan=row[5],
+        parent_workspace_id=row[6],
+        role=row[7] if len(row) > 7 and row[7] else DEFAULT_ROLE,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +113,8 @@ def _init_registry(conn: sqlite3.Connection) -> None:
             api_key_hash        TEXT NOT NULL UNIQUE,
             created_at          TEXT NOT NULL,
             plan                TEXT NOT NULL DEFAULT 'trial',
-            parent_workspace_id TEXT
+            parent_workspace_id TEXT,
+            role                TEXT NOT NULL DEFAULT 'msp_admin'
         );
 
         CREATE TABLE IF NOT EXISTS trial_quota (
@@ -104,8 +124,13 @@ def _init_registry(conn: sqlite3.Connection) -> None:
             extended_by    INTEGER NOT NULL DEFAULT 0
         );
     """)
+    # Migrate registries created before the role column existed
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(workspaces)").fetchall()}
+    if "role" not in cols:
+        conn.execute(
+            "ALTER TABLE workspaces ADD COLUMN role TEXT NOT NULL DEFAULT 'msp_admin'"
+        )
     conn.commit()
-
 
 def _get_registry_conn() -> sqlite3.Connection:
     # Ensure directory exists
@@ -146,6 +171,7 @@ def create_workspace(
     owner_email: str,
     plan: str = "trial",
     parent_workspace_id: Optional[str] = None,
+    role: str = DEFAULT_ROLE,
 ) -> tuple[Workspace, str]:
     """
     Create a new workspace and return (Workspace, raw_api_key).
@@ -157,6 +183,10 @@ def create_workspace(
         ValueError: if workspace_id already exists or is invalid.
     """
     _validate_workspace_id(workspace_id)
+    if role not in VALID_ROLES:
+        raise ValueError(
+            f"role must be one of {sorted(VALID_ROLES)}, got {role!r}"
+        )
 
     raw_key = _generate_api_key()
     key_hash = _hash_api_key(raw_key)
@@ -170,6 +200,7 @@ def create_workspace(
         created_at=created_at,
         plan=plan,
         parent_workspace_id=parent_workspace_id,
+        role=role,
     )
 
     # Create the workspace data directory
@@ -184,8 +215,8 @@ def create_workspace(
                     """
                     INSERT INTO workspaces
                         (workspace_id, name, owner_email, api_key_hash,
-                         created_at, plan, parent_workspace_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                         created_at, plan, parent_workspace_id, role)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         workspace.workspace_id,
@@ -195,6 +226,7 @@ def create_workspace(
                         workspace.created_at,
                         workspace.plan,
                         workspace.parent_workspace_id,
+                        workspace.role,
                     ),
                 )
         except sqlite3.IntegrityError as exc:
@@ -219,7 +251,7 @@ def get_workspace_by_api_key(raw_api_key: str) -> Optional[Workspace]:
             row = conn.execute(
                 """
                 SELECT workspace_id, name, owner_email, api_key_hash,
-                       created_at, plan, parent_workspace_id
+                       created_at, plan, parent_workspace_id, role
                 FROM workspaces
                 WHERE api_key_hash = ?
                 """,
@@ -230,16 +262,7 @@ def get_workspace_by_api_key(raw_api_key: str) -> Optional[Workspace]:
 
     if row is None:
         return None
-    return Workspace(
-        workspace_id=row[0],
-        name=row[1],
-        owner_email=row[2],
-        api_key_hash=row[3],
-        created_at=row[4],
-        plan=row[5],
-        parent_workspace_id=row[6],
-    )
-
+    return _row_to_workspace(row)
 
 def can_access_workspace(caller: Workspace, target: Workspace) -> bool:
     """
@@ -263,7 +286,7 @@ def get_workspace(workspace_id: str) -> Optional[Workspace]:
             row = conn.execute(
                 """
                 SELECT workspace_id, name, owner_email, api_key_hash,
-                       created_at, plan, parent_workspace_id
+                       created_at, plan, parent_workspace_id, role
                 FROM workspaces WHERE workspace_id = ?
                 """,
                 (workspace_id,),
@@ -273,11 +296,7 @@ def get_workspace(workspace_id: str) -> Optional[Workspace]:
 
     if row is None:
         return None
-    return Workspace(
-        workspace_id=row[0], name=row[1], owner_email=row[2],
-        api_key_hash=row[3], created_at=row[4], plan=row[5],
-        parent_workspace_id=row[6],
-    )
+    return _row_to_workspace(row)
 
 
 def list_workspaces(parent_workspace_id: Optional[str] = None) -> list[Workspace]:
@@ -291,7 +310,7 @@ def list_workspaces(parent_workspace_id: Optional[str] = None) -> list[Workspace
             if parent_workspace_id is not None:
                 rows = conn.execute(
                     "SELECT workspace_id, name, owner_email, api_key_hash, "
-                    "created_at, plan, parent_workspace_id "
+                    "created_at, plan, parent_workspace_id, role "
                     "FROM workspaces WHERE parent_workspace_id = ? "
                     "ORDER BY created_at DESC",
                     (parent_workspace_id,),
@@ -299,21 +318,13 @@ def list_workspaces(parent_workspace_id: Optional[str] = None) -> list[Workspace
             else:
                 rows = conn.execute(
                     "SELECT workspace_id, name, owner_email, api_key_hash, "
-                    "created_at, plan, parent_workspace_id "
+                    "created_at, plan, parent_workspace_id, role "
                     "FROM workspaces ORDER BY created_at DESC"
                 ).fetchall()
         finally:
             conn.close()
 
-    return [
-        Workspace(
-            workspace_id=r[0], name=r[1], owner_email=r[2],
-            api_key_hash=r[3], created_at=r[4], plan=r[5],
-            parent_workspace_id=r[6],
-        )
-        for r in rows
-    ]
-
+    return [_row_to_workspace(r) for r in rows]
 
 def rotate_api_key(workspace_id: str) -> str:
     """

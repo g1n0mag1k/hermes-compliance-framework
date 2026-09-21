@@ -192,6 +192,32 @@ def verify_api_key(x_api_key: str = Header(...)):
     raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing API Key")
 
 
+def require_role(allowed_roles: list[str]):
+    """
+    Dependency factory: authenticate via API key and enforce workspace.role.
+
+    Uses the same X-API-Key header as verify_api_key. Raises 403 when the
+    workspace role is not in allowed_roles.
+    """
+    def _dependency(x_api_key: str = Header(..., alias="X-API-Key")):
+        from hermes.workspaces import get_workspace_by_api_key
+
+        workspace = get_workspace_by_api_key(x_api_key)
+        if workspace is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Unauthorized: Invalid or missing API Key",
+            )
+        if workspace.role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Insufficient permissions",
+            )
+        return workspace
+
+    return _dependency
+
+
 class _LegacyWorkspace:
     """Synthetic workspace wrapping the legacy global chain/vault."""
     workspace_id = "default"
@@ -199,7 +225,8 @@ class _LegacyWorkspace:
     owner_email = ""
     plan = "production"
     parent_workspace_id = None
-
+    role = "msp_admin"
+    created_at = ""
 
 # -------------------------------------------------------------------------
 # TRIAL QUOTA (same hermes_chain.db as attestation — HERMES_DB_PATH)
@@ -582,11 +609,24 @@ class WorkspaceOut(BaseModel):
     created_at: str
     plan: str
     parent_workspace_id: Optional[str]
+    role: str = "msp_admin"
 
 
 class WorkspaceCreateResponse(BaseModel):
     workspace: WorkspaceOut
     api_key: str   # shown ONCE — never retrievable again
+
+
+def _workspace_out(workspace) -> WorkspaceOut:
+    return WorkspaceOut(
+        workspace_id=workspace.workspace_id,
+        name=workspace.name,
+        owner_email=workspace.owner_email,
+        created_at=getattr(workspace, "created_at", "") or "",
+        plan=workspace.plan,
+        parent_workspace_id=workspace.parent_workspace_id,
+        role=getattr(workspace, "role", "msp_admin") or "msp_admin",
+    )
 
 
 @app.post("/v1/workspaces", response_model=WorkspaceCreateResponse, tags=["Workspaces"])
@@ -612,14 +652,7 @@ def create_workspace_endpoint(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return WorkspaceCreateResponse(
-        workspace=WorkspaceOut(
-            workspace_id=workspace.workspace_id,
-            name=workspace.name,
-            owner_email=workspace.owner_email,
-            created_at=workspace.created_at,
-            plan=workspace.plan,
-            parent_workspace_id=workspace.parent_workspace_id,
-        ),
+        workspace=_workspace_out(workspace),
         api_key=raw_key,
     )
 
@@ -629,17 +662,25 @@ def list_workspaces_endpoint(workspace=Depends(verify_api_key)):
     """List all workspaces. MSPs see their own client workspaces."""
     from hermes.workspaces import list_workspaces
     workspaces = list_workspaces(parent_workspace_id=workspace.workspace_id)
-    return [
-        WorkspaceOut(
-            workspace_id=w.workspace_id,
-            name=w.name,
-            owner_email=w.owner_email,
-            created_at=w.created_at,
-            plan=w.plan,
-            parent_workspace_id=w.parent_workspace_id,
-        )
-        for w in workspaces
-    ]
+    return [_workspace_out(w) for w in workspaces]
+
+
+@app.get("/v1/workspace", response_model=WorkspaceOut, tags=["Workspaces"])
+def current_workspace_endpoint(workspace=Depends(verify_api_key)):
+    """Return the authenticated caller's workspace (includes role for RBAC UI)."""
+    return _workspace_out(workspace)
+
+
+@app.post("/api/v1/sentry/config", tags=["Integrations"])
+def sentry_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech"]))):
+    """Update Sentry DSN configuration for this workspace (RBAC-gated stub)."""
+    return {"status": "updated"}
+
+
+@app.post("/api/v1/drata/config", tags=["Integrations"])
+def drata_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech"]))):
+    """Update Drata sync configuration for this workspace (RBAC-gated stub)."""
+    return {"status": "updated"}
 
 
 @app.post("/v1/workspaces/{workspace_id}/rotate-key", tags=["Workspaces"])

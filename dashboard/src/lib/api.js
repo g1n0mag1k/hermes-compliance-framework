@@ -74,3 +74,48 @@ export async function fetchWorkspaces() {
 
   return response.json();
 }
+
+/** Current authenticated workspace (includes role for RBAC). */
+export async function fetchCurrentWorkspace() {
+  const response = await fetch(`${API_URL}/v1/workspace`, {
+    method: "GET",
+    headers: {
+      "X-API-Key": API_KEY,
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Workspace request failed with HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function updateSentryConfig() {
+  const response = await fetch(`${API_URL}/api/v1/sentry/config`, {
+    method: "POST",
+    headers: {
+      "X-API-Key": API_KEY,
+      Accept: "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Sentry config update failed with HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function syncDrataConfig() {
+  const response = await fetch(`${API_URL}/api/v1/drata/config`, {
+    method: "POST",
+    headers: {
+      "X-API-Key": API_KEY,
+      Accept: "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Drata config sync failed with HTTP ${response.status}`);
+  }
+  return response.json();
+}

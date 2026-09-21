@@ -1,15 +1,28 @@
-import React, { useState, useEffect } from 'react'
+import React, { createContext, useState, useEffect } from 'react'
 import PortfolioHeader from './components/PortfolioHeader.jsx'
 import ClientTable from './components/ClientTable.jsx'
 import ClientDetail from './components/ClientDetail.jsx'
-import { fetchStatus, fetchWorkspaces, API_URL, API_KEY } from './lib/api.js'
+import { RequireRole } from './components/RequireRole.jsx'
+import {
+  fetchStatus,
+  fetchWorkspaces,
+  fetchCurrentWorkspace,
+  updateSentryConfig,
+  syncDrataConfig,
+  API_URL,
+  API_KEY,
+} from './lib/api.js'
+
+export const WorkspaceContext = createContext({ workspace: null })
 
 export default function App() {
   const [status, setStatus] = useState(null)
   const [workspaces, setWorkspaces] = useState(null)
+  const [workspace, setWorkspace] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [view, setView] = useState('portfolio')
+  const [adminMessage, setAdminMessage] = useState(null)
 
   async function load() {
     try {
@@ -32,12 +45,40 @@ export default function App() {
     }
   }
 
+  async function loadCurrentWorkspace() {
+    try {
+      const data = await fetchCurrentWorkspace()
+      setWorkspace(data)
+    } catch {
+      setWorkspace(null)
+    }
+  }
+
   useEffect(() => {
     load()
     loadWorkspaces()
+    loadCurrentWorkspace()
     const interval = setInterval(load, 30000)
     return () => clearInterval(interval)
   }, [])
+
+  async function handleUpdateSentry() {
+    try {
+      await updateSentryConfig()
+      setAdminMessage('Sentry DSN updated')
+    } catch (err) {
+      setAdminMessage(err.message)
+    }
+  }
+
+  async function handleSyncDrata() {
+    try {
+      await syncDrataConfig()
+      setAdminMessage('Drata sync complete')
+    } catch (err) {
+      setAdminMessage(err.message)
+    }
+  }
 
   if (loading) {
     return (
@@ -69,52 +110,75 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-canvas">
-      <header className="bg-navy text-white px-6 py-4 flex items-center justify-between">
-        <div
-          className="flex items-center gap-3 cursor-pointer"
-          onClick={() => setView('portfolio')}
-        >
-          <div className="w-7 h-7 rounded-full bg-emerald-600 flex items-center justify-center">
-            <span className="text-white text-xs font-bold">H</span>
+    <WorkspaceContext.Provider value={{ workspace }}>
+      <div className="min-h-screen bg-canvas">
+        <header className="bg-navy text-white px-6 py-4 flex items-center justify-between">
+          <div
+            className="flex items-center gap-3 cursor-pointer"
+            onClick={() => setView('portfolio')}
+          >
+            <div className="w-7 h-7 rounded-full bg-emerald-600 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">H</span>
+            </div>
+            <span className="font-semibold tracking-wide">HERMES RELAY</span>
           </div>
-          <span className="font-semibold tracking-wide">HERMES RELAY</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs text-slate-300">Active Monitoring</span>
-        </div>
-      </header>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-slate-300">Active Monitoring</span>
+          </div>
+        </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {view === 'portfolio' ? (
-          <>
-            <PortfolioHeader
+        <main className="max-w-7xl mx-auto px-6 py-8">
+          {view === 'portfolio' ? (
+            <>
+              <PortfolioHeader
+                status={status}
+                workspaces={workspaces}
+                onScanComplete={load}
+              />
+              <RequireRole allowedRoles={['msp_admin', 'msp_tech']}>
+                <div className="flex flex-wrap items-center gap-3 mb-6">
+                  <button
+                    type="button"
+                    onClick={handleUpdateSentry}
+                    className="px-3 py-2 text-sm bg-slate-800 text-white rounded hover:bg-slate-700"
+                  >
+                    Update Sentry DSN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSyncDrata}
+                    className="px-3 py-2 text-sm bg-slate-800 text-white rounded hover:bg-slate-700"
+                  >
+                    Sync Drata
+                  </button>
+                  {adminMessage && (
+                    <span className="text-xs text-slate-500">{adminMessage}</span>
+                  )}
+                </div>
+              </RequireRole>
+              <ClientTable
+                status={status}
+                apiKey={API_KEY}
+                onClientClick={() => setView('client')}
+              />
+            </>
+          ) : (
+            <ClientDetail
               status={status}
-              workspaces={workspaces}
-              onScanComplete={load}
+              onBack={() => setView('portfolio')}
             />
-            <ClientTable
-              status={status}
-              apiKey={API_KEY}
-              onClientClick={() => setView('client')}
-            />
-          </>
-        ) : (
-          <ClientDetail
-            status={status}
-            onBack={() => setView('portfolio')}
-          />
-        )}
+          )}
 
-        <div className="mt-6 text-center text-xs text-slate-400">
-          Chain integrity: {status?.chain_integrity} ·
-          Total scans: {status?.total_scans} ·
-          Evidence current as of: {status?.evidence_current_as_of
-            ? new Date(status.evidence_current_as_of).toLocaleString()
-            : '—'}
-        </div>
-      </main>
-    </div>
+          <div className="mt-6 text-center text-xs text-slate-400">
+            Chain integrity: {status?.chain_integrity} ·
+            Total scans: {status?.total_scans} ·
+            Evidence current as of: {status?.evidence_current_as_of
+              ? new Date(status.evidence_current_as_of).toLocaleString()
+              : '—'}
+          </div>
+        </main>
+      </div>
+    </WorkspaceContext.Provider>
   )
 }
