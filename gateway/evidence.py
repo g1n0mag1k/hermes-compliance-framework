@@ -69,10 +69,13 @@ def _load_signer_from_env() -> SoftwareSignerEd25519:
     return SoftwareSignerEd25519.generate()
 
 
-_GATEWAY_SIGNER = _load_signer_from_env()
+_GATEWAY_SIGNER: SoftwareSignerEd25519 | None = None
 
 
 def _get_gateway_signer() -> SoftwareSignerEd25519:
+    global _GATEWAY_SIGNER
+    if _GATEWAY_SIGNER is None:
+        _GATEWAY_SIGNER = _load_signer_from_env()
     return _GATEWAY_SIGNER
 
 

@@ -24,8 +24,10 @@ def isolated_gateway_evidence(tmp_path, monkeypatch):
         "HERMES_REGISTRY_DB",
         str(tmp_path / "workspaces" / "registry.db"),
     )
-    monkeypatch.delenv("HERMES_GATEWAY_KEYSTORE_PATH", raising=False)
-    monkeypatch.delenv("HERMES_GATEWAY_KEYSTORE_PASSPHRASE", raising=False)
+    ks_path = tmp_path / "fixture.keystore"
+    KeyStore.create(ks_path, b"gateway-keystore-passphrase")
+    monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PATH", str(ks_path))
+    monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PASSPHRASE", "gateway-keystore-passphrase")
 
     import hermes.workspaces as ws_mod
 
