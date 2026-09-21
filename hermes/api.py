@@ -683,6 +683,55 @@ def drata_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech
     return {"status": "updated"}
 
 
+@app.post("/api/v1/evaluate", tags=["Canary"])
+async def evaluate_phi_canary(
+    payload: dict,
+    background_tasks: BackgroundTasks,
+    workspace=Depends(verify_api_key),
+):
+    """Run PHI canary evaluation; open a PSA ticket on drift via BackgroundTasks."""
+    from gateway.evidence_export.dispatch import dispatch_psa_ticket
+    from hermes.auditor import load_prior_result, run_canary, save_result
+
+    canary_db = None
+    if not isinstance(workspace, _LegacyWorkspace):
+        canary_db = workspace.canary_db_path
+        Path(canary_db).parent.mkdir(parents=True, exist_ok=True)
+
+    prior = load_prior_result(db_path=canary_db) if canary_db else load_prior_result()
+    result = run_canary(prior_result=prior)
+    if canary_db:
+        save_result(result, db_path=canary_db)
+    else:
+        save_result(result)
+
+    # Treat missed covered flags as drift even on the first baseline run.
+    drift_detected = bool(result.drift_detected) or bool(result.flags_missed)
+
+    if drift_detected:
+        failed_category = (
+            result.flags_missed[0]
+            if result.flags_missed
+            else (
+                result.flags_unexpected[0]
+                if result.flags_unexpected
+                else str(payload.get("failed_category") or "unknown")
+            )
+        )
+        evidence_url = str(
+            payload.get("evidence_url")
+            or f"/v1/receipts/{result.receipt.receipt_id}"
+        )
+        background_tasks.add_task(
+            dispatch_psa_ticket,
+            workspace.workspace_id,
+            failed_category,
+            evidence_url,
+        )
+
+    return {"status": "evaluated", "drift_detected": drift_detected}
+
+
 @app.post("/v1/workspaces/{workspace_id}/rotate-key", tags=["Workspaces"])
 def rotate_key_endpoint(workspace_id: str, workspace=Depends(verify_api_key)):
     """Rotate the API key for a workspace. Returns new key once."""
