@@ -2,6 +2,8 @@
 
 This profile is for a **small healthcare MSP design partner** evaluating Hermes Relay. It is **not** a general production deployment guide.
 
+**Installation:** use the Docker Compose procedure in [`DEPLOYMENT.md`](./DEPLOYMENT.md). This page only describes the evaluation profile.
+
 ## Topology
 
 ```
@@ -24,19 +26,15 @@ Optional legacy path: `/v1/scrub` on Hermes Relay API (:8787) for batch scrubbin
 | `HERMES_OPENAI_API_KEY` / `HERMES_ANTHROPIC_API_KEY` / Azure vars | Upstream provider credentials |
 | Workspace `X-API-Key` | Per-tenant gateway authentication |
 
-Create keystore once:
+Create the keystore once (Docker deployment, `DEPLOYMENT.md` §6):
 
 ```bash
-python -c "
-from hermes.receipts.v2.key_store import KeyStore
-from pathlib import Path
-KeyStore.create(Path('gateway.keystore'), b'your-strong-passphrase')
-"
+docker compose run --rm --no-deps hermes-gateway hermes-relay keystore-init
 ```
 
 ## Routing
 
-- Point application SDK base URL to `http://<hermes-host>:8788/gateway/<provider>/...`
+- Point application SDK base URL to `http://<hermes-host>:8788/gateway/<provider>/...` (behind your TLS proxy, see `DEPLOYMENT.md` §13)
 - Supported providers: `openai`, `azure_openai`, `anthropic`
 - Unsupported paths/providers return controlled 400/403 without upstream contact
 
@@ -48,7 +46,7 @@ KeyStore.create(Path('gateway.keystore'), b'your-strong-passphrase')
 ## Receipt storage
 
 - SQLite per workspace: `gateway_receipts` table in workspace chain DB
-- Backup: include workspace data directory and keystore in encrypted backup
+- Backup: the `hermes_data` and `hermes_keys` volumes plus `.env.hermes` (see `DEPLOYMENT.md` §15)
 - Verify receipts with `hermes-verify` (see `RECEIPT_VERIFICATION.md`)
 
 ## Monitoring

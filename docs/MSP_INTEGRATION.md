@@ -3,6 +3,10 @@
 **Setup time: under 10 minutes**
 **Requires: Python 3.12+, pipx, a Drata account with Custom Connections and Tests enabled and the required permissions**
 
+> This guide covers the pipx + systemd install. The supported container
+> deployment (API + gateway, persistent keystore, receipt verification) is
+> [`DEPLOYMENT.md`](./DEPLOYMENT.md).
+
 ---
 
 ## What This Does

@@ -123,7 +123,7 @@ Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriti
 - AI enforcement gateway (OpenAI, Azure OpenAI, Anthropic)
 - Legacy scrub proxy paths (OpenAI, Anthropic, Ollama — separate from gateway)
 - Generic JSON webhook dispatcher (compatible with any HTTP JSON webhook receiver; native Splunk HEC event formatting not currently implemented)
-- Docker / GHCR
+- Docker Compose (image built locally from this repository)
 - Render (API + Streamlit demo) / Netlify (landing page)
 
 ---
@@ -134,7 +134,11 @@ Hermes is designed for on-premise or private cloud deployment inside the custome
 
 **The sensitive workload never runs on Sui-Generis LLC infrastructure.**
 
-For deployment documentation and pilot program inquiries:  
+Supported install: Docker Compose, built from this repository. Follow
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+For pilot program inquiries:
+
 andrew@hermesrelay.dev  
 hermesrelay.dev
 

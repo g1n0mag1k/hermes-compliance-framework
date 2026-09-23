@@ -7,6 +7,7 @@ Customer-facing quality control for Hermes Relay as of 2026-09-18.
 - **Routing requirement:** PHI enforcement applies only to traffic routed through the Hermes Gateway. Direct calls to OpenAI/Azure/Anthropic bypass Hermes.
 - **Three supported providers:** OpenAI, Azure OpenAI, Anthropic only. No generic AI proxy.
 - **Legacy `/v1/scrub` path:** Separate integration API with V1 HMAC receipts; not a substitute for gateway routing.
+- **Deployment:** Limitations of the Docker Compose deployment are listed in `DEPLOYMENT.md` §16. They include: no built-in TLS, a single gateway instance only, and Azure `api-version` query values detected as PHI dates.
 
 ## Enforcement modes
 

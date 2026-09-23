@@ -86,7 +86,8 @@ gateway/policy.py           — allow/block/redact policy engine
 gateway/evidence.py         — evidence generation per decision
 gateway/credentials.py      — credential injection, auth stripping
 gateway/response_headers.py — provider disclosure header stripping
-gateway/Dockerfile          — container deployment
+Dockerfile + docker-compose.yml (repo root) — the one container deployment
+                              (API + gateway, one image); see docs/DEPLOYMENT.md
 tests/test_gateway.py       — 568 gateway tests
 
 Current test count: 544 passing

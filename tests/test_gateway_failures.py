@@ -189,3 +189,40 @@ def test_production_startup_fails_without_keystore(monkeypatch):
 
     with pytest.raises(RuntimeError, match="HERMES_GATEWAY_KEYSTORE"):
         gateway_evidence.validate_gateway_signing_config()
+
+
+def test_production_app_startup_fails_when_keystore_file_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_ENV", "production")
+    monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PATH", str(tmp_path / "missing.keystore"))
+    monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PASSPHRASE", PASSPHRASE.decode())
+    monkeypatch.setattr(gateway_evidence, "_GATEWAY_SIGNER", None)
+
+    with pytest.raises(FileNotFoundError, match="Key store not found"):
+        with TestClient(app):
+            pass
+
+
+def test_production_app_startup_fails_with_wrong_passphrase(tmp_path, monkeypatch):
+    store_path = tmp_path / "gateway.keystore"
+    KeyStore.create(store_path, PASSPHRASE)
+    monkeypatch.setenv("HERMES_ENV", "production")
+    monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PATH", str(store_path))
+    monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PASSPHRASE", "wrong-passphrase")
+    monkeypatch.setattr(gateway_evidence, "_GATEWAY_SIGNER", None)
+
+    with pytest.raises(ValueError, match="wrong passphrase"):
+        with TestClient(app):
+            pass
+
+
+def test_production_app_startup_loads_keystore_signer(tmp_path, monkeypatch):
+    store_path = tmp_path / "gateway.keystore"
+    store = KeyStore.create(store_path, PASSPHRASE)
+    monkeypatch.setenv("HERMES_ENV", "production")
+    monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PATH", str(store_path))
+    monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PASSPHRASE", PASSPHRASE.decode())
+    monkeypatch.setattr(gateway_evidence, "_GATEWAY_SIGNER", None)
+
+    with TestClient(app):
+        assert gateway_evidence._GATEWAY_SIGNER is not None
+        assert gateway_evidence._GATEWAY_SIGNER.key_id.hex() == store.key_id

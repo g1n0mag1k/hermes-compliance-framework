@@ -13,7 +13,11 @@ from hermes.classifier import DetectorFailureError, scrub_payload
 from hermes.workspaces import Workspace, get_workspace_by_api_key
 
 from gateway import __version__
-from gateway.evidence import get_v2_chain_head, validate_gateway_signing_config
+from gateway.evidence import (
+    get_v2_chain_head,
+    preload_gateway_signer,
+    validate_gateway_signing_config,
+)
 from gateway.pipeline import GatewayPipeline, GatewayRequest
 from gateway.policy import PolicyEngine, reload_policy
 from gateway.providers import PROVIDER_REGISTRY, resolve_provider, validate_path
@@ -45,6 +49,7 @@ _pipeline = GatewayPipeline()
 @app.on_event("startup")
 async def _validate_production_gateway_config() -> None:
     validate_gateway_signing_config()
+    preload_gateway_signer()
 
 
 def _authenticate(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> Workspace:

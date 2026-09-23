@@ -68,6 +68,19 @@ BUILD_ARGS=()
 "${DC[@]}" build "${BUILD_ARGS[@]}" hermes-api
 ok "image hermes-relay:1.0.0 built"
 
+log "Negative check: gateway must refuse to start before keystore-init"
+"${DC[@]}" up -d
+for _ in $(seq 1 30); do
+  "${DC[@]}" logs hermes-gateway 2>&1 | grep -q "Key store not found" && break
+  sleep 2
+done
+"${DC[@]}" logs hermes-gateway 2>&1 | grep -q "Key store not found" || die "gateway did not report missing keystore"
+if curl -sS -m 3 -f "$GW/gateway/health" >/dev/null 2>&1; then die "gateway served health without a keystore"; fi
+[[ "$(docker inspect -f '{{.State.Health.Status}}' "$("${DC[@]}" ps -aq hermes-gateway)")" != "healthy" ]] \
+  || die "gateway reported healthy without a keystore"
+"${DC[@]}" down
+ok "without a keystore the gateway exits at startup (Key store not found) and never reports healthy"
+
 log "Create persistent gateway keystore"
 INIT_OUT="$("${DC[@]}" run --rm --no-deps hermes-gateway hermes-relay keystore-init)"
 echo "$INIT_OUT"

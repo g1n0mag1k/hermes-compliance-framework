@@ -79,6 +79,17 @@ def _get_gateway_signer() -> SoftwareSignerEd25519:
     return _GATEWAY_SIGNER
 
 
+def preload_gateway_signer() -> None:
+    """In production, open the keystore at startup.
+
+    ALLOW receipts are signed only after the upstream call, so a missing
+    keystore or wrong passphrase discovered lazily would let a request reach
+    the provider with no receipt. Failing startup keeps the gateway down instead.
+    """
+    if _is_production_env():
+        _get_gateway_signer()
+
+
 def _decision_label(decision: PolicyDecision) -> str:
     return {
         "ALLOW": "allowed",

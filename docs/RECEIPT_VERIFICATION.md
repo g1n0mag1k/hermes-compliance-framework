@@ -4,18 +4,30 @@ Customers can independently verify Hermes Gateway V2 receipts without reading Py
 
 ## Prerequisites
 
-1. The COSE_Sign1 receipt bytes (hex from SQLite or API response `receipt_digest` lookup).
-2. The published **public key PEM** from the gateway key manifest (derived from the persistent keystore in production).
+1. The COSE_Sign1 receipt bytes as `.cose` files.
+2. The published **public key PEM** of the gateway's persistent keystore.
+
+In the Docker deployment both come from the operator commands in
+`docs/DEPLOYMENT.md` §6 and §12:
+
+```bash
+# Public key (once, after keystore-init)
+docker compose run --rm --no-deps -T hermes-gateway hermes-relay keystore-public-key > gateway-public.pem
+
+# All receipts of one workspace, as ordered .cose files
+docker compose exec -T hermes-gateway hermes-relay export-receipts --workspace <workspace_id> --out /app/exports/<name>
+docker compose cp hermes-gateway:/app/exports/<name> ./<name>
+```
 
 ## Quick verify (CLI)
 
 ```bash
-# Save receipt COSE bytes to a file (example from gateway SQLite cose_sign1_hex)
-echo "<hex>" | xxd -r -p > receipt.cose
-
-# Export public key from keystore ceremony / key manifest
-hermes-verify receipt receipt.cose --public-key gateway-public.pem
+hermes-verify receipt <name>/<file>.cose --public-key gateway-public.pem
 ```
+
+`hermes-verify` is installed in the `hermes-relay:1.0.0` image. It can run
+isolated from the deployment:
+`docker run --rm --network none -v "$PWD:/r:ro" hermes-relay:1.0.0 hermes-verify receipt /r/<name>/<file>.cose --public-key /r/gateway-public.pem`.
 
 Output:
 
@@ -54,7 +66,17 @@ PHI values are **never** included in gateway receipts — only category names an
 
 ## Chain verification
 
-For ordered receipt sequences, use the Python API (library) or export receipts from `gateway_receipts` SQLite table and verify with `verify_receipt_chain()` in `hermes/receipts/v2/verifier.py`.
+Verify a whole exported chain. The command checks each signature, the
+digest links, a gap-free `gateway_sequence` from 0, and one workspace:
+
+```bash
+hermes-verify chain <name>/ --public-key gateway-public.pem --workspace-id <workspace_id>
+```
+
+It prints `VALID` or `INVALID`, the receipt count, and the set of
+`signer_key_ids`. With a persistent keystore that set is a single key ID.
+Exit codes are the same as for `receipt`. The library equivalent is
+`verify_receipt_chain()` in `hermes/receipts/v2/verifier.py`.
 
 ## Limitations
 
