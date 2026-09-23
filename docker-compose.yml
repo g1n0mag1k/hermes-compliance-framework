@@ -25,14 +25,14 @@ services:
       - hermes-net
     healthcheck:
       test: ["CMD", "python3", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+             "import urllib.request; urllib.request.urlopen('http://localhost:8787/health')"]
       interval: 10s
       timeout:  5s
       retries:  3
       start_period: 15s
     # No ports exposed — Caddy is the only ingress
     expose:
-      - "8000"
+      - "8787"
 
   # ── Streamlit Investor Demo ────────────────────────────────────────────────
   hermes-demo:
@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
     env_file: .env.hermes
     environment:
-      HERMES_API_BASE: "http://hermes-api:8000"
+      HERMES_API_BASE: "http://hermes-api:8787"
     volumes:
       - ./demo.py:/app/demo.py:ro
       - ./assets:/app/assets:ro

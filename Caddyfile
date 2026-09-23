@@ -24,7 +24,7 @@ hermesrelay.dev {
     }
 
     # ── Reverse proxy to Hermes FastAPI ──────────────────────────────────────
-    reverse_proxy hermes-api:8000 {
+    reverse_proxy hermes-api:8787 {
         health_uri    /health
         health_interval 10s
         health_timeout  5s
