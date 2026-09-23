@@ -10,6 +10,10 @@ services:
         generateValue: true
       - key: HERMES_VAULT_DB_PATH
         value: /tmp/hermes_vault.db
+      - key: HERMES_ENV
+        value: production
+      - key: HERMES_SIGNING_KEY
+        sync: false
     healthCheckPath: /health
   - type: web
     name: hermes-demo
