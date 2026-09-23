@@ -78,3 +78,12 @@ These suppressions exist because pip-audit matches advisory IDs to package names
 regardless of version. All affected packages are pinned at versions that resolve
 the reported issues. Suppressions will be removed once pip-audit correctly
 excludes already-patched versions.
+
+### PSA Credentials Stored Plaintext — OPEN
+
+**Location:** gateway/credentials.py — CredentialManager class  
+**Status:** Known limitation, not yet remediated  
+**Impact:** HaloPSA and ConnectWise PSA API tokens stored as plaintext TEXT in ~/.hermes/psa_credentials.db  
+**Scope:** Affects only the PSA canary-drift subsystem, not the core /v1/scrub or gateway PHI-detection path  
+**Remediation path:** Encrypt api_token column at rest using HERMES_VAULT_KEY via hermes/vault.py AES-256-GCM before storing; decrypt on retrieval. Scheduled for next engineering sprint.  
+**Diligence statement:** PSA credentials are stored in a local SQLite database accessible only within the customer deployment environment. They are not transmitted externally. Encryption at rest is on the roadmap.
