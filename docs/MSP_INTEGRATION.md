@@ -142,3 +142,7 @@ under their Hermes Relay custom connection.
 andrew@hermesrelay.dev
 hermesrelay.dev
 Sui-Generis LLC — Rocky Top, Tennessee
+
+## Vanta Integration Environment Variables
+
+## Sprinto Integration Environment Variables

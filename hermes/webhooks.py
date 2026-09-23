@@ -173,3 +173,151 @@ def dispatch_drata_cct(receipt: ComplianceReceipt) -> bool:
     except Exception as exc:
         logger.warning("Hermes Drata CCT dispatch unexpected error: %s", exc)
         return False
+
+def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bool:
+    """
+    PUT a Hermes scan receipt as a custom resource record into a Vanta tenant.
+
+    Vanta private integrations use OAuth 2.0 client_credentials grant.
+    Fetches a fresh access token on every call (Vanta allows only one active
+    token per app). chain_integrity must come from a live chain verification
+    result, never hard-coded to True.
+
+    Env vars required:
+        HERMES_VANTA_CLIENT_ID
+        HERMES_VANTA_CLIENT_SECRET
+        HERMES_VANTA_RESOURCE_ID
+    """
+    import json, urllib.request, urllib.error, os, logging
+    logger = logging.getLogger("hermes.webhooks")
+
+    client_id = os.environ.get("HERMES_VANTA_CLIENT_ID")
+    client_secret = os.environ.get("HERMES_VANTA_CLIENT_SECRET")
+    resource_id = os.environ.get("HERMES_VANTA_RESOURCE_ID")
+
+    if not all([client_id, client_secret, resource_id]):
+        return False
+
+    token_req = urllib.request.Request(
+        "https://api.vanta.com/oauth/token",
+        data=json.dumps({
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": "connectors.self:write-resource",
+            "grant_type": "client_credentials",
+        }).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(token_req, timeout=3.0) as resp:
+            token_data = json.loads(resp.read().decode("utf-8"))
+            access_token = token_data.get("access_token")
+            if not access_token:
+                logger.warning("Vanta token response missing access_token")
+                return False
+    except Exception as exc:
+        logger.warning("Vanta token fetch failed: %s", exc)
+        return False
+
+    resource_req = urllib.request.Request(
+        "https://api.vanta.com/v1/resources/custom_resource",
+        data=json.dumps({
+            "resourceId": resource_id,
+            "resources": [{
+                "displayName": receipt.receipt_id,
+                "uniqueId": receipt.receipt_id,
+                "externalUrl": "https://hermesrelay.dev",
+                "customProperties": {
+                    "receipt_id": receipt.receipt_id,
+                    "scan_timestamp": receipt.issued_at,
+                    "phi_classes_detected": receipt.pii_classes_detected,
+                    "zero_pii_egress_confirmed": receipt.zero_pii_egress_confirmed,
+                    "chain_position": receipt.chain_position,
+                    "chain_integrity": chain_integrity,
+                },
+            }],
+        }).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {access_token}",
+            "User-Agent": "hermes-relay-vanta/1.0",
+        },
+        method="PUT",
+    )
+    try:
+        with urllib.request.urlopen(resource_req, timeout=3.0) as resp:
+            success = 200 <= resp.status < 300
+            if not success:
+                logger.warning("Vanta resource push returned non-2xx: %s", resp.status)
+            return success
+    except urllib.error.URLError as exc:
+        logger.warning("Vanta resource push failed: %s", exc)
+        return False
+    except Exception as exc:
+        logger.warning("Vanta resource push unexpected error: %s", exc)
+        return False
+
+
+def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> bool:
+    """
+    POST a Hermes scan receipt as custom evidence to Sprinto via GraphQL API.
+
+    Sprinto uses API key auth and a GraphQL endpoint.
+    Confirm the exact mutation name and input type with Atharva Lad on the
+    partner call before wiring HERMES_SPRINTO_MUTATION.
+
+    Env vars required:
+        HERMES_SPRINTO_API_KEY
+    Optional:
+        HERMES_SPRINTO_GRAPHQL_URL  (default: https://app.sprinto.com/dev-api/graphql)
+        HERMES_SPRINTO_MUTATION     (confirm with Sprinto before setting)
+    """
+    import json, urllib.request, urllib.error, os, logging
+    logger = logging.getLogger("hermes.webhooks")
+
+    api_key = os.environ.get("HERMES_SPRINTO_API_KEY")
+    if not api_key:
+        return False
+
+    graphql_url = os.environ.get(
+        "HERMES_SPRINTO_GRAPHQL_URL",
+        "https://app.sprinto.com/dev-api/graphql",
+    )
+    mutation = os.environ.get("HERMES_SPRINTO_MUTATION", "CONFIRM_WITH_SPRINTO")
+
+    req = urllib.request.Request(
+        graphql_url,
+        data=json.dumps({
+            "query": "mutation AddHermesEvidence($input: HermesEvidenceInput) { " + mutation + "(input: $input) { success } }",
+            "variables": {
+                "input": {
+                    "receipt_id": receipt.receipt_id,
+                    "scan_timestamp": receipt.issued_at,
+                    "phi_classes_detected": receipt.pii_classes_detected,
+                    "zero_pii_egress_confirmed": receipt.zero_pii_egress_confirmed,
+                    "chain_position": receipt.chain_position,
+                    "chain_integrity": chain_integrity,
+                }
+            },
+            "operationName": "AddHermesEvidence",
+        }).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "api-key": api_key,
+            "User-Agent": "hermes-relay-sprinto/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            success = 200 <= resp.status < 300
+            if not success:
+                logger.warning("Sprinto evidence push returned non-2xx: %s", resp.status)
+            return success
+    except urllib.error.URLError as exc:
+        logger.warning("Sprinto evidence push failed: %s", exc)
+        return False
+    except Exception as exc:
+        logger.warning("Sprinto evidence push unexpected error: %s", exc)
+        return False
