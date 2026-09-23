@@ -232,7 +232,7 @@ def issue_gateway_receipt(
     if failure_class is not None:
         payload["failure_class"] = failure_class
 
-    builder = ReceiptV2Builder(_GATEWAY_SIGNER)
+    builder = ReceiptV2Builder(_get_gateway_signer())
     receipt = builder.build(payload, prev_receipt_digest=prev_digest)
 
     try:
