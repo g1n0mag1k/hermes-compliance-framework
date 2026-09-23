@@ -30,13 +30,13 @@ Provider will deliver the following services during the pilot period:
 ### 1.1 Deployment
 
 - Deploy Hermes Relay as a zero-egress PHI redaction service inside Client’s designated environment (Docker, bare metal, or virtual machine), with no PHI transit through Sui-Generis infrastructure.
-- Configure runtime, API surface (`/v1/scrub`, `/v1/attest`, `/v1/health` or equivalent shipped endpoints), signing keys, and environment variables required for production-style operation in Client’s infrastructure.
+- Configure runtime, API surface (`/v1/scrub`, `/v1/review`, `/v1/status`, `/health`), signing keys, and environment variables required for production-style operation in Client’s infrastructure.
 - Confirm that scrubbing and attestation operate with zero external network calls during redaction (zero-egress by design).
 
 ### 1.2 Integration Support
 
 - Assist Client in wiring Hermes Relay ahead of AI / LLM or other outbound pipelines via the REST API.
-- Support configuration of structured JSON webhook export (optional auth header) for audit events to Client-designated receivers (for example, generic webhook intake or Splunk HEC-compatible endpoints).
+- Support configuration of structured JSON webhook export (optional auth header) for audit events to Client-designated receivers (for example, generic HTTP JSON webhook receivers; native Splunk HEC event formatting is not currently implemented).
 - Provide API key setup guidance and integration troubleshooting for payloads Client selects for the pilot.
 
 ### 1.3 Audit Chain Setup
@@ -55,7 +55,7 @@ Services under this SOW are limited to the pilot deployment described herein. Ex
 | --- | --- | --- |
 | M1 — Kickoff & environment access | Days 1–3 | Kickoff call (or async intake), environment access confirmed, deployment target selected, BAA status confirmed if required |
 | M2 — Deployed instance | Days 4–10 | Hermes Relay running in Client environment; health check passing; signing key configured; zero-egress posture validated for scrub path |
-| M3 — Integration & audit chain live | Days 11–20 | At least one Client pipeline path calling scrub/attest; hash-chained attestation receipts generated and verified; optional webhook export configured if requested |
+| M3 — Integration & audit chain live | Days 11–20 | At least one Client pipeline path calling /v1/scrub; hash-chained attestation receipts generated and verified; optional webhook export configured if requested |
 | M4 — Pilot readout | Days 21–30 | Written pilot summary: deployment topology, identifier categories exercised, sample attestation evidence (metadata only — no PHI), recommended production cutover steps |
 
 Pilot fee covers one production-style deployment in a single Client environment for 30 calendar days from the pilot start date. Production subscription terms after the pilot are addressed in Section 3.
