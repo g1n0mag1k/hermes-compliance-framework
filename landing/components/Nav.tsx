@@ -1,9 +1,3 @@
-/* ---------------------------------------------------------------------------
- * Nav -- sticky top navigation. Pure CSS sticky positioning, no client-side
- * JS -- just anchor links to existing section IDs, plus a persistent
- * pilot-request CTA so a returning evaluator never has to scroll to act.
- * ------------------------------------------------------------------------- */
-
 const LINKS: readonly { label: string; href: string }[] = [
   { label: "How it works", href: "#audit-chain" },
   { label: "Pricing", href: "#pricing" },
