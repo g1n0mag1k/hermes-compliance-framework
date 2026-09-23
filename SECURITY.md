@@ -48,3 +48,12 @@ Dependabot and other automated scanners will periodically flag vulnerabilities i
 ## Supported Versions
 
 Pre-1.0 solo-founder project. There is currently one actively maintained branch: `main`. No formal LTS or backport policy exists yet.
+
+## Known Dependency Advisories
+
+### PYSEC-2026-1325 — ecdsa 0.19.2
+- **Status:** Transitive dependency of pycose==1.1.0. Not used directly by Hermes.
+- **Impact:** Hermes receipt signing and verification uses the `cryptography` library (Ed25519/ES256), not `ecdsa`. The vulnerable package is present in the dependency graph but is not exercised by Hermes production signing paths.
+- **Verification:** `grep -rn "import ecdsa" hermes/ gateway/` returns zero results.
+- **Remediation:** Tracking upstream pycose for a release that removes the ecdsa dependency. No patched version of ecdsa or pycose is currently available.
+- **Diligence statement:** ecdsa is a transitive dependency of pycose; Hermes does not use it for receipt signing or verification. Hermes signs and verifies using the `cryptography` library.
