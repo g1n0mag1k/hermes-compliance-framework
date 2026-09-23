@@ -15,13 +15,19 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-50 bg-void/95 backdrop-blur border-b-2 border-border">
       <div className="w-full max-w-content mx-auto px-6 sm:px-8 lg:px-10 h-16 flex items-center justify-between">
-        <a href="#top" className="font-display font-bold text-ink text-[1.0625rem] tracking-tight">
-          Hermes
+        <a href="#top" className="flex items-center gap-3">
+          <img
+            src="/hermes-relay-logo.jpg"
+            alt="Hermes Relay"
+            className="h-9 w-9 object-contain"
+          />
+          <span className="font-display font-bold text-ink text-[1.0625rem] tracking-tight">
+            Hermes Relay
+          </span>
         </a>
         <nav className="hidden md:flex items-center gap-8">
           {LINKS.map((link) => (
             
-            <a
               key={link.href}
               href={link.href}
               className="font-mono text-caption text-muted uppercase tracking-[0.05em] hover:text-signal transition-colors"
@@ -31,7 +37,6 @@ export function Nav() {
           ))}
         </nav>
         
-        <a
           href="#pilot"
           className="bg-signal text-void font-display font-bold text-[13px] px-5 py-2.5 border-2 border-signal hover:bg-ink hover:border-ink transition-colors whitespace-nowrap"
         >
