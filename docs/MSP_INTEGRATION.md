@@ -1,15 +1,15 @@
 # Hermes Relay — MSP Integration Guide
 
 **Setup time: under 10 minutes**
-**Requires: Python 3.12+, pipx, a Drata account on Advanced or Enterprise plan**
+**Requires: Python 3.12+, pipx, a Drata account with Custom Connections and Tests enabled and the required permissions**
 
 ---
 
 ## What This Does
 
-Hermes Relay runs inside your client environment and automatically pushes
+Hermes Relay runs inside your client environment and exports metadata-only evidence after scans to
 PHI detection evidence into their Drata compliance dashboard via the Custom
-Connections and Tests (CCT) API — zero manual evidence collection required.
+Connections and Tests (CCT) API when configured. Exporter failures do not block scan results.
 
 Every scan generates a signed, hash-chained compliance receipt documenting:
 - Which PHI identifiers were found (16 of 18 HIPAA Safe Harbor categories)
