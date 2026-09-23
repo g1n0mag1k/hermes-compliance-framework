@@ -93,3 +93,5 @@ presidio_analyzer.yaml
 *.db-shm
 *.db-wal
 data/
+receipt-export/
+*.keystore

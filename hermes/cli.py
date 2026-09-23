@@ -6,6 +6,10 @@ Commands:
     hermes-relay install-service Write and enable systemd user service
     hermes-relay status          Show service status
     hermes-relay version         Show version
+    hermes-relay keystore-init   Create the persistent gateway signing keystore
+    hermes-relay keystore-public-key
+                                 Print the gateway signing public key (PEM)
+    hermes-relay export-receipts Export a workspace's gateway receipts as .cose files
 """
 import argparse
 import multiprocessing
@@ -13,6 +17,7 @@ import os
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 
 VERSION = "1.0.0"
@@ -139,7 +144,104 @@ def cmd_version(args):
     print("hermesrelay.dev | Sui-Generis LLC")
 
 
-def main():
+def _keystore_env() -> tuple[Path, bytes]:
+    path = os.environ.get("HERMES_GATEWAY_KEYSTORE_PATH")
+    passphrase = os.environ.get("HERMES_GATEWAY_KEYSTORE_PASSPHRASE")
+    if not path or not passphrase:
+        print(
+            "Error: HERMES_GATEWAY_KEYSTORE_PATH and "
+            "HERMES_GATEWAY_KEYSTORE_PASSPHRASE must both be set.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return Path(path), passphrase.encode("utf-8")
+
+
+def _open_gateway_signer():
+    from hermes.receipts.v2.key_store import KeyStore
+
+    path, passphrase = _keystore_env()
+    try:
+        return KeyStore.open(path, passphrase).load_signer()
+    except FileNotFoundError:
+        print(
+            f"Error: Keystore not found at {path}. Run 'hermes-relay keystore-init' first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_keystore_init(args):
+    """Create the encrypted gateway signing keystore. Never overwrites."""
+    from hermes.receipts.v2.key_store import KeyStore
+
+    path, passphrase = _keystore_env()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        store = KeyStore.create(path, passphrase)
+    except FileExistsError:
+        print(
+            f"Error: Keystore already exists at {path}; refusing to overwrite. "
+            "Replacing it would make every existing receipt unverifiable "
+            "with the new public key.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    print(f"Created gateway keystore: {path}")
+    print(f"algorithm: {store.algorithm}")
+    print(f"key_id: {store.key_id}")
+
+
+def cmd_keystore_public_key(args):
+    """Print the gateway signing public key PEM to stdout (key id to stderr)."""
+    manifest = _open_gateway_signer().public_key_manifest()
+    print(f"key_id: {manifest['key_id']}", file=sys.stderr)
+    sys.stdout.write(manifest["public_key_pem"])
+
+
+def cmd_export_receipts(args):
+    """Write every gateway receipt of a workspace to OUT as ordered .cose files."""
+    from gateway.evidence import list_gateway_receipts
+    from hermes.workspaces import get_workspace
+
+    workspace = get_workspace(args.workspace)
+    if workspace is None:
+        print(f"Error: Workspace {args.workspace!r} not found.", file=sys.stderr)
+        sys.exit(1)
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if any(out_dir.glob("*.cose")):
+        print(
+            f"Error: {out_dir} already contains .cose files; use an empty directory.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    manifest = _open_gateway_signer().public_key_manifest()
+    (out_dir / "gateway-public.pem").write_text(manifest["public_key_pem"], encoding="ascii")
+
+    receipts = list_gateway_receipts(workspace)
+    for receipt in receipts:
+        payload = receipt["payload"]
+        name = (
+            f"{receipt['gateway_sequence']:08d}-{payload.get('decision', 'UNKNOWN')}-"
+            f"{receipt['receipt_digest'][:16]}.cose"
+        )
+        (out_dir / name).write_bytes(bytes.fromhex(receipt["cose_sign1_hex"]))
+        print(
+            f"{name} decision={payload.get('decision')} "
+            f"forwarded={payload.get('forwarded')} "
+            f"transaction_id={receipt['transaction_id']}"
+        )
+    print(f"Exported {len(receipts)} receipt(s) for workspace {workspace.workspace_id!r} to {out_dir}")
+    print(f"Public key: {out_dir / 'gateway-public.pem'} (key_id {manifest['key_id']})")
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="hermes-relay",
         description="Hermes Relay — Local-first PHI detection and compliance evidence for MSPs",
@@ -161,14 +263,31 @@ def main():
     subparsers.add_parser("install-service", help="Install and enable systemd user service")
     subparsers.add_parser("status", help="Show service status")
     subparsers.add_parser("version", help="Show version")
+    subparsers.add_parser(
+        "keystore-init",
+        help="Create the gateway signing keystore at HERMES_GATEWAY_KEYSTORE_PATH",
+    )
+    subparsers.add_parser(
+        "keystore-public-key",
+        help="Print the gateway signing public key (PEM) to stdout",
+    )
+    export_parser = subparsers.add_parser(
+        "export-receipts",
+        help="Export a workspace's gateway receipts as ordered .cose files",
+    )
+    export_parser.add_argument("--workspace", required=True, help="Workspace ID")
+    export_parser.add_argument("--out", required=True, help="Empty output directory")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     commands = {
         "serve": cmd_serve,
         "install-service": cmd_install_service,
         "status": cmd_status,
         "version": cmd_version,
+        "keystore-init": cmd_keystore_init,
+        "keystore-public-key": cmd_keystore_public_key,
+        "export-receipts": cmd_export_receipts,
     }
 
     commands[args.command](args)

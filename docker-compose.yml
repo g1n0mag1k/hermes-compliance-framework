@@ -1,80 +1,87 @@
+# Hermes Relay — canonical MSP Docker deployment.
+#
+#   tenant application ──HTTP──▶ hermes-gateway :8788 ──HTTPS──▶ provider
+#                                     │
+#                                     ▼
+#                     hermes_data volume (workspace registry,
+#                     per-workspace chain.db with V2 receipts)
+#                                     ▲
+#   MSP operator (host only) ──▶ hermes-api :8787 (workspace admin, /v1/scrub)
+#
+# Full procedure: docs/DEPLOYMENT.md. Configuration: .env.hermes
+# (copy .env.hermes.example). TLS is NOT provided here — terminate TLS in a
+# reverse proxy in front of the gateway (see docs/DEPLOYMENT.md).
 name: hermes-relay
 
-# ── Networks ──────────────────────────────────────────────────────────────────
+x-hermes-common: &hermes-common
+  image: hermes-relay:1.0.0
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  env_file: .env.hermes
+  networks:
+    - hermes-net
+
+# Persistence paths are fixed here (not in .env.hermes) so both services
+# always point at the same files on the shared volume.
+x-hermes-paths: &hermes-paths
+  HERMES_DATA_DIR: /app/data/workspaces
+  HERMES_REGISTRY_DB: /app/data/workspaces/registry.db
+  HERMES_DB_PATH: /app/data/hermes_chain.db
+  HERMES_VAULT_DB_PATH: /app/data/hermes_vault.db
+  HERMES_CANARY_DB_PATH: /app/data/hermes_canary.db
+
 networks:
   hermes-net:
     driver: bridge
 
-# ── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
-  caddy_data:     # Let's Encrypt certs + ACME state — persist across restarts
-  caddy_config:   # Caddy runtime config
+  hermes_data:   # workspace registry, receipt chains, vault — back up
+  hermes_keys:   # encrypted gateway signing keystore — back up separately
 
-# ── Services ──────────────────────────────────────────────────────────────────
 services:
 
-  # ── Hermes API (2 replicas) ────────────────────────────────────────────────
-  # Scale: docker compose up -d --scale hermes-api=2
   hermes-api:
-    image: ghcr.io/g1n0mag1k/hermes-compliance:1.0.0
-    restart: unless-stopped
-    env_file: .env.hermes
-    tmpfs:
-      - /tmp
-    networks:
-      - hermes-net
+    <<: *hermes-common
+    environment:
+      <<: *hermes-paths
+    volumes:
+      - hermes_data:/app/data
+    # Loopback only: workspace creation (X-Admin-Token) is reachable from the
+    # Docker host, never from the network.
+    ports:
+      - "127.0.0.1:8787:8787"
     healthcheck:
-      test: ["CMD", "python3", "-c",
+      test: ["CMD", "python", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8787/health')"]
       interval: 10s
-      timeout:  5s
-      retries:  3
-      start_period: 15s
-    # No ports exposed — Caddy is the only ingress
-    expose:
-      - "8787"
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
-  # ── Streamlit Investor Demo ────────────────────────────────────────────────
-  hermes-demo:
-    image: ghcr.io/g1n0mag1k/hermes-compliance:1.0.0
-    entrypoint: [
-      "streamlit", "run", "demo.py",
-      "--server.port",       "8501",
-      "--server.address",    "0.0.0.0",
-      "--server.headless",   "true",
-      "--server.enableCORS", "false",
-      "--server.enableXsrfProtection", "false"
-    ]
-    restart: unless-stopped
-    env_file: .env.hermes
+  hermes-gateway:
+    <<: *hermes-common
+    command: ["uvicorn", "gateway.app:app", "--host", "0.0.0.0", "--port", "8788"]
     environment:
-      HERMES_API_BASE: "http://hermes-api:8787"
+      <<: *hermes-paths
+      HERMES_GATEWAY_KEYSTORE_PATH: /app/keys/gateway.keystore
     volumes:
-      - ./demo.py:/app/demo.py:ro
-      - ./assets:/app/assets:ro
-    working_dir: /app
-    networks:
-      - hermes-net
+      - hermes_data:/app/data
+      - hermes_keys:/app/keys
+    # Binds to 127.0.0.1 unless HERMES_GATEWAY_BIND is set (shell or ./.env).
+    # Plain HTTP: put a TLS reverse proxy in front before exposing it.
+    ports:
+      - "${HERMES_GATEWAY_BIND:-127.0.0.1}:8788:8788"
     depends_on:
       hermes-api:
         condition: service_healthy
-    expose:
-      - "8501"
-
-  # ── Caddy Reverse Proxy ────────────────────────────────────────────────────
-  caddy:
-    image: caddy:2.8-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"        # HTTP → redirects to HTTPS automatically
-      - "443:443"      # HTTPS (TLS)
-      - "443:443/udp"  # HTTP/3 (QUIC)
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - hermes-net
-    depends_on:
-      - hermes-api
-      - hermes-demo
+    # /gateway/health returns 503 (unhealthy) until at least one provider
+    # credential is configured. It does NOT contact the provider.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8788/gateway/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

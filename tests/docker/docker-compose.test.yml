@@ -1,0 +1,24 @@
+# Test-only override for tests/docker/e2e.sh. Never use in a deployment.
+#
+# Points the gateway's azure_openai provider at a local mock upstream so the
+# test can count exactly which requests were forwarded, without real
+# provider credentials.
+services:
+  mock-provider:
+    image: hermes-relay:1.0.0
+    command: ["python", "/mock/mock_provider.py"]
+    volumes:
+      - ./tests/docker:/mock:ro
+    networks:
+      - hermes-net
+    restart: "no"
+    healthcheck:
+      disable: true
+
+  hermes-gateway:
+    environment:
+      HERMES_AZURE_OPENAI_ENDPOINT: http://mock-provider:9000
+      HERMES_AZURE_OPENAI_KEY: mock-provider-key
+    depends_on:
+      mock-provider:
+        condition: service_started

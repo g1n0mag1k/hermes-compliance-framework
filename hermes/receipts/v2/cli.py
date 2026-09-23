@@ -3,6 +3,7 @@ hermes/receipts/v2/cli.py — hermes-verify CLI entry point.
 
 Usage:
     hermes-verify receipt <receipt.cose> --public-key <key.pem>
+    hermes-verify chain <export-dir> --public-key <key.pem> [--workspace-id ID]
 
 Exit codes:
     0 — signature_valid AND receipt_digest_valid
@@ -19,7 +20,7 @@ import json
 import sys
 from pathlib import Path
 
-from hermes.receipts.v2.verifier import verify_receipt
+from hermes.receipts.v2.verifier import verify_receipt, verify_receipt_chain
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -60,7 +61,70 @@ Exit codes:
         help="Output verification result as JSON (default is human-readable).",
     )
 
+    chain_cmd = sub.add_parser(
+        "chain",
+        help="Verify an ordered directory of COSE_Sign1 receipts as one chain.",
+        description=(
+            "Verify every *.cose file in a directory, in filename order, as a "
+            "single gateway receipt chain: each signature, digest linkage, and "
+            "a gap-free gateway_sequence starting at 0."
+        ),
+    )
+    chain_cmd.add_argument(
+        "export_dir",
+        type=Path,
+        help="Directory of *.cose files (e.g. produced by 'hermes-relay export-receipts').",
+    )
+    chain_cmd.add_argument(
+        "--public-key",
+        required=True,
+        type=Path,
+        dest="public_key_file",
+        help="Path to the PEM-encoded public key that signed the chain.",
+    )
+    chain_cmd.add_argument(
+        "--workspace-id",
+        default=None,
+        dest="workspace_id",
+        help="Require every receipt to carry this workspace_id.",
+    )
+
     return parser.parse_args(argv)
+
+
+def _verify_chain_command(args: argparse.Namespace) -> int:
+    if not args.export_dir.is_dir():
+        print(f"Error: Not a directory: {args.export_dir}", file=sys.stderr)
+        return 2
+    try:
+        public_key_pem = args.public_key_file.read_text(encoding="ascii")
+    except Exception as exc:
+        print(f"Error: Failed to read public key file: {exc}", file=sys.stderr)
+        return 2
+
+    receipt_files = sorted(args.export_dir.glob("*.cose"))
+    if not receipt_files:
+        print(f"Error: No *.cose files in {args.export_dir}", file=sys.stderr)
+        return 2
+
+    cose_list = [path.read_bytes() for path in receipt_files]
+    chain = verify_receipt_chain(
+        cose_list,
+        public_key_pem,
+        expected_workspace_id=args.workspace_id,
+    )
+    key_ids = sorted(
+        {verify_receipt(cose, public_key_pem).signer_key_id for cose in cose_list}
+    )
+
+    print("VALID" if chain.valid else "INVALID")
+    print(f"receipts: {len(cose_list)}")
+    print(f"signer_key_ids: {', '.join(k or 'n/a' for k in key_ids)}")
+    if chain.errors:
+        print("errors:")
+        for err in chain.errors:
+            print(f"  - {err}")
+    return 0 if chain.valid else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,8 +134,12 @@ def main(argv: list[str] | None = None) -> int:
     """
     args = _parse_args(argv)
 
+    if args.command == "chain":
+        return _verify_chain_command(args)
+
     if args.command != "receipt":
-        print("Usage: hermes-verify receipt <receipt.cose> --public-key <key.pem>",
+        print("Usage: hermes-verify receipt <receipt.cose> --public-key <key.pem>\n"
+              "       hermes-verify chain <export-dir> --public-key <key.pem>",
               file=sys.stderr)
         return 2
 
