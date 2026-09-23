@@ -126,7 +126,7 @@ export function Hero() {
          * viewport), constrained back into the column on desktop. */}
         <div className="flex flex-col">
           <div className="flex justify-center mb-6 px-6 sm:px-8 lg:px-0">
-            <img src="/hermes-relay-logo.jpg" alt="Hermes Relay" className="w-32 h-32 object-contain opacity-90" />
+            <img src="/hermes-relay-logo.jpg" alt="Hermes Relay" className="w-72 h-72 object-contain opacity-90" />
           </div>
           <p className="font-mono text-caption text-muted mb-3 px-6 sm:px-8 lg:px-0">
             Illustrative output — sample audit stream (CFR citations limited to categories Hermes detects)
