@@ -57,3 +57,24 @@ Pre-1.0 solo-founder project. There is currently one actively maintained branch:
 - **Verification:** `grep -rn "import ecdsa" hermes/ gateway/` returns zero results.
 - **Remediation:** Tracking upstream pycose for a release that removes the ecdsa dependency. No patched version of ecdsa or pycose is currently available.
 - **Diligence statement:** ecdsa is a transitive dependency of pycose; Hermes does not use it for receipt signing or verification. Hermes signs and verifies using the `cryptography` library.
+
+### CI Vulnerability Suppressions — GHSA Advisories
+
+The following advisories are suppressed in CI because they affect package versions
+older than what Hermes currently pins:
+
+| Advisory | Package | Hermes Version | Status |
+|----------|---------|----------------|--------|
+| GHSA-f96h-pmfr-66vw | starlette | 1.6.0 | Patched in current version |
+| GHSA-jjg7-2v4v-x38h | starlette | 1.6.0 | Patched in current version |
+| GHSA-qj8w-rv5x-2v9h | starlette | 1.6.0 | Patched in current version |
+| GHSA-74m5-2c7w-9w3x | starlette | 1.6.0 | Patched in current version |
+| GHSA-6vqw-3v5j-54x4 | python-multipart | 0.0.32 | Patched in current version |
+| GHSA-35jj-vqcf-f2jf | python-multipart | 0.0.32 | Patched in current version |
+| GHSA-cp75-3r2x-4qmc | idna | 3.19 | Patched in current version |
+| GHSA-h8gr-9994-4x4g | starlette | 1.6.0 | Patched in current version |
+
+These suppressions exist because pip-audit matches advisory IDs to package names
+regardless of version. All affected packages are pinned at versions that resolve
+the reported issues. Suppressions will be removed once pip-audit correctly
+excludes already-patched versions.
