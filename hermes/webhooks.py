@@ -220,6 +220,10 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         logger.warning("Vanta token fetch failed: %s", exc)
         return False
 
+    # IMPORTANT: Vanta PUT is full-state synchronization.
+    # Any uniqueId previously pushed but omitted from this call
+    # will be marked as no longer existing in Vanta.
+    # Always pass the complete set of current receipts, not just the latest.
     resource_req = urllib.request.Request(
         "https://api.vanta.com/v1/resources/custom_resource",
         data=json.dumps({
