@@ -59,7 +59,7 @@ docker compose run --rm --no-deps hermes-gateway hermes-relay keystore-init
 
 1. Route application traffic directly to provider (bypass gateway)
 2. Preserve SQLite + keystore for audit continuity
-3. Do not delete keystore — prior receipts become unverifiable without it
+3. Do not delete the keystore. Without it the gateway cannot keep signing under the same `key_id`, and prior receipts can be verified only with the separately exported `gateway-public.pem`.
 
 ## Known limitations
 

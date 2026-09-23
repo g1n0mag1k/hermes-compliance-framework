@@ -152,8 +152,8 @@ store it with your compliance records:
 docker compose run --rm --no-deps -T hermes-gateway hermes-relay keystore-public-key > gateway-public.pem
 ```
 
-`-T` matters: without it, Docker allocates a terminal and the key ID, which
-is printed on stderr, ends up mixed into the file.
+The PEM goes to stdout and the key ID to stderr, so the file contains only
+the key. `-T` disables terminal allocation.
 
 ## 7. Start
 
@@ -405,6 +405,9 @@ docker run --rm --user 0 -v hermes-relay_hermes_data:/data:ro -v hermes-relay_he
 docker compose start
 ```
 
+The archive is created as root. Move it off the host with `sudo`, or run
+`sudo chown $USER backups/*.tgz` first.
+
 Restore onto a host where `.env.hermes` is already in place:
 
 ```bash
@@ -433,15 +436,17 @@ the same `key_id`, and new receipts continued the chain.
 - **Workspace administration needs a shell on the Docker host** (loopback
   API + admin token). There is no remote admin UI in this deployment.
 - **Azure OpenAI `api-version` query parameter.** Values like
-  `api-version=2024-06-01` are detected as a PHI date, so under
-  `HIPAA_PRODUCTION_BLOCK` every request carrying it is blocked with 403. This
-  was observed in the detector. Use the `/openai/v1/...` paths without
-  `api-version` (this was tested against a mock only). Calls to a real Azure
-  resource through the gateway are **UNVERIFIED**.
-- **Provider responses are inspected and may be altered.** Observed: the
-  string `"object": "chat.completion"` in a chat-completion response is
-  detected as a URL and returned to the client as a redaction placeholder.
-  Clients that validate that field strictly may reject the response.
+  `api-version=2024-06-01` are detected as a PHI date
+  (`HIPAA_PHI_DATE`), so under `HIPAA_PRODUCTION_BLOCK` every request carrying
+  one is blocked with 403. This was observed against the running gateway. The
+  `/openai/v1/...` paths without `api-version` pass; this was tested against
+  a mock only. Calls to a real Azure resource through the gateway are
+  **UNVERIFIED**.
+- **Provider responses are inspected and may be altered.** Observed:
+  `"object": "chat.completion"` in a chat-completion response is detected
+  as a URL and returned to the client as `"object": "[REDACTED_URL]pletion"`.
+  The OpenAI Python SDK accepted the altered response. Clients that validate
+  that field strictly may reject it.
 - **No streaming (SSE) enforcement**, POST routes only. See
   `docs/CURRENT_LIMITATIONS.md`.
 - `hermes-verify receipt` prints `issued_at: n/a` for gateway receipts.
@@ -465,13 +470,13 @@ the same `key_id`, and new receipts continued the chain.
 
 | Symptom | Cause / fix |
 |---|---|
-| `docker compose` → `env file .env.hermes not found` | Run `./scripts/generate-env.sh` (§4). |
+| `docker compose up` / `run` → `env file …/.env.hermes not found` | Run `./scripts/generate-env.sh` (§4). |
 | Gateway restarting; log `Key store not found at /app/keys/gateway.keystore` | Run `keystore-init` (§6). |
 | Gateway log `Key decryption failed — wrong passphrase` | `HERMES_GATEWAY_KEYSTORE_PASSPHRASE` in `.env.hermes` does not match the keystore. Restore the original `.env.hermes`. **Do not** create a new keystore, or receipts will be signed under a new `key_id`. |
 | Log `HERMES_SIGNING_KEY is required` / `HERMES_VAULT_KEY must be exactly 64 hex characters` | Secret missing or malformed in `.env.hermes`. Values must be unquoted hex. |
 | `hermes-gateway` `(unhealthy)`, `/gateway/health` 503 with all `provider_connectivity` false | No provider credential set. Add one to `.env.hermes`, then run `docker compose up -d --wait` (a plain `restart` does not re-read `.env.hermes`). |
 | `dependency failed to start: container … hermes-api … is unhealthy` | `docker compose logs hermes-api`, usually a missing secret. |
-| `PermissionError` / `unable to open database file` | The volume was created by an older image or a bind mount not owned by uid 10001. Use the named volumes from this Compose file, or `chown -R 10001:10001` the bind-mount directory. |
+| `PermissionError` / `unable to open database file` | The volume was created by an older image, or is a bind mount not owned by uid 10001. Use the named volumes from this Compose file. Bind mounts are not part of this procedure (**UNVERIFIED**); they would need `chown -R 10001:10001`. |
 | 401 `Invalid API key` at the gateway | Wrong or rotated workspace key, or the key was sent in `Authorization` instead of `X-API-Key`. |
 | 403 `phi_detected` on a request you expected to pass | The detector found a PHI category. Check `phi_categories_detected` in the exported receipt. See the Azure `api-version` limitation. |
 | 400 `Path … not allowed` | Path not in the allow-list (§10). |

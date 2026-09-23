@@ -185,8 +185,7 @@ def cmd_keystore_init(args):
     except FileExistsError:
         print(
             f"Error: Keystore already exists at {path}; refusing to overwrite. "
-            "Replacing it would make every existing receipt unverifiable "
-            "with the new public key.",
+            "Replacing it would discard the signing key of every existing receipt.",
             file=sys.stderr,
         )
         sys.exit(1)
