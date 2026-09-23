@@ -58,3 +58,14 @@ Prior to this pass, several claims across the landing page, `README.md`, `BENCHM
 - `hermes/proxy.py`: Zero-trust LLM proxy supporting OpenAI, Anthropic, Ollama, and custom targets — deep-scrubs JSON payloads before forwarding upstream.
 - Landing page (Next.js 15 / Tailwind CSS v4) built and deployed to hermesrelay.dev, including Hero, Problem, Solution, AuditChain, Architecture, Differentiators, Integrations, and Pilot CTA sections.
 - Docker deployment: multi-stage build, non-root user, spaCy model baked into image at build time, health check configured.
+
+## Pre-Call Engineering Fixes — 2026-09-23
+
+1. `render.yaml` — production signing enforced.
+2. `docker-compose.yml` + `Caddyfile` — port `8787` aligned.
+3. `README.md` — zero-egress scope, BAVR/CUAP, and Splunk HEC claims corrected.
+4. `SOW_template.md` — `/v1/attest` endpoint and Splunk HEC claims fixed.
+5. `MSP_INTEGRATION.md` — Drata plan requirement and CCT overclaims corrected.
+6. `SECURITY.md` — ecdsa advisory documented with the production-path diligence statement.
+7. `SECURITY.md` — all eight GHSA suppressions documented with resolution status.
+8. `SECURITY.md` — PSA plaintext credential issue documented with a remediation path.
