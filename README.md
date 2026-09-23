@@ -35,7 +35,7 @@ This record is what your OCR investigator reads.
 
 ## Architecture
 
-**Zero-egress.** Hermes runs entirely inside the customer environment. PHI never transits external infrastructure — making compliance attestations technically accurate, not aspirational.
+**Zero-egress.** Hermes runs entirely inside the customer environment. PHI is not stored or retained. The scrubbing pipeline runs locally; post-policy payloads may be forwarded to configured downstream providers after redaction.
 
 **Deterministic.** Rule-based hybrid engine: spaCy NER + Presidio + regex + Luhn checksum. Every classification decision is explainable to the token level. No ML black box. No confidence score an auditor cannot verify.
 
@@ -104,10 +104,10 @@ Per-scan evidence artifact. Contains classification flags, per-flag occurrence c
 **Human Review Receipt**  
 When a scan result is reviewed by a person, a `HumanReviewReceipt` is issued and chained into the same attestation chain as the original scan — tamper-evident proof that a control was looked at by a human, not just that the automated scan ran. Supports `accepted`, `overridden`, and `escalated` decisions.
 
-**BA Technical Safeguard Verification Report (BAVR)**  
+**BA Technical Safeguard Verification Report (BAVR)** *(documentation concept — not a shipped automated generator)*  
 Annual written verification of technical safeguards for covered entity clients. Designed to support annual BA verification workflows under proposed 2026 HIPAA Security Rule updates. Only producible by a zero-egress architecture — cloud-ML vendors cannot make this attestation honestly.
 
-**Cyber Insurance Underwriting Attestation Package (CUAP)**  
+**Cyber Insurance Underwriting Attestation Package (CUAP)** *(documentation concept — not a shipped automated generator)*  
 Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriting control categories. Provides tamper-evident evidence records supporting PHI-handling attestation reviews.
 
 ---
@@ -122,7 +122,7 @@ Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriti
 - ReportLab PDF evidence report generation
 - AI enforcement gateway (OpenAI, Azure OpenAI, Anthropic)
 - Legacy scrub proxy paths (OpenAI, Anthropic, Ollama — separate from gateway)
-- Generic JSON webhook dispatcher (Splunk HEC, SIEM, DLP)
+- Generic JSON webhook dispatcher (compatible with any HTTP JSON webhook receiver; native Splunk HEC event formatting not currently implemented)
 - Docker / GHCR
 - Render (API + Streamlit demo) / Netlify (landing page)
 
