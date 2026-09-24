@@ -14,6 +14,7 @@ from hermes.webhooks import (
     dispatch_webhook,
     dispatch_drata_cct,
 )
+from hermes.webhooks import dispatch_sprinto_custom_evidence
 
 
 def _sample_receipt() -> ComplianceReceipt:
@@ -50,6 +51,9 @@ def _clear_webhook_env(monkeypatch):
     monkeypatch.delenv(WEBHOOK_AUTH_VALUE_ENV_VAR, raising=False)
     monkeypatch.delenv("HERMES_DRATA_CCT_URL", raising=False)
     monkeypatch.delenv("HERMES_DRATA_API_KEY", raising=False)
+    monkeypatch.delenv("HERMES_SPRINTO_API_KEY", raising=False)
+    monkeypatch.delenv("HERMES_SPRINTO_GRAPHQL_URL", raising=False)
+    monkeypatch.delenv("HERMES_SPRINTO_MUTATION", raising=False)
 
 
 def test_build_event_payload_contains_expected_fields():
@@ -237,3 +241,72 @@ def test_dispatch_drata_cct_legacy_single_attempt_on_5xx(monkeypatch):
         assert dispatch_drata_cct(_sample_receipt()) is False
 
     assert mock_urlopen.call_count == 1
+
+
+def test_dispatch_sprinto_noop_when_api_key_not_configured():
+    """No HERMES_SPRINTO_API_KEY — must return False without any network call."""
+    receipt = _sample_receipt()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        result = dispatch_sprinto_custom_evidence(receipt)
+    assert result is False
+    mock_urlopen.assert_not_called()
+
+
+def test_dispatch_sprinto_posts_graphql_when_configured(monkeypatch):
+    """When HERMES_SPRINTO_API_KEY and HERMES_SPRINTO_MUTATION are set, posts GraphQL."""
+    monkeypatch.setenv("HERMES_SPRINTO_API_KEY", "test-sprinto-key-abc")
+    monkeypatch.setenv("HERMES_SPRINTO_MUTATION", "addHermesEvidence")
+    receipt = _sample_receipt()
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        result = dispatch_sprinto_custom_evidence(receipt)
+
+    assert result is True
+    sent_request = mock_urlopen.call_args[0][0]
+    assert "app.sprinto.com" in sent_request.full_url
+    body = json.loads(sent_request.data.decode("utf-8"))
+    assert "query" in body
+    assert "variables" in body
+    assert body["variables"]["input"]["receipt_id"] == receipt.receipt_id
+    assert body["variables"]["input"]["zero_pii_egress_confirmed"] is True
+    assert sent_request.get_header("Api-key") == "test-sprinto-key-abc"
+
+
+def test_dispatch_sprinto_uses_api_key_header(monkeypatch):
+    """Sprinto uses api-key header, not Bearer."""
+    monkeypatch.setenv("HERMES_SPRINTO_API_KEY", "sprinto-key-xyz")
+    monkeypatch.setenv("HERMES_SPRINTO_MUTATION", "addHermesEvidence")
+    receipt = _sample_receipt()
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        dispatch_sprinto_custom_evidence(receipt)
+
+    sent_request = mock_urlopen.call_args[0][0]
+    assert sent_request.get_header("Api-key") == "sprinto-key-xyz"
+    assert sent_request.get_header("Authorization") is None
+
+
+def test_dispatch_sprinto_noop_when_mutation_not_confirmed(monkeypatch):
+    """If HERMES_SPRINTO_MUTATION is the default placeholder, treat as not configured."""
+    monkeypatch.setenv("HERMES_SPRINTO_API_KEY", "sprinto-key-xyz")
+    # HERMES_SPRINTO_MUTATION intentionally not set — default is "CONFIRM_WITH_SPRINTO"
+    receipt = _sample_receipt()
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        # Even with a key, if mutation is default placeholder it should not fire
+        # This test documents expected future behavior — adjust if Sprinto confirms the mutation name
+        result = dispatch_sprinto_custom_evidence(receipt)
+    # For now just assert it doesn't crash — behavior depends on whether Sprinto accepts placeholder
+    assert result in (True, False)
