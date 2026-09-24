@@ -55,10 +55,24 @@ wrapper that delegates every call to it.
 | Method | Behavior |
 |---|---|
 | `is_configured()` | `True` only when `HERMES_DRATA_CCT_URL` is set. No network call. |
-| `status()` | `{connector, state, cct_url_configured, api_key_configured, connection_tested}`. `state` is `NOT_CONFIGURED` or `CONFIGURED` from the shared state machine in `hermes/drata_state.py`. `connection_tested` is always `false`. No network call; no credential values. |
-| `send_evidence(event)` | The POST described below. Refuses (no network call, `error="phi_safety_check_failed"`) if `event.assert_phi_safe()` fails. |
-| `send_test_evidence()` | Returns `ExportResult(success=False, attempts=0, error="UNSUPPORTED")`. No network call: no safe Drata connection-test endpoint is known, and posting a synthetic record would write test data into real Drata evidence. |
-| `test_connection()` | Returns `ConnectionResult(state="UNSUPPORTED", success=False, reason=...)`. No network call: no verified read-only Drata endpoint exists in this repository. Planned for Session 4 once a safe method is confirmed. |
+| `status()` | `{connector, state, cct_url_configured, api_key_configured, connection_tested}`. `state` is `NOT_CONFIGURED`, `CONFIG_INVALID`, or `CONFIGURED` from the shared state machine in `hermes/drata_state.py`. `connection_tested` is always `false`. No network call; no credential values. |
+| `send_evidence(event)` | The POST described below. Refuses (no network call) with `error="insecure_url_refused"` and a warning log (URL value never logged) if `HERMES_DRATA_CCT_URL` is not `https://`, and with `error="phi_safety_check_failed"` if `event.assert_phi_safe()` fails. |
+| `send_test_evidence()` | Returns `ExportResult(success=False, attempts=0, error="UNSUPPORTED", reason=...)`. No network call: the only verified transport is the CCT POST URL, which writes into a real Drata tenant, and no sandbox endpoint is known. |
+| `test_connection()` | Offline **structural** check returning `ConnectionResult(state, success, reason, live_validated=False)`. It is **not** a live connection test and does not prove Drata accepts the credentials or URL. See the state table below. |
+
+`test_connection()` states (no network call in any state; the reason names env
+vars only and never includes the URL or API key):
+
+| State | When |
+|---|---|
+| `NOT_CONFIGURED` | `HERMES_DRATA_CCT_URL` is not set (even if the API key is set). |
+| `CONFIG_INVALID` | URL is malformed, does not use `https://` (also logs a warning), or `HERMES_DRATA_API_KEY` is absent. |
+| `CONFIGURED` | URL is a well-formed `https://` URL and the API key is present. `success=True` means only that this structural check passed. |
+| `UNSUPPORTED` | Returned for `test_connection(live=True)`: no verified read-only Drata endpoint exists. |
+| `CONNECTION_SUCCESS` / `CONNECTION_FAILED` | Reserved for future live validation; never returned today. |
+
+`POST /api/v1/drata/config` still returns HTTP 501 and reports `state`, `reason`,
+and `live_validated` from `test_connection()`.
 
 ### Legacy `/v1/scrub` Drata path (Path A)
 

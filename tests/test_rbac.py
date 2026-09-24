@@ -197,6 +197,70 @@ def test_get_drata_config_state_transitions(clear_drata_env, monkeypatch):
     assert get_drata_config_state(False) is DrataConfigState.NOT_CONFIGURED
 
     monkeypatch.setenv("HERMES_DRATA_CCT_URL", DRATA_TEST_URL)
+    assert get_drata_config_state() is DrataConfigState.CONFIG_INVALID
+    assert get_drata_config_state(True) is DrataConfigState.CONFIG_INVALID
+
+    monkeypatch.setenv("HERMES_DRATA_API_KEY", DRATA_TEST_KEY)
     assert get_drata_config_state() is DrataConfigState.CONFIGURED
     assert get_drata_config_state(False) is DrataConfigState.CONNECTION_TEST_FAILED
     assert get_drata_config_state(True) is DrataConfigState.CONNECTION_TEST_SUCCEEDED
+
+
+def test_drata_config_http_url_is_config_invalid(client, clear_drata_env, monkeypatch, caplog):
+    insecure_url = "http://drata.example.invalid/cct/secret-connection-123"
+    monkeypatch.setenv("HERMES_DRATA_CCT_URL", insecure_url)
+    monkeypatch.setenv("HERMES_DRATA_API_KEY", DRATA_TEST_KEY)
+    with caplog.at_level(logging.DEBUG):
+        response = client.post(
+            "/api/v1/drata/config", headers={"X-API-Key": _admin_key()}
+        )
+    assert response.status_code == 501
+    body = response.json()
+    assert body["state"] == "CONFIG_INVALID"
+    assert "https" in body["reason"]
+    assert body["cct_url_configured"] is True
+    assert body["live_validated"] is False
+    assert body["connection_tested"] is False
+    for secret in (insecure_url, "secret-connection-123", DRATA_TEST_KEY):
+        assert secret not in response.text
+        assert secret not in caplog.text
+
+
+def test_drata_config_malformed_url_is_config_invalid(client, clear_drata_env, monkeypatch):
+    monkeypatch.setenv("HERMES_DRATA_CCT_URL", "not a url")
+    monkeypatch.setenv("HERMES_DRATA_API_KEY", DRATA_TEST_KEY)
+    response = client.post(
+        "/api/v1/drata/config", headers={"X-API-Key": _admin_key()}
+    )
+    assert response.status_code == 501
+    assert response.json()["state"] == "CONFIG_INVALID"
+    assert "not a url" not in response.text
+
+
+def test_drata_config_url_without_api_key_is_config_invalid(client, clear_drata_env, monkeypatch):
+    monkeypatch.setenv("HERMES_DRATA_CCT_URL", DRATA_TEST_URL)
+    response = client.post(
+        "/api/v1/drata/config", headers={"X-API-Key": _admin_key()}
+    )
+    assert response.status_code == 501
+    body = response.json()
+    assert body["state"] == "CONFIG_INVALID"
+    assert body["cct_url_configured"] is True
+    assert body["api_key_configured"] is False
+    assert "HERMES_DRATA_API_KEY" in body["reason"]
+
+
+def test_drata_config_configured_never_claims_live_validation(client, clear_drata_env, monkeypatch):
+    monkeypatch.setenv("HERMES_DRATA_CCT_URL", DRATA_TEST_URL)
+    monkeypatch.setenv("HERMES_DRATA_API_KEY", DRATA_TEST_KEY)
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        response = client.post(
+            "/api/v1/drata/config", headers={"X-API-Key": _admin_key()}
+        )
+    mock_urlopen.assert_not_called()
+    assert response.status_code == 501
+    body = response.json()
+    assert body["state"] == "CONFIGURED"
+    assert body["live_validated"] is False
+    assert "does NOT prove" in body["reason"]
+    assert body["state"] not in ("CONNECTION_SUCCESS", "CONNECTION_TEST_SUCCEEDED")

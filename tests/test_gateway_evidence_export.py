@@ -21,6 +21,10 @@ import gateway.policy as gateway_policy
 from gateway.app import app
 from gateway.evidence_export.dispatch import dispatch_evidence_export, try_export_evidence
 from gateway.evidence_export.drata_connector import (
+    INSECURE_URL_ERROR,
+    INSECURE_URL_WARNING,
+    SEND_TEST_EVIDENCE_UNSUPPORTED_REASON,
+    TEST_CONNECTION_UNSUPPORTED_REASON,
     UNSUPPORTED,
     ConnectionResult,
     DrataConnector,
@@ -625,18 +629,245 @@ def test_drata_connector_send_test_evidence_unsupported_no_network(monkeypatch):
     assert result.attempts == 0
 
 
-def test_drata_connector_test_connection_unsupported_no_network(monkeypatch):
-    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+DRATA_SECRET_URL = "https://api.drata.com/cct/secret-connection-777"
+DRATA_SECRET_KEY = "drata-secret-key-xyz"
+
+
+def _test_connection_no_network() -> ConnectionResult:
     with patch("gateway.evidence_export.exporters._post_json") as mock_post, patch(
         "urllib.request.urlopen"
-    ) as mock_urlopen:
+    ) as mock_urlopen, patch("socket.create_connection") as mock_socket:
         result = DrataConnector().test_connection()
     mock_post.assert_not_called()
     mock_urlopen.assert_not_called()
+    mock_socket.assert_not_called()
     assert isinstance(result, ConnectionResult)
+    return result
+
+
+def test_drata_connector_test_connection_not_configured():
+    result = _test_connection_no_network()
+    assert result.state == "NOT_CONFIGURED"
+    assert result.success is False
+    assert "HERMES_DRATA_CCT_URL" in result.reason
+    assert result.live_validated is False
+
+
+def test_drata_connector_test_connection_not_configured_with_api_key_only(monkeypatch):
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    result = _test_connection_no_network()
+    assert result.state == "NOT_CONFIGURED"
+    assert DRATA_SECRET_KEY not in result.reason
+
+
+def test_drata_connector_test_connection_configured_no_network(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, DRATA_SECRET_URL)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    result = _test_connection_no_network()
+    assert result.state == "CONFIGURED"
+    assert result.success is True
+    assert result.live_validated is False
+    assert "No network call" in result.reason
+    assert "does NOT prove Drata accepts" in result.reason
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://api.drata.com/cct/secret-connection-777",
+        "ftp://api.drata.com/cct/secret-connection-777",
+        "HTTP://api.drata.com/cct/secret-connection-777",
+    ],
+)
+def test_drata_connector_test_connection_non_https_is_config_invalid(monkeypatch, url):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, url)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    result = _test_connection_no_network()
+    assert result.state == "CONFIG_INVALID"
+    assert result.success is False
+    assert result.live_validated is False
+    assert "https" in result.reason
+    assert url not in result.reason
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "not-a-url",
+        "https://",
+        "https:///cct/path-only",
+        "https://[::1/cct",
+        "https://api.drata.com:notaport/cct",
+        "https://api.drata.com/cct with space",
+        " https://api.drata.com/cct",
+        "api.drata.com/cct/secret-connection-777",
+    ],
+)
+def test_drata_connector_test_connection_malformed_url_is_config_invalid(monkeypatch, url):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, url)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    result = _test_connection_no_network()
+    assert result.state == "CONFIG_INVALID"
+    assert result.success is False
+    assert "well-formed" in result.reason
+    assert url.strip() not in result.reason
+
+
+def test_drata_connector_test_connection_url_without_api_key_is_config_invalid(monkeypatch):
+    """
+    URL set, API key absent: CONFIG_INVALID. Consistent with Session 2, the URL
+    alone decides NOT_CONFIGURED vs. not (so cct_url_configured stays True), but
+    CONFIGURED requires the API key to be present.
+    """
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, DRATA_SECRET_URL)
+    result = _test_connection_no_network()
+    assert result.state == "CONFIG_INVALID"
+    assert result.success is False
+    assert "HERMES_DRATA_API_KEY is not set" in result.reason
+    assert DrataConnector().status()["cct_url_configured"] is True
+    assert DrataConnector().status()["state"] == "CONFIG_INVALID"
+
+
+@pytest.mark.parametrize(
+    "url,api_key",
+    [
+        (None, None),
+        (None, DRATA_SECRET_KEY),
+        (DRATA_SECRET_URL, None),
+        (DRATA_SECRET_URL, DRATA_SECRET_KEY),
+        ("http://api.drata.com/cct/secret-connection-777", DRATA_SECRET_KEY),
+        ("https://", DRATA_SECRET_KEY),
+    ],
+)
+def test_drata_connector_test_connection_live_validated_always_false(monkeypatch, url, api_key):
+    if url:
+        monkeypatch.setenv(DRATA_CCT_URL_ENV, url)
+    if api_key:
+        monkeypatch.setenv(DRATA_API_KEY_ENV, api_key)
+    result = _test_connection_no_network()
+    assert result.live_validated is False
+    assert result.state not in ("CONNECTION_SUCCESS", "CONNECTION_FAILED")
+
+
+def test_drata_connector_test_connection_live_request_is_unsupported(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, DRATA_SECRET_URL)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    with patch("gateway.evidence_export.exporters._post_json") as mock_post, patch(
+        "urllib.request.urlopen"
+    ) as mock_urlopen:
+        result = DrataConnector().test_connection(live=True)
+    mock_post.assert_not_called()
+    mock_urlopen.assert_not_called()
     assert result.state == UNSUPPORTED
     assert result.success is False
-    assert result.reason
+    assert result.live_validated is False
+    assert result.reason == TEST_CONNECTION_UNSUPPORTED_REASON
+    assert "does NOT prove Drata accepts" in result.reason
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        DRATA_SECRET_URL,
+        "http://api.drata.com/cct/secret-connection-777",
+        "https://api.drata.com:notaport/cct/secret-connection-777",
+    ],
+)
+@pytest.mark.parametrize("live", [False, True])
+def test_drata_connector_test_connection_reason_contains_no_credentials(monkeypatch, url, live):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, url)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    result = DrataConnector().test_connection(live=live)
+    serialized = json.dumps(result.__dict__)
+    for secret in (DRATA_SECRET_KEY, url, "secret-connection-777", "api.drata.com"):
+        assert secret not in serialized
+
+
+@pytest.mark.parametrize(
+    "url,api_key",
+    [
+        (DRATA_SECRET_URL, DRATA_SECRET_KEY),
+        (DRATA_SECRET_URL, None),
+        ("http://api.drata.com/cct/secret-connection-777", DRATA_SECRET_KEY),
+        ("not-a-url/secret-connection-777", DRATA_SECRET_KEY),
+    ],
+)
+def test_drata_connector_test_connection_no_credentials_in_logs(monkeypatch, caplog, url, api_key):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, url)
+    if api_key:
+        monkeypatch.setenv(DRATA_API_KEY_ENV, api_key)
+    with caplog.at_level(logging.DEBUG):
+        DrataConnector().test_connection()
+        DrataConnector().test_connection(live=True)
+        DrataConnector().status()
+    for secret in (DRATA_SECRET_KEY, url, "secret-connection-777", "api.drata.com"):
+        assert secret not in caplog.text
+
+
+def test_drata_connector_test_connection_warns_on_http_url_without_url_value(monkeypatch, caplog):
+    insecure_url = "http://api.drata.com/cct/secret-connection-777"
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, insecure_url)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    with caplog.at_level(logging.WARNING, logger="hermes.gateway.evidence_export"):
+        DrataConnector().test_connection()
+    assert INSECURE_URL_WARNING in caplog.text
+    assert insecure_url not in caplog.text
+    assert DRATA_SECRET_KEY not in caplog.text
+
+
+def test_drata_connector_test_connection_no_warning_on_https_url(monkeypatch, caplog):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, DRATA_SECRET_URL)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    with caplog.at_level(logging.WARNING, logger="hermes.gateway.evidence_export"):
+        DrataConnector().test_connection()
+    assert INSECURE_URL_WARNING not in caplog.text
+
+
+def test_drata_connector_send_evidence_refuses_http_url_without_network(monkeypatch, caplog):
+    insecure_url = "http://api.drata.com/cct/secret-connection-777"
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, insecure_url)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    with patch("gateway.evidence_export.exporters._post_json") as mock_post, patch(
+        "urllib.request.urlopen"
+    ) as mock_urlopen, caplog.at_level(logging.WARNING):
+        connector_result = DrataConnector().send_evidence(_sample_event())
+        exporter_result = DrataExporter().export(_sample_event())
+    mock_post.assert_not_called()
+    mock_urlopen.assert_not_called()
+    for result in (connector_result, exporter_result):
+        assert result.success is False
+        assert result.attempts == 0
+        assert result.error == INSECURE_URL_ERROR
+    assert INSECURE_URL_WARNING in caplog.text
+    assert insecure_url not in caplog.text
+    assert DRATA_SECRET_KEY not in caplog.text
+
+
+def test_drata_connector_send_test_evidence_reason_is_displayable(monkeypatch, caplog):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, DRATA_SECRET_URL)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    with patch("urllib.request.urlopen") as mock_urlopen, caplog.at_level(logging.DEBUG):
+        result = DrataConnector().send_test_evidence()
+    mock_urlopen.assert_not_called()
+    assert result.error == UNSUPPORTED
+    assert result.reason == SEND_TEST_EVIDENCE_UNSUPPORTED_REASON
+    assert result.reason.endswith(".")
+    assert result.reason.isprintable()
+    assert "real customer's Drata tenant" in result.reason
+    assert "sandbox" in result.reason
+    serialized = json.dumps(result.__dict__)
+    for secret in (DRATA_SECRET_KEY, DRATA_SECRET_URL, "secret-connection-777", "api.drata.com"):
+        assert secret not in serialized
+        assert secret not in caplog.text
+
+
+def test_drata_unsupported_reason_strings_are_safe_to_display():
+    for reason in (TEST_CONNECTION_UNSUPPORTED_REASON, SEND_TEST_EVIDENCE_UNSUPPORTED_REASON):
+        assert reason.isprintable()
+        assert 40 < len(reason) < 400
+        assert "not supported" in reason
+        assert "://" not in reason
+        assert "Bearer" not in reason
 
 
 def test_drata_connector_send_evidence_matches_drata_exporter(monkeypatch):

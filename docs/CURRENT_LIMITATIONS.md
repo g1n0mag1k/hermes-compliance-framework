@@ -39,7 +39,7 @@ Customer-facing quality control for Hermes Relay as of 2026-09-18.
 
 - **Gateway evidence export** — optional webhook and Drata CCT exporters via `gateway/evidence_export/` (see `GATEWAY_EVIDENCE_EXPORT.md`). Best-effort post-decision export; exporter outage does not affect enforcement.
 - **Live Drata gateway integration** — Drata adapter implemented and contract-tested; live tenant validation pending. Hermes sends metadata-only records wrapped in `{"data": {...}}`; never raw PHI.
-- **Canonical Drata connector** — `DrataConnector` in `gateway/evidence_export/drata_connector.py`. `send_test_evidence()` and `test_connection()` return `UNSUPPORTED` without any network call; no Drata connection test exists yet.
+- **Canonical Drata connector** — `DrataConnector` in `gateway/evidence_export/drata_connector.py`. `send_test_evidence()` returns `UNSUPPORTED` without any network call. `test_connection()` is an offline structural check only (URL set, `https://`, API key present → `CONFIGURED`; otherwise `NOT_CONFIGURED` or `CONFIG_INVALID`); `live_validated` is always `false` and live connection validation is `UNSUPPORTED`. `send_evidence()` refuses non-`https://` CCT URLs.
 - **`/v1/scrub` Drata export (legacy)** — separate V1 path via `dispatch_drata_cct()` in `hermes/webhooks.py`, kept for backward compatibility. It sends a different, flat payload shape than the canonical connector, with no retries and no idempotency key.
 
 ## Multi-tenancy

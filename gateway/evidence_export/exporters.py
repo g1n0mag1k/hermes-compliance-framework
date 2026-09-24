@@ -30,6 +30,7 @@ class ExportResult:
     success: bool
     attempts: int = 1
     error: Optional[str] = None
+    reason: Optional[str] = None
 
 
 class EvidenceExporter(Protocol):

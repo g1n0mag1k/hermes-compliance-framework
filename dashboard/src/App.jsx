@@ -18,6 +18,7 @@ export const WorkspaceContext = createContext({ workspace: null })
 const DRATA_STATE_LABELS = {
   NOT_CONFIGURED: 'Drata not configured (set HERMES_DRATA_CCT_URL)',
   CONFIGURED: 'Drata configured, connection not tested',
+  CONFIG_INVALID: 'Drata configuration invalid (check HTTPS URL and API key)',
   CONNECTION_TEST_FAILED: 'Drata connection test failed',
   CONNECTION_TEST_SUCCEEDED: 'Drata connection test passed',
 }

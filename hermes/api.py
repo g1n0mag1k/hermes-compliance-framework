@@ -690,14 +690,21 @@ def drata_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech
     Report Drata configuration state. Configuring or syncing Drata from the
     dashboard is not implemented: this endpoint stores nothing and does not
     contact Drata. Credential values are never included in the response.
+
+    state comes from DrataConnector.test_connection(), an offline structural
+    check (URL set, https, API key present). It is never a live validation.
     """
-    state = get_drata_config_state()
+    from gateway.evidence_export.drata_connector import DrataConnector
+
+    result = DrataConnector().test_connection()
     return JSONResponse(
         status_code=501,
         content={
             "status": "not_implemented",
-            "state": state.value,
-            "cct_url_configured": state is not DrataConfigState.NOT_CONFIGURED,
+            "state": result.state,
+            "reason": result.reason,
+            "live_validated": result.live_validated,
+            "cct_url_configured": bool(os.environ.get(DRATA_CCT_URL_ENV_VAR)),
             "api_key_configured": bool(os.environ.get(DRATA_API_KEY_ENV_VAR)),
             "connection_tested": False,
             "detail": (
