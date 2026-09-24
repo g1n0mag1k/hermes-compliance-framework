@@ -11,9 +11,10 @@
 
 ## What This Does
 
-Hermes Relay runs inside your client environment and exports metadata-only evidence after scans to
-PHI detection evidence into their Drata compliance dashboard via the Custom
-Connections and Tests (CCT) API when configured. Exporter failures do not block scan results.
+Hermes Relay runs inside your client's environment. When Drata export is
+configured, it sends metadata-only PHI detection evidence from each scan to
+the client's Drata account via the Custom Connections and Tests (CCT) API.
+Exporter failures do not block scan results.
 
 Every scan generates a signed, hash-chained compliance receipt documenting:
 - Which PHI identifiers were found (16 of 18 HIPAA Safe Harbor categories)
@@ -66,6 +67,10 @@ On the client machine:
 
     pipx install hermes-relay
 
+PyPI availability of `hermes-relay` is UNKNOWN. To install from a local
+checkout of this repository instead, run `pipx install .` from the repository
+root.
+
 Verify:
 
     hermes-relay version
@@ -104,6 +109,12 @@ In the client Drata account:
 5. Go to Settings → API Keys and generate a new API key
 6. Paste both into your environment variables above
 
+`HERMES_DRATA_CCT_URL` also contains a resource ID (`YOUR_RESOURCE_ID` in
+Step 2). Hermes does not create or discover it: obtain the resource ID from
+the Drata UI and embed it in `HERMES_DRATA_CCT_URL` alongside the connection
+ID. Where the resource ID appears in the Drata UI is not documented in this
+repository. See `docs/integrations/DRATA.md`.
+
 ---
 
 ## Step 4 — Install the systemd Service
@@ -118,10 +129,18 @@ Hermes Relay now starts automatically on boot at 127.0.0.1:8787.
 
 ## Step 5 — Send Your First Scan
 
-    curl -s -X POST http://127.0.0.1:8787/v1/scrub       -H "Content-Type: application/json"       -H "X-API-Key: your-secure-api-key-here"       -d "{"payload": "Patient John Smith SSN 372-18-5421 DOB 1982-03-15"}"       | python3 -m json.tool
+    curl -s -X POST http://127.0.0.1:8787/v1/scrub \
+      -H "Content-Type: application/json" \
+      -H "X-API-Key: your-secure-api-key-here" \
+      -d '{"payload": "Patient John Smith SSN 372-18-5421 DOB 1982-03-15"}' \
+      | python3 -m json.tool
 
-Within seconds the receipt appears in the client Drata dashboard
-under their Hermes Relay custom connection.
+When `HERMES_DRATA_CCT_URL` is set, Hermes also schedules a best-effort
+background POST of the receipt metadata to that URL after the response is
+returned. `/v1/scrub` uses the legacy Drata export path (flat payload, one
+attempt, no retries, no idempotency key). Whether the record appears in the
+Drata dashboard has not been validated against a live Drata tenant; see
+`docs/integrations/DRATA_VALIDATION.md`.
 
 ---
 
