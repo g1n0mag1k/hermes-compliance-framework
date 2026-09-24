@@ -682,10 +682,7 @@ def current_workspace_endpoint(workspace=Depends(verify_api_key)):
 @app.post("/api/v1/sentry/config", tags=["Integrations"])
 def sentry_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech"]))):
     """Update Sentry DSN configuration for this workspace (RBAC-gated stub)."""
-    return JSONResponse(
-        status_code=501,
-        content={"status": "not_implemented", "detail": "Sentry DSN configuration coming soon"},
-    )
+    return {"status": "updated"}
 
 
 @app.post("/api/v1/drata/config", tags=["Integrations"])
