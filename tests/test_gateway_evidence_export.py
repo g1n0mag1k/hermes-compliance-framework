@@ -20,6 +20,11 @@ import gateway.evidence as gateway_evidence
 import gateway.policy as gateway_policy
 from gateway.app import app
 from gateway.evidence_export.dispatch import dispatch_evidence_export, try_export_evidence
+from gateway.evidence_export.drata_connector import (
+    UNSUPPORTED,
+    ConnectionResult,
+    DrataConnector,
+)
 from gateway.evidence_export.event import EvidenceEvent, build_evidence_event
 from gateway.evidence_export.exporters import (
     DRATA_API_KEY_ENV,
@@ -28,7 +33,9 @@ from gateway.evidence_export.exporters import (
     WEBHOOK_AUTH_VALUE_ENV,
     WEBHOOK_URL_ENV,
     DrataExporter,
+    ExportResult,
     WebhookExporter,
+    get_configured_exporters,
 )
 from gateway.pipeline import GatewayPipeline
 from gateway.policy import Policy, set_workspace_policy, clear_workspace_policy
@@ -541,6 +548,205 @@ def test_drata_payload_contains_no_phi_with_real_gateway_request(
         payload = json.loads(payload_str)
         assert "data" in payload
         assert "cose_sign1_hex" not in payload["data"]
+
+
+# -------------------------------------------------------------------------
+# Canonical Drata connector
+# -------------------------------------------------------------------------
+
+
+def _mock_http_response(status: int = 200) -> MagicMock:
+    response = MagicMock()
+    response.status = status
+    response.__enter__.return_value = response
+    return response
+
+
+def test_drata_connector_is_configured_reflects_env(monkeypatch):
+    assert DrataConnector().is_configured() is False
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    assert DrataConnector().is_configured() is True
+
+
+def test_drata_connector_is_configured_ignores_api_key_alone(monkeypatch):
+    monkeypatch.setenv(DRATA_API_KEY_ENV, "drata-secret-key-xyz")
+    assert DrataConnector().is_configured() is False
+
+
+def test_drata_connector_status_not_configured():
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        status = DrataConnector().status()
+    mock_urlopen.assert_not_called()
+    assert status == {
+        "connector": "drata_cct",
+        "state": "NOT_CONFIGURED",
+        "cct_url_configured": False,
+        "api_key_configured": False,
+        "connection_tested": False,
+    }
+
+
+def test_drata_connector_status_configured_never_claims_connection_test(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    monkeypatch.setenv(DRATA_API_KEY_ENV, "drata-secret-key-xyz")
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        status = DrataConnector().status()
+    mock_urlopen.assert_not_called()
+    assert status["state"] == "CONFIGURED"
+    assert status["cct_url_configured"] is True
+    assert status["api_key_configured"] is True
+    assert status["connection_tested"] is False
+    serialized = json.dumps(status)
+    assert "drata-secret-key-xyz" not in serialized
+    assert "api.drata.com" not in serialized
+
+
+def test_drata_connector_status_uses_shared_state_machine(monkeypatch):
+    import hermes.api as hermes_api
+    from hermes.drata_state import DrataConfigState, get_drata_config_state
+
+    assert hermes_api.DrataConfigState is DrataConfigState
+    assert hermes_api.get_drata_config_state is get_drata_config_state
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    assert DrataConnector().status()["state"] == get_drata_config_state().value
+
+
+def test_drata_connector_send_test_evidence_unsupported_no_network(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    with patch("gateway.evidence_export.exporters._post_json") as mock_post, patch(
+        "urllib.request.urlopen"
+    ) as mock_urlopen:
+        result = DrataConnector().send_test_evidence()
+    mock_post.assert_not_called()
+    mock_urlopen.assert_not_called()
+    assert isinstance(result, ExportResult)
+    assert result.success is False
+    assert result.error == UNSUPPORTED
+    assert result.attempts == 0
+
+
+def test_drata_connector_test_connection_unsupported_no_network(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    with patch("gateway.evidence_export.exporters._post_json") as mock_post, patch(
+        "urllib.request.urlopen"
+    ) as mock_urlopen:
+        result = DrataConnector().test_connection()
+    mock_post.assert_not_called()
+    mock_urlopen.assert_not_called()
+    assert isinstance(result, ConnectionResult)
+    assert result.state == UNSUPPORTED
+    assert result.success is False
+    assert result.reason
+
+
+def test_drata_connector_send_evidence_matches_drata_exporter(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    monkeypatch.setenv(DRATA_API_KEY_ENV, "drata-secret-key-xyz")
+    event = _sample_event()
+
+    with patch(
+        "gateway.evidence_export.exporters._post_json",
+        return_value=(True, 1, None),
+    ) as mock_post:
+        connector_result = DrataConnector().send_evidence(event)
+        exporter_result = DrataExporter().export(event)
+
+    assert connector_result == exporter_result
+    connector_call, exporter_call = mock_post.call_args_list
+    assert connector_call == exporter_call
+    assert DrataExporter.build_drata_payload(event) == DrataConnector.build_drata_payload(event)
+
+
+def test_drata_connector_wire_request_headers_and_timeout(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    monkeypatch.setenv(DRATA_API_KEY_ENV, "drata-secret-key-xyz")
+    event = _sample_event()
+
+    with patch(
+        "urllib.request.urlopen", return_value=_mock_http_response(200)
+    ) as mock_urlopen:
+        result = DrataConnector().send_evidence(event)
+
+    assert result.success is True
+    assert result.attempts == 1
+    request = mock_urlopen.call_args[0][0]
+    assert mock_urlopen.call_args[1]["timeout"] == 3.0
+    assert request.full_url == "https://api.drata.com/cct/test"
+    assert request.get_method() == "POST"
+    assert request.get_header("X-idempotency-key") == event.event_id
+    assert request.get_header("Authorization") == "Bearer drata-secret-key-xyz"
+    assert request.get_header("Content-type") == "application/json"
+    assert request.get_header("User-agent") == "hermes-gateway-drata-cct/1.0"
+    body = json.loads(request.data.decode("utf-8"))
+    assert set(body.keys()) == {"data"}
+    assert body["data"]["id"] == event.event_id
+    assert "cose_sign1_hex" not in body["data"]
+
+
+def test_drata_connector_retries_twice_on_5xx(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    event = _sample_event()
+    error = urllib.error.HTTPError(
+        "https://api.drata.com/cct/test", 503, "Service Unavailable", {}, None
+    )
+
+    with patch("urllib.request.urlopen", side_effect=error) as mock_urlopen, patch(
+        "gateway.evidence_export.exporters.time.sleep"
+    ):
+        result = DrataConnector().send_evidence(event)
+
+    assert result.success is False
+    assert result.attempts == 3
+    assert result.error == "HTTP 503"
+    assert mock_urlopen.call_count == 3
+    keys = {call[0][0].get_header("X-idempotency-key") for call in mock_urlopen.call_args_list}
+    assert keys == {event.event_id}
+
+
+def test_drata_connector_no_retry_on_4xx(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    error = urllib.error.HTTPError(
+        "https://api.drata.com/cct/test", 401, "Unauthorized", {}, None
+    )
+
+    with patch("urllib.request.urlopen", side_effect=error) as mock_urlopen, patch(
+        "gateway.evidence_export.exporters.time.sleep"
+    ):
+        result = DrataConnector().send_evidence(_sample_event())
+
+    assert result.success is False
+    assert result.attempts == 1
+    assert mock_urlopen.call_count == 1
+
+
+def test_drata_connector_refuses_phi_unsafe_event_without_network(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    event = _sample_event(endpoint_path=f"/v1/chat/completions?ssn={PHI_SSN}")
+
+    with patch("gateway.evidence_export.exporters._post_json") as mock_post:
+        result = DrataConnector().send_evidence(event)
+
+    mock_post.assert_not_called()
+    assert result.success is False
+    assert result.attempts == 0
+    assert result.error == "phi_safety_check_failed"
+
+
+def test_drata_connector_send_evidence_not_configured():
+    with patch("gateway.evidence_export.exporters._post_json") as mock_post:
+        result = DrataConnector().send_evidence(_sample_event())
+    mock_post.assert_not_called()
+    assert result.success is False
+    assert result.error == "not_configured"
+
+
+def test_get_configured_exporters_uses_canonical_drata_connector(monkeypatch):
+    assert get_configured_exporters() == []
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, "https://api.drata.com/cct/test")
+    exporters = get_configured_exporters()
+    assert len(exporters) == 1
+    assert isinstance(exporters[0], DrataConnector)
+    assert exporters[0].name == "drata_cct"
 
 
 # -------------------------------------------------------------------------

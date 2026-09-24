@@ -188,3 +188,52 @@ def test_dispatch_drata_cct_includes_bearer_token_when_configured(monkeypatch):
 
     sent_request = mock_urlopen.call_args[0][0]
     assert sent_request.get_header("Authorization") == "Bearer drata-test-key-abc123"
+
+
+def test_dispatch_drata_cct_legacy_payload_shape_unchanged(monkeypatch):
+    """Legacy Path A keeps its flat payload, no idempotency key, and no retries."""
+    monkeypatch.setenv("HERMES_DRATA_CCT_URL", "https://api.drata.com/cct/test")
+    receipt = _sample_receipt()
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        assert dispatch_drata_cct(receipt) is True
+
+    sent_request = mock_urlopen.call_args[0][0]
+    assert mock_urlopen.call_args[1]["timeout"] == 3.0
+    assert sent_request.get_header("X-idempotency-key") is None
+    assert sent_request.get_header("User-agent") == "hermes-relay-drata-cct/1.0"
+    payload = json.loads(sent_request.data.decode("utf-8"))
+    assert "data" not in payload
+    assert set(payload.keys()) == {
+        "timestamp",
+        "transaction_id",
+        "receipt_id",
+        "zero_phi_egress_confirmed",
+        "phi_classes_detected",
+        "phi_classes_redacted",
+        "count_detected",
+        "count_redacted",
+        "compliance_frameworks",
+        "chain_position",
+        "receipt_hash",
+        "declared_scope",
+        "evidence_incomplete_categories",
+        "issuer",
+        "source",
+    }
+
+
+def test_dispatch_drata_cct_legacy_single_attempt_on_5xx(monkeypatch):
+    monkeypatch.setenv("HERMES_DRATA_CCT_URL", "https://api.drata.com/cct/test")
+    error = urllib.error.HTTPError(
+        "https://api.drata.com/cct/test", 503, "Service Unavailable", {}, None
+    )
+
+    with patch("urllib.request.urlopen", side_effect=error) as mock_urlopen:
+        assert dispatch_drata_cct(_sample_receipt()) is False
+
+    assert mock_urlopen.call_count == 1

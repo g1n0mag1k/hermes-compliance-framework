@@ -125,82 +125,36 @@ class WebhookExporter:
         )
 
 
+def _drata_connector_cls():
+    # Deferred: drata_connector imports this module for ExportResult and _post_json.
+    from gateway.evidence_export.drata_connector import DrataConnector
+
+    return DrataConnector
+
+
 class DrataExporter:
+    """Thin wrapper around the canonical DrataConnector (drata_connector.py)."""
+
     name = "drata_cct"
 
+    def __init__(self) -> None:
+        self._connector = _drata_connector_cls()()
+
     def is_configured(self) -> bool:
-        return bool(os.environ.get(DRATA_CCT_URL_ENV))
+        return self._connector.is_configured()
 
     @staticmethod
     def build_drata_record(event: EvidenceEvent) -> dict:
-        """Map EvidenceEvent to a Drata Custom Data Record (metadata-only fields)."""
-        return {
-            "id": event.event_id,
-            "timestamp": event.timestamp,
-            "transaction_id": event.transaction_id,
-            "receipt_id": event.receipt_id,
-            "event_id": event.event_id,
-            "event_type": event.event_type,
-            "source": event.source,
-            "workspace_id": event.workspace_id,
-            "gateway_decision": event.decision,
-            "upstream_contacted": event.upstream_contacted,
-            "upstream_provider": event.upstream_provider,
-            "endpoint_path": event.endpoint_path,
-            "phi_categories_detected": event.phi_categories_detected,
-            "phi_categories_redacted": event.phi_categories_redacted,
-            "policy_id": event.policy_id,
-            "policy_version": event.policy_version,
-            "policy_digest": event.policy_digest,
-            "receipt_digest": event.receipt_digest,
-            "prev_receipt_digest": event.prev_receipt_digest,
-            "gateway_sequence": event.gateway_sequence,
-            "failure_class": event.failure_class,
-            "gateway_version": event.gateway_version,
-            "signature_algorithm": event.signature_algorithm,
-        }
+        return _drata_connector_cls().build_drata_record(event)
 
     @staticmethod
     def build_drata_payload(event: EvidenceEvent) -> dict:
-        """
-        Wrap the record in Drata v2 Custom Data Records request body.
-
-        POST /custom-connections/{connectionId}/resources/{resourceId}/records
-        requires a top-level ``data`` key (object or array).
-        """
-        return {"data": DrataExporter.build_drata_record(event)}
+        return _drata_connector_cls().build_drata_payload(event)
 
     def export(self, event: EvidenceEvent) -> ExportResult:
-        url = os.environ.get(DRATA_CCT_URL_ENV)
-        if not url:
-            return ExportResult(exporter=self.name, success=False, error="not_configured")
-
-        headers = {"User-Agent": "hermes-gateway-drata-cct/1.0"}
-        api_key = os.environ.get(DRATA_API_KEY_ENV)
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        payload = self.build_drata_payload(event)
-        success, attempts, error = _post_json(
-            url,
-            payload,
-            headers,
-            idempotency_key=event.event_id,
-        )
-        if not success:
-            logger.warning(
-                "Gateway Drata CCT evidence export failed after %s attempt(s): %s",
-                attempts,
-                error,
-            )
-        return ExportResult(
-            exporter=self.name,
-            success=success,
-            attempts=attempts,
-            error=error,
-        )
+        return self._connector.send_evidence(event)
 
 
 def get_configured_exporters() -> list[EvidenceExporter]:
-    exporters: list[EvidenceExporter] = [WebhookExporter(), DrataExporter()]
+    exporters: list[EvidenceExporter] = [WebhookExporter(), _drata_connector_cls()()]
     return [exporter for exporter in exporters if exporter.is_configured()]

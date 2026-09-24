@@ -5,7 +5,6 @@ import threading
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -20,6 +19,12 @@ from hermes.attestation import (
     DEFAULT_DB_PATH,
 )
 from hermes.webhooks import dispatch_webhook, dispatch_drata_cct
+from hermes.drata_state import (
+    DRATA_API_KEY_ENV_VAR,
+    DRATA_CCT_URL_ENV_VAR,
+    DrataConfigState,
+    get_drata_config_state,
+)
 from hermes.classifier import (
     FlagEntry,
     RedactionAuditLog,
@@ -677,34 +682,6 @@ def current_workspace_endpoint(workspace=Depends(verify_api_key)):
 def sentry_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech"]))):
     """Update Sentry DSN configuration for this workspace (RBAC-gated stub)."""
     return {"status": "updated"}
-
-
-class DrataConfigState(str, Enum):
-    NOT_CONFIGURED = "NOT_CONFIGURED"
-    CONFIGURED = "CONFIGURED"
-    CONNECTION_TEST_FAILED = "CONNECTION_TEST_FAILED"
-    CONNECTION_TEST_SUCCEEDED = "CONNECTION_TEST_SUCCEEDED"
-
-
-DRATA_CCT_URL_ENV_VAR = "HERMES_DRATA_CCT_URL"
-DRATA_API_KEY_ENV_VAR = "HERMES_DRATA_API_KEY"
-
-
-def get_drata_config_state(connection_test_passed: Optional[bool] = None) -> DrataConfigState:
-    """
-    Derive the Drata configuration state from the environment.
-
-    connection_test_passed must be None unless a connection test actually
-    ran. No Drata connection test exists in this repository, so production
-    callers always pass None and can never reach a CONNECTION_TEST_* state.
-    """
-    if not os.environ.get(DRATA_CCT_URL_ENV_VAR):
-        return DrataConfigState.NOT_CONFIGURED
-    if connection_test_passed is None:
-        return DrataConfigState.CONFIGURED
-    if connection_test_passed:
-        return DrataConfigState.CONNECTION_TEST_SUCCEEDED
-    return DrataConfigState.CONNECTION_TEST_FAILED
 
 
 @app.post("/api/v1/drata/config", tags=["Integrations"])

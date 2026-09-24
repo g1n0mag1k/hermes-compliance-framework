@@ -8,7 +8,7 @@ Gateway enforcement decision
     → EvidenceEvent (metadata-only contract)
     → optional exporters (best-effort, post-decision):
         - WebhookExporter (HERMES_WEBHOOK_URL)
-        - DrataExporter (HERMES_DRATA_CCT_URL)
+        - DrataConnector (HERMES_DRATA_CCT_URL) — canonical Drata path
 ```
 
 Export runs **after** receipt persistence inside `issue_gateway_receipt()`. Exporter failure never changes the enforcement decision.
@@ -44,6 +44,39 @@ Both exporters:
 - `X-Idempotency-Key: {event_id}` header
 - 3s timeout
 - Structured logging without PHI or credentials
+
+## Canonical Drata connector
+
+`DrataConnector` in `gateway/evidence_export/drata_connector.py` is the single
+Drata implementation. `get_configured_exporters()` (used by `dispatch.py`)
+returns it directly; `DrataExporter` in `exporters.py` is a thin backward-compatible
+wrapper that delegates every call to it.
+
+| Method | Behavior |
+|---|---|
+| `is_configured()` | `True` only when `HERMES_DRATA_CCT_URL` is set. No network call. |
+| `status()` | `{connector, state, cct_url_configured, api_key_configured, connection_tested}`. `state` is `NOT_CONFIGURED` or `CONFIGURED` from the shared state machine in `hermes/drata_state.py`. `connection_tested` is always `false`. No network call; no credential values. |
+| `send_evidence(event)` | The POST described below. Refuses (no network call, `error="phi_safety_check_failed"`) if `event.assert_phi_safe()` fails. |
+| `send_test_evidence()` | Returns `ExportResult(success=False, attempts=0, error="UNSUPPORTED")`. No network call: no safe Drata connection-test endpoint is known, and posting a synthetic record would write test data into real Drata evidence. |
+| `test_connection()` | Returns `ConnectionResult(state="UNSUPPORTED", success=False, reason=...)`. No network call: no verified read-only Drata endpoint exists in this repository. Planned for Session 4 once a safe method is confirmed. |
+
+### Legacy `/v1/scrub` Drata path (Path A)
+
+`dispatch_drata_cct()` in `hermes/webhooks.py` is **legacy** and kept unchanged
+for backward compatibility. It is **not** routed through `DrataConnector` because
+the payloads are built from different source models (V1 `ComplianceReceipt` vs
+gateway `EvidenceEvent`) and share no payload-building step.
+
+Known payload-shape divergence (live Drata acceptance of either shape is UNKNOWN):
+
+| | Path A (legacy, `/v1/scrub`) | Path B (canonical, gateway) |
+|---|---|---|
+| Body | flat JSON object | `{"data": {...}}` |
+| Category fields | `phi_classes_detected/redacted`, counts | `phi_categories_detected/redacted` |
+| Chain fields | `chain_position`, `receipt_hash` | `receipt_digest`, `prev_receipt_digest`, `gateway_sequence` |
+| Retries | none | 2 on 5xx / transient errors |
+| Idempotency | none | `X-Idempotency-Key: {event_id}` |
+| Timeout | 3s | 3s |
 
 ## Configuration
 

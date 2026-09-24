@@ -60,7 +60,9 @@ against mocks only; live Drata acceptance is UNKNOWN — see Honest State)
 - hermes/api.py — /v1/scrub and webhook/CCT wiring
 - tests/test_webhooks.py — webhook and Drata CCT contract tests
 - gateway/evidence_export/event.py — gateway evidence event model (Drata Path B)
-- gateway/evidence_export/exporters.py — DrataExporter (Drata Path B)
+- gateway/evidence_export/drata_connector.py — DrataConnector, canonical Drata connector (Drata Path B)
+- gateway/evidence_export/exporters.py — DrataExporter, thin wrapper around DrataConnector
+- hermes/drata_state.py — DrataConfigState state machine shared by hermes/api.py and DrataConnector
 - gateway/evidence_export/dispatch.py — gateway evidence export dispatch (Drata Path B)
 - tests/test_gateway_evidence_export.py — gateway evidence export / DrataExporter contract tests
 
@@ -120,7 +122,8 @@ STATUS: CONTRACT-TESTED | NOT LIVE-VALIDATED | NOT PARTNER-APPROVED | NOT PARTNE
 
 Two Drata export paths exist. They must not be conflated with a validated integration:
 - Path A (scrub): dispatch_drata_cct() in hermes/webhooks.py — flat JSON payload, no retries, no idempotency key
-- Path B (gateway): DrataExporter in gateway/evidence_export/ — {"data":...} wrapper, X-Idempotency-Key, 2 retries
+- Path B (gateway, CANONICAL): DrataConnector in gateway/evidence_export/drata_connector.py — {"data":...} wrapper, X-Idempotency-Key, 2 retries. DrataExporter in exporters.py is a thin wrapper around it. send_test_evidence() and test_connection() return UNSUPPORTED (no network call).
+- Path A is LEGACY: kept unchanged for backward compatibility, not routed through DrataConnector.
 - Dashboard: "Check Drata Status" button + POST /api/v1/drata/config do NOT call Drata. The endpoint returns HTTP 501 not_implemented with state NOT_CONFIGURED or CONFIGURED derived from HERMES_DRATA_CCT_URL. No connection test exists, so CONNECTION_TEST_* states are never reported.
 - Payload shape mismatch between Path A and Path B is unresolved — live Drata behavior unknown.
 - No per-workspace Drata config. Both paths use a single global HERMES_DRATA_CCT_URL.

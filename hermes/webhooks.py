@@ -111,6 +111,13 @@ def dispatch_webhook(receipt: ComplianceReceipt, event_type: str = "scrub") -> b
 
 def dispatch_drata_cct(receipt: ComplianceReceipt) -> bool:
     """
+    LEGACY (Drata Path A). Kept only for backward compatibility with the
+    /v1/scrub and /v1/trial-scan V1 receipt flow; its behavior is frozen.
+    The canonical Drata integration is DrataConnector in
+    gateway/evidence_export/drata_connector.py. This path sends a different,
+    flat payload shape (no {"data": ...} wrapper), with no retries and no
+    idempotency key; see docs/GATEWAY_EVIDENCE_EXPORT.md.
+
     POST a Hermes compliance receipt to Drata's Custom Connections
     and Tests (CCT) API as structured evidence.
 
