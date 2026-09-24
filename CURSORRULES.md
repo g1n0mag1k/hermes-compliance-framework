@@ -12,35 +12,29 @@ Exit target: Drata or Nightfall acquisition
 ---
 
 ## Current State
-- 544 tests passing, 0 failures
+- 562 tests passing, 0 failures
 - 16 of 18 HIPAA Safe Harbor categories covered (P and Q are 
   reference_only — binary artifacts, acknowledged)
 - FastAPI /v1/scrub and /v1/review endpoints functional
 - HMAC-SHA256 attestation chain wired and persisting to SQLite
 - Generic webhook dispatcher working in webhooks.py
-- No Drata CCT integration yet
+- Drata CCT: TWO active implementations exist. Path A: hermes/webhooks.py dispatch_drata_cct() — flat JSON, no retry, no idempotency. Path B: gateway/evidence_export/ DrataExporter — {"data":...} wrapper, idempotency key, retries. Both use HERMES_DRATA_CCT_URL + HERMES_DRATA_API_KEY. CONTRACT-TESTED against mocks only. NOT live-validated.
 - No pipx install path yet
 
 ---
 
 ## Build Order — Do Not Skip Steps
 
-### Step 1 — Drata CCT Integration (CURRENT)
-Add dispatch_drata_cct() to hermes/webhooks.py
-Wire it into /v1/scrub in hermes/api.py alongside dispatch_webhook
-Add tests to tests/test_webhooks.py
-Target: 119+ tests passing after this step
-
-### Step 2 — pyproject.toml + pipx install
+### Step 1 — pyproject.toml + pipx install
 Create pyproject.toml with hermes-relay CLI entry point
 Add hermes-relay install-service subcommand for systemd
 Target: pipx install hermes-relay works on Linux
 
-### Step 3 — MSP Integration Guide
+### Step 2 — MSP Integration Guide
 Create docs/MSP_INTEGRATION.md
 One-page guide showing Hermes + Drata setup in under 10 minutes
 
-### Step 4 — Demo preparation
+### Step 3 — Demo preparation
 90-second terminal demo script
 PHI caught — receipt generated — evidence in Drata dashboard
 
@@ -48,7 +42,7 @@ PHI caught — receipt generated — evidence in Drata dashboard
 
 ## Hard Rules — Never Violate These
 
-- PYTEST MUST STAY GREEN. 544 tests is the floor. Never decrease.
+- PYTEST MUST STAY GREEN. 562 tests is the floor. Never decrease.
 - Never add external API calls to classifier.py or the scanner
 - Never remove HERMES_SIGNING_KEY or HERMES_API_KEY checks
 - Never add ML inference to the detection pipeline
@@ -63,9 +57,9 @@ PHI caught — receipt generated — evidence in Drata dashboard
 ## Key Files
 - hermes/classifier.py — PHI detection engine. Do not touch without explicit instruction.
 - hermes/attestation.py — HMAC chain. Do not touch without explicit instruction.
-- hermes/webhooks.py — Current session target for Step 1
-- hermes/api.py — Wire CCT after webhooks.py is done
-- tests/test_webhooks.py — Add CCT tests here
+- hermes/webhooks.py — generic webhooks and dispatch_drata_cct() (Drata Path A)
+- hermes/api.py — /v1/scrub and webhook/CCT wiring
+- tests/test_webhooks.py — webhook and Drata CCT contract tests
 
 ---
 
@@ -74,8 +68,8 @@ HERMES_API_KEY        — tenant auth for /v1/scrub and /v1/review
 HERMES_SIGNING_KEY    — HMAC signing key for attestation chain
 HERMES_VAULT_KEY      — AES-256-GCM vault key
 HERMES_WEBHOOK_URL    — existing generic webhook target
-HERMES_DRATA_CCT_URL  — Drata CCT endpoint (Step 1 target)
-HERMES_DRATA_API_KEY  — Drata API key for CCT auth (Step 1 target)
+HERMES_DRATA_CCT_URL  — Drata CCT endpoint
+HERMES_DRATA_API_KEY  — Drata API key for CCT auth
 
 ### Gateway — AI Enforcement Proxy (ADDED Sept 17 2026)
 gateway/app.py              — FastAPI gateway application
@@ -88,9 +82,10 @@ gateway/credentials.py      — credential injection, auth stripping
 gateway/response_headers.py — provider disclosure header stripping
 Dockerfile + docker-compose.yml (repo root) — the one container deployment
                               (API + gateway, one image); see docs/DEPLOYMENT.md
+NOTE: The root Caddyfile was deleted in commit 9f99c97. docker-compose.yml still references it. This must be resolved before docker compose up will succeed.
 tests/test_gateway.py       — 568 gateway tests
 
-Current test count: 544 passing
+Current test count: 562 passing
 Gateway supports: OpenAI, Azure OpenAI, Anthropic
 Auth: Bearer (OpenAI), api-key (Azure), x-api-key (Anthropic)
 Recursive JSON inspection covers tool arguments, nested blocks,
@@ -113,3 +108,15 @@ Large MSP (30+ employees):
   Free 30-Day Sprint
   90-Day Pilot: $1,500/month ($4,500 total)
   Founding Partner: $3,000/month locked 12 months
+
+## Drata Integration — Honest State (updated 2026-09-24)
+STATUS: CONTRACT-TESTED | NOT LIVE-VALIDATED | NOT PARTNER-APPROVED | NOT PARTNER-CONNECTION
+
+Two Drata export paths exist. They must not be conflated with a validated integration:
+- Path A (scrub): dispatch_drata_cct() in hermes/webhooks.py — flat JSON payload, no retries, no idempotency key
+- Path B (gateway): DrataExporter in gateway/evidence_export/ — {"data":...} wrapper, X-Idempotency-Key, 2 retries
+- Dashboard: "Sync Drata" button + POST /api/v1/drata/config are stubs. They do NOT call Drata.
+- Payload shape mismatch between Path A and Path B is unresolved — live Drata behavior unknown.
+- No per-workspace Drata config. Both paths use a single global HERMES_DRATA_CCT_URL.
+
+Never claim: live Drata validation, Partner Connection, OAuth, approved control mappings, or per-tenant Drata routing.
