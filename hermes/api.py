@@ -19,7 +19,7 @@ from hermes.attestation import (
     REVIEW_DECISIONS,
     DEFAULT_DB_PATH,
 )
-from hermes.webhooks import dispatch_webhook, dispatch_drata_cct
+from hermes.webhooks import dispatch_webhook, dispatch_drata_cct, dispatch_sprinto_custom_evidence
 from hermes.drata_state import (
     DRATA_API_KEY_ENV_VAR,
     DRATA_CCT_URL_ENV_VAR,
@@ -409,6 +409,7 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks, wor
         increment_trial_quota(workspace.workspace_id)
     background_tasks.add_task(dispatch_webhook, receipt)
     background_tasks.add_task(dispatch_drata_cct, receipt)
+    background_tasks.add_task(dispatch_sprinto_custom_evidence, receipt)
     return ScrubResponse(
         clean_text=result.clean_text,
         audit_log=result.audit_log,
@@ -591,6 +592,7 @@ def trial_scan_endpoint(background_tasks: BackgroundTasks, workspace=Depends(ver
     _ws_increment(workspace.workspace_id)
     background_tasks.add_task(dispatch_webhook, receipt)
     background_tasks.add_task(dispatch_drata_cct, receipt)
+    background_tasks.add_task(dispatch_sprinto_custom_evidence, receipt)
     return ScrubResponse(
         clean_text=result.clean_text,
         audit_log=result.audit_log,
