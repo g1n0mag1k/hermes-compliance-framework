@@ -7,12 +7,16 @@ import pytest
 
 from hermes.attestation import ComplianceReceipt
 from hermes.webhooks import (
+    SPRINTO_API_KEY_ENV_VAR,
+    SPRINTO_BASE_URL_ENV_VAR,
+    SPRINTO_WORKFLOW_CHECK_PK_ENV_VAR,
     WEBHOOK_AUTH_HEADER_ENV_VAR,
     WEBHOOK_AUTH_VALUE_ENV_VAR,
     WEBHOOK_URL_ENV_VAR,
     build_event_payload,
     dispatch_webhook,
     dispatch_drata_cct,
+    dispatch_sprinto_evidence,
 )
 
 
@@ -50,6 +54,9 @@ def _clear_webhook_env(monkeypatch):
     monkeypatch.delenv(WEBHOOK_AUTH_VALUE_ENV_VAR, raising=False)
     monkeypatch.delenv("HERMES_DRATA_CCT_URL", raising=False)
     monkeypatch.delenv("HERMES_DRATA_API_KEY", raising=False)
+    monkeypatch.delenv(SPRINTO_API_KEY_ENV_VAR, raising=False)
+    monkeypatch.delenv(SPRINTO_WORKFLOW_CHECK_PK_ENV_VAR, raising=False)
+    monkeypatch.delenv(SPRINTO_BASE_URL_ENV_VAR, raising=False)
 
 
 def test_build_event_payload_contains_expected_fields():
@@ -237,3 +244,111 @@ def test_dispatch_drata_cct_legacy_single_attempt_on_5xx(monkeypatch):
         assert dispatch_drata_cct(_sample_receipt()) is False
 
     assert mock_urlopen.call_count == 1
+
+
+# -------------------------------------------------------------------------
+# Sprinto Open Evidence Ingestion (REST multipart) tests
+# -------------------------------------------------------------------------
+
+def test_dispatch_sprinto_evidence_returns_false_without_workflow_check_pk(monkeypatch):
+    """Missing HERMES_SPRINTO_WORKFLOW_CHECK_PK — return False, no network call."""
+    monkeypatch.setenv(SPRINTO_API_KEY_ENV_VAR, "sprinto-test-key")
+    receipt = _sample_receipt()
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        result = dispatch_sprinto_evidence(receipt)
+
+    assert result is False
+    mock_urlopen.assert_not_called()
+
+
+def test_dispatch_sprinto_evidence_returns_false_without_api_key(monkeypatch):
+    """Missing HERMES_SPRINTO_API_KEY — return False, no network call."""
+    monkeypatch.setenv(SPRINTO_WORKFLOW_CHECK_PK_ENV_VAR, "chk_pk_123")
+    receipt = _sample_receipt()
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        result = dispatch_sprinto_evidence(receipt)
+
+    assert result is False
+    mock_urlopen.assert_not_called()
+
+
+def test_dispatch_sprinto_evidence_posts_multipart_with_bearer_and_pass(
+    monkeypatch,
+):
+    """Configured Sprinto POST uses multipart/form-data, Bearer auth, status=PASS."""
+    monkeypatch.setenv(SPRINTO_API_KEY_ENV_VAR, "sprinto-test-key")
+    monkeypatch.setenv(SPRINTO_WORKFLOW_CHECK_PK_ENV_VAR, "chk_pk_456")
+    receipt = _sample_receipt()
+    assert receipt.zero_pii_egress_confirmed is True
+    pdf_bytes = b"%PDF-1.4 hermes-evidence"
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        result = dispatch_sprinto_evidence(receipt, pdf_bytes=pdf_bytes)
+
+    assert result is True
+    sent_request = mock_urlopen.call_args[0][0]
+    assert sent_request.full_url == (
+        "https://app.sprinto.com/api/v1/workflow-checks/chk_pk_456/evidence"
+    )
+    assert sent_request.get_method() == "POST"
+
+    content_type = sent_request.get_header("Content-type")
+    assert content_type is not None
+    assert content_type.startswith("multipart/form-data; boundary=")
+    # Must NOT be bare application/json (old GraphQL path)
+    assert not content_type.startswith("application/json")
+
+    auth = sent_request.get_header("Authorization")
+    assert auth == "Bearer sprinto-test-key"
+    assert sent_request.get_header("Api-key") is None
+
+    body = sent_request.data
+    assert isinstance(body, (bytes, bytearray))
+    assert b'name="data"' in body
+    assert b"Content-Type: application/json" in body
+    assert b'"status": "PASS"' in body
+    assert b'"evaluation_scope": "hermes-relay-phi-canary-test"' in body
+    assert receipt.issued_at.encode("utf-8") in body
+    assert b'name="file"' in body
+    assert b"hermes_evidence.pdf" in body
+    assert pdf_bytes in body
+
+
+def test_dispatch_sprinto_evidence_sets_fail_when_egress_not_confirmed(monkeypatch):
+    """zero_pii_egress_confirmed=False → status=FAIL in multipart metadata."""
+    monkeypatch.setenv(SPRINTO_API_KEY_ENV_VAR, "sprinto-test-key")
+    monkeypatch.setenv(SPRINTO_WORKFLOW_CHECK_PK_ENV_VAR, "chk_pk_789")
+    receipt = _sample_receipt()
+    receipt.zero_pii_egress_confirmed = False
+
+    mock_response = MagicMock()
+    mock_response.status = 201
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        result = dispatch_sprinto_evidence(receipt)
+
+    assert result is True
+    body = mock_urlopen.call_args[0][0].data
+    assert b'"status": "FAIL"' in body
+    assert b'name="file"' not in body
+
+
+def test_dispatch_sprinto_evidence_never_raises_on_network_failure(monkeypatch):
+    monkeypatch.setenv(SPRINTO_API_KEY_ENV_VAR, "sprinto-test-key")
+    monkeypatch.setenv(SPRINTO_WORKFLOW_CHECK_PK_ENV_VAR, "chk_pk_fail")
+    receipt = _sample_receipt()
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=urllib.error.URLError("connection refused"),
+    ):
+        result = dispatch_sprinto_evidence(receipt)
+
+    assert result is False

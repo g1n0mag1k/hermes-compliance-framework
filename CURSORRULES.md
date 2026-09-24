@@ -20,6 +20,7 @@ Exit target: Drata or Nightfall acquisition
 - HMAC-SHA256 attestation chain wired and persisting to SQLite
 - Generic webhook dispatcher working in webhooks.py
 - Drata CCT: TWO active implementations exist. Path A: hermes/webhooks.py dispatch_drata_cct() — flat JSON, no retry, no idempotency. Path B: gateway/evidence_export/ DrataExporter — {"data":...} wrapper, idempotency key, retries. Both use HERMES_DRATA_CCT_URL + HERMES_DRATA_API_KEY. CONTRACT-TESTED against mocks only. NOT live-validated.
+- Sprinto: REST multipart/form-data POST to /api/v1/workflow-checks/{HERMES_SPRINTO_WORKFLOW_CHECK_PK}/evidence, Bearer auth, metadata JSON + PDF binary. workflowCheckPk must be obtained from Sprinto dashboard. NOT live-validated.
 - pyproject.toml defines the hermes-relay and hermes-verify CLI entry
   points (local install via pip/pipx from the repo). PyPI availability: UNKNOWN
 
@@ -76,6 +77,9 @@ HERMES_VAULT_KEY      — AES-256-GCM vault key
 HERMES_WEBHOOK_URL    — existing generic webhook target
 HERMES_DRATA_CCT_URL  — Drata CCT endpoint
 HERMES_DRATA_API_KEY  — Drata API key for CCT auth
+HERMES_SPRINTO_API_KEY           — Sprinto Bearer token (Open Evidence Ingestion)
+HERMES_SPRINTO_WORKFLOW_CHECK_PK — Sprinto workflow check PK for evidence POST
+HERMES_SPRINTO_BASE_URL          — optional; default https://app.sprinto.com
 
 ### Gateway — AI Enforcement Proxy (ADDED Sept 17 2026)
 gateway/app.py              — FastAPI gateway application

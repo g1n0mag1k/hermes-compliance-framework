@@ -36,6 +36,11 @@ WEBHOOK_AUTH_HEADER_ENV_VAR = "HERMES_WEBHOOK_AUTH_HEADER"
 WEBHOOK_AUTH_VALUE_ENV_VAR = "HERMES_WEBHOOK_AUTH_VALUE"
 WEBHOOK_TIMEOUT_SECONDS = 3.0
 
+# Sprinto Open Evidence Ingestion (REST multipart — NOT GraphQL)
+SPRINTO_API_KEY_ENV_VAR = "HERMES_SPRINTO_API_KEY"
+SPRINTO_WORKFLOW_CHECK_PK_ENV_VAR = "HERMES_SPRINTO_WORKFLOW_CHECK_PK"
+SPRINTO_BASE_URL_ENV_VAR = "HERMES_SPRINTO_BASE_URL"
+
 
 def build_event_payload(receipt: ComplianceReceipt, event_type: str = "scrub") -> dict:
     """
@@ -270,65 +275,91 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         return False
 
 
-def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> bool:
+def dispatch_sprinto_evidence(receipt, pdf_bytes: bytes = None, chain_integrity: bool = False) -> bool:
     """
-    POST a Hermes scan receipt as custom evidence to Sprinto via GraphQL API.
+    POST a Hermes gateway receipt as custom evidence to Sprinto.
 
-    Sprinto uses API key auth and a GraphQL endpoint.
-    Confirm the exact mutation name and input type with Atharva Lad on the
-    partner call before wiring HERMES_SPRINTO_MUTATION.
+    Uses Sprinto's Open Evidence Ingestion REST API (multipart/form-data).
+    The workflowCheckPk must be obtained from Sprinto and set as an env var.
+
+    NOT GraphQL. Previous implementation was incorrect.
 
     Env vars required:
-        HERMES_SPRINTO_API_KEY
+        HERMES_SPRINTO_API_KEY         Bearer token from Sprinto API settings
+        HERMES_SPRINTO_WORKFLOW_CHECK_PK   Check PK from Sprinto dashboard
     Optional:
-        HERMES_SPRINTO_GRAPHQL_URL  (default: https://app.sprinto.com/dev-api/graphql)
-        HERMES_SPRINTO_MUTATION     (confirm with Sprinto before setting)
-    """
-    import json, urllib.request, urllib.error, os, logging
-    logger = logging.getLogger("hermes.webhooks")
+        HERMES_SPRINTO_BASE_URL        Default: https://app.sprinto.com
 
-    api_key = os.environ.get("HERMES_SPRINTO_API_KEY")
-    if not api_key:
+    STATUS: ARCHITECTURE CORRECT — NOT LIVE VALIDATED against real Sprinto tenant.
+    The multipart shape and auth model are confirmed from Sprinto partner docs.
+    workflowCheckPk must be confirmed on the partner call.
+    """
+    import uuid
+
+    api_key = os.environ.get(SPRINTO_API_KEY_ENV_VAR)
+    check_pk = os.environ.get(SPRINTO_WORKFLOW_CHECK_PK_ENV_VAR)
+
+    if not api_key or not check_pk:
+        logger.debug("Sprinto not configured (missing API key or workflowCheckPk) — skipping")
         return False
 
-    graphql_url = os.environ.get(
-        "HERMES_SPRINTO_GRAPHQL_URL",
-        "https://app.sprinto.com/dev-api/graphql",
+    base_url = os.environ.get(SPRINTO_BASE_URL_ENV_VAR, "https://app.sprinto.com").rstrip("/")
+    endpoint = f"{base_url}/api/v1/workflow-checks/{check_pk}/evidence"
+
+    # Determine pass/fail from receipt
+    status = "PASS" if receipt.zero_pii_egress_confirmed else "FAIL"
+
+    # Build multipart body manually (stdlib only — no new dependency)
+    boundary = uuid.uuid4().hex
+
+    metadata = json.dumps({
+        "status": status,
+        "timestamp": receipt.issued_at,
+        "evaluation_scope": "hermes-relay-phi-canary-test",
+    }).encode("utf-8")
+
+    body_parts = []
+    body_parts.append(f"--{boundary}\r\n".encode())
+    body_parts.append(
+        b'Content-Disposition: form-data; name="data"\r\n'
+        b"Content-Type: application/json\r\n\r\n"
     )
-    mutation = os.environ.get("HERMES_SPRINTO_MUTATION", "CONFIRM_WITH_SPRINTO")
+    body_parts.append(metadata)
+    body_parts.append(b"\r\n")
+
+    if pdf_bytes:
+        body_parts.append(f"--{boundary}\r\n".encode())
+        body_parts.append(
+            b'Content-Disposition: form-data; name="file"; '
+            b'filename="hermes_evidence.pdf"\r\n'
+            b"Content-Type: application/pdf\r\n\r\n"
+        )
+        body_parts.append(pdf_bytes)
+        body_parts.append(b"\r\n")
+
+    body_parts.append(f"--{boundary}--\r\n".encode())
+    body = b"".join(body_parts)
 
     req = urllib.request.Request(
-        graphql_url,
-        data=json.dumps({
-            "query": "mutation AddHermesEvidence($input: HermesEvidenceInput) { " + mutation + "(input: $input) { success } }",
-            "variables": {
-                "input": {
-                    "receipt_id": receipt.receipt_id,
-                    "scan_timestamp": receipt.issued_at,
-                    "phi_classes_detected": receipt.pii_classes_detected,
-                    "zero_pii_egress_confirmed": receipt.zero_pii_egress_confirmed,
-                    "chain_position": receipt.chain_position,
-                    "chain_integrity": chain_integrity,
-                }
-            },
-            "operationName": "AddHermesEvidence",
-        }).encode("utf-8"),
+        endpoint,
+        data=body,
         headers={
-            "Content-Type": "application/json",
-            "api-key": api_key,
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
             "User-Agent": "hermes-relay-sprinto/1.0",
         },
         method="POST",
     )
+
     try:
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
             success = 200 <= resp.status < 300
             if not success:
-                logger.warning("Sprinto evidence push returned non-2xx: %s", resp.status)
+                logger.warning("Sprinto evidence POST returned non-2xx: %s", resp.status)
             return success
     except urllib.error.URLError as exc:
-        logger.warning("Sprinto evidence push failed: %s", exc)
+        logger.warning("Sprinto evidence POST failed: %s", exc)
         return False
     except Exception as exc:
-        logger.warning("Sprinto evidence push unexpected error: %s", exc)
+        logger.warning("Sprinto evidence POST unexpected error: %s", exc)
         return False

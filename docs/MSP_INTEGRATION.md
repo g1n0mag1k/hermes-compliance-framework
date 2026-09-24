@@ -169,3 +169,15 @@ Sui-Generis LLC — Rocky Top, Tennessee
 ## Vanta Integration Environment Variables
 
 ## Sprinto Integration Environment Variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `HERMES_SPRINTO_API_KEY` | yes | Bearer token from Sprinto API settings |
+| `HERMES_SPRINTO_WORKFLOW_CHECK_PK` | yes | Workflow check PK for evidence POST |
+| `HERMES_SPRINTO_BASE_URL` | no | Default `https://app.sprinto.com` |
+
+Evidence is posted as REST `multipart/form-data` to
+`/api/v1/workflow-checks/{HERMES_SPRINTO_WORKFLOW_CHECK_PK}/evidence`
+(Bearer auth, JSON metadata + optional PDF). See
+[`docs/integrations/SPRINTO.md`](integrations/SPRINTO.md).
+Not live-validated.
