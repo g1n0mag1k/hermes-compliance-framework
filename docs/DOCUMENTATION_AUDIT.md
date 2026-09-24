@@ -6,7 +6,7 @@ Code is source of truth. Contradictions found and corrections applied.
 
 | Topic | Was claimed | Actual behavior | Action |
 |---|---|---|---|
-| Gateway vs scrub Drata | MSP guide implies all evidence → Drata | Only `/v1/scrub` calls `dispatch_drata_cct()` | Added `GATEWAY_EVIDENCE_EXPORT.md`; qualified MSP guide scope |
+| Gateway vs scrub Drata | MSP guide implies all evidence → Drata | Two paths send to Drata: Path A (`hermes/webhooks.py` `dispatch_drata_cct()`, from `/v1/scrub` and `/v1/trial-scan`) and Path B (gateway `evidence_export` `DrataExporter`). Contract-tested against mocks only; live Drata acceptance UNKNOWN. *(Updated 2026-09-24: original entry predated the gateway exporter.)* | Added `GATEWAY_EVIDENCE_EXPORT.md`; qualified MSP guide scope |
 | Default enforcement | README/implied "blocking" | `HIPAA_STRICT.text_action=REDACT` | Documented BLOCK vs REDACT; added `HIPAA_PRODUCTION_BLOCK` |
 | Fail-closed scope | "Fail-closed gateway" globally | Upstream transport failures occur after forward | Documented PRE-FORWARD vs UPSTREAM TRANSPORT in `CURRENT_LIMITATIONS.md` |
 | Gateway signing | Silent ephemeral key | Ephemeral in dev only | Production requires keystore; updated SECURITY.md |
@@ -38,5 +38,5 @@ Code is source of truth. Contradictions found and corrections applied.
 
 ## Remaining follow-ups
 
-- Update `CURSORRULES.md` test count (502) when next editing that file
+- ~~Update `CURSORRULES.md` test count (502) when next editing that file~~ — RESOLVED 2026-09-24: test floor is now 562 in `CURSORRULES.md` and `AGENTS.md`
 - Notion workspace sync (see agent report)
