@@ -7,11 +7,42 @@ Gateway enforcement decision
     → V2 COSE_Sign1 receipt (local SQLite)
     → EvidenceEvent (metadata-only contract)
     → optional exporters (best-effort, post-decision):
-        - WebhookExporter (HERMES_WEBHOOK_URL)
-        - DrataConnector (HERMES_DRATA_CCT_URL) — canonical Drata path
+        - WebhookExporter (HERMES_WEBHOOK_URL) — inline, before the response
+        - Drata: enqueue to local evidence outbox (SQLite, no network)
+            → response returned to client
+            → background flush_outbox() → DrataConnector (HERMES_DRATA_CCT_URL)
 ```
 
-Export runs **after** receipt persistence inside `issue_gateway_receipt()`. Exporter failure never changes the enforcement decision.
+Export runs **after** receipt persistence inside `issue_gateway_receipt()`. Exporter failure never changes the enforcement decision. Drata is never contacted before the gateway response is sent.
+
+## Drata evidence outbox
+
+`gateway/evidence_export/outbox.py` stores each Drata-bound `EvidenceEvent` in
+`evidence_outbox` inside `{HERMES_DATA_DIR}/evidence_outbox.db` (stdlib `sqlite3`,
+same as the receipt chain). The gateway route schedules `flush_outbox(workspace_id)`
+as a FastAPI background task, which runs after the response has been sent.
+
+| Column | Meaning |
+|---|---|
+| `event_id` | Primary key; set once by `build_evidence_event()`. Duplicate inserts raise `DuplicateEventError`. |
+| `workspace_id`, `created_at` | Owning workspace; UTC ISO-8601 enqueue time |
+| `evidence_payload` | `EvidenceEvent.serialize()` — metadata-only; `assert_phi_safe()` runs before insert |
+| `attempt_count` | Drata send attempts, counted when a flush claims the row |
+| `next_attempt_at` | Next retry time (PENDING) or lease expiry (PROCESSING) |
+| `status` | `PENDING`, `PROCESSING`, `EXPORTED`, `DEAD_LETTER` (`FAILED` is not used) |
+| `last_error` | `sanitize_error()` output: URLs, hosts, bearer/basic tokens, key=value secrets, long tokens, configured Drata URL/key, and PHI-shaped values removed; max 200 chars |
+
+Retry semantics:
+
+- Each flush makes one `DrataConnector.send_evidence()` call per due row (which itself retries 5xx/network errors twice inline, 3s timeout).
+- Transient (5xx, 429, network error, timeout, exporter exception, malformed exporter result): back to `PENDING`, backoff `30s × 2^(attempt−1)` capped at 1h.
+- Permanent (4xx except 429, `phi_safety_check_failed`, `insecure_url_refused`, `not_configured`, unparsable stored payload): `DEAD_LETTER` immediately.
+- `MAX_OUTBOX_ATTEMPTS = 8`: the 8th failed attempt moves the row to `DEAD_LETTER`.
+- `DEAD_LETTER` rows are never retried and never deleted; they remain for operator review.
+- A `PROCESSING` row whose 300s lease expired (flush crashed mid-send) is reclaimed.
+- Every attempt sends the same `event_id` as `X-Idempotency-Key`. Whether Drata honors that header is **UNKNOWN**, so a retry after a lost 2xx could create a duplicate Drata record.
+
+If the outbox write fails, the error is logged and the gateway response is returned unchanged.
 
 ## EvidenceEvent
 
@@ -176,6 +207,8 @@ Category names (e.g. `HIPAA_SSN`) and counts of categories are metadata — not 
 ## Limitations (not implemented)
 
 - Drata adapter implemented and contract-tested; live tenant validation pending
+- Outbox is flushed only by gateway traffic for the same workspace; there is no periodic scheduler, so queued events for an idle workspace wait for its next request (or a manual `flush_outbox()` call)
+- No API or dashboard view of `DEAD_LETTER` rows yet; inspect `evidence_outbox.db` directly
 - No immutable external storage (WORM/TSA/SCITT)
 - No streaming enforcement evidence
 - SQLite receipt storage remains mutable local filesystem

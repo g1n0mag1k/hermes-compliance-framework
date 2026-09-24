@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import logging
 import urllib.error
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -41,7 +43,18 @@ from gateway.evidence_export.exporters import (
     WebhookExporter,
     get_configured_exporters,
 )
-from gateway.pipeline import GatewayPipeline
+from gateway.evidence_export import outbox
+from gateway.evidence_export.outbox import (
+    MAX_OUTBOX_ATTEMPTS,
+    DuplicateEventError,
+    OutboxStatus,
+    enqueue_event,
+    flush_outbox,
+    get_outbox_row,
+    list_outbox_rows,
+    sanitize_error,
+)
+from gateway.pipeline import GatewayPipeline, GatewayRequest
 from gateway.policy import Policy, set_workspace_policy, clear_workspace_policy
 from hermes.receipts.v2.builder import ReceiptV2Builder
 from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
@@ -1055,3 +1068,520 @@ def test_dispatch_evidence_export_runs_all_configured_exporters(monkeypatch):
 def test_try_export_evidence_returns_none_when_unconfigured():
     receipt = _build_test_receipt()
     assert try_export_evidence(receipt, "ws-01") is None
+
+
+# -------------------------------------------------------------------------
+# Persistent evidence outbox — Drata is never on the enforcement path
+# -------------------------------------------------------------------------
+
+OUTBOX_DRATA_URL = "https://api.drata.com/cct/secret-connection-777"
+
+
+@pytest.fixture()
+def drata_configured(monkeypatch):
+    monkeypatch.setenv(DRATA_CCT_URL_ENV, OUTBOX_DRATA_URL)
+    monkeypatch.setenv(DRATA_API_KEY_ENV, DRATA_SECRET_KEY)
+    monkeypatch.setattr("gateway.evidence_export.exporters.time.sleep", lambda _s: None)
+
+
+def _drata_urlopen(monkeypatch, behavior: str) -> list:
+    """Patch the Drata transport. behavior: down | http_5xx | http_4xx | http_429 | ok."""
+    calls: list = []
+
+    def _urlopen(req, timeout=None):
+        calls.append(req)
+        if behavior == "down":
+            raise urllib.error.URLError("[Errno 111] Connection refused")
+        if behavior.startswith("http_") and behavior != "http_ok":
+            code = {"http_5xx": 503, "http_4xx": 401, "http_429": 429}[behavior]
+            raise urllib.error.HTTPError(req.full_url, code, "error", {}, None)
+        return _mock_http_response(200)
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+    return calls
+
+
+def _future(days: int) -> datetime:
+    return datetime.now(timezone.utc) + timedelta(days=days)
+
+
+def test_outbox_enforcement_returns_response_when_drata_down(
+    client, workspace, upstream_capture, drata_configured, monkeypatch
+):
+    ws, api_key = workspace
+    drata_calls = _drata_urlopen(monkeypatch, "down")
+
+    response = client.post(
+        "/gateway/openai/v1/chat/completions",
+        headers={"X-API-Key": api_key},
+        json=_openai_chat("Explain photosynthesis briefly."),
+    )
+
+    assert response.status_code == 200
+    assert len(upstream_capture["requests"]) == 1
+    assert drata_calls, "background flush should have attempted Drata"
+    rows = list_outbox_rows(ws.workspace_id)
+    assert len(rows) == 1
+    assert rows[0]["status"] == OutboxStatus.PENDING.value
+    assert rows[0]["attempt_count"] == 1
+    assert rows[0]["last_error"]
+
+
+def test_outbox_block_stays_block_when_drata_down(
+    client, workspace, upstream_capture, drata_configured, monkeypatch
+):
+    ws, api_key = workspace
+    set_workspace_policy(ws.workspace_id, BLOCK_POLICY)
+    _drata_urlopen(monkeypatch, "down")
+
+    response = client.post(
+        "/gateway/openai/v1/chat/completions",
+        headers={"X-API-Key": api_key},
+        json=_openai_chat(f"Patient SSN is {PHI_SSN}"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "phi_detected"
+    receipt = gateway_evidence.get_gateway_receipt(ws, response.json()["receipt_digest"])
+    assert receipt["payload"]["decision"] == "BLOCK"
+    stored = json.loads(list_outbox_rows(ws.workspace_id)[0]["evidence_payload"])
+    assert stored["decision"] == "BLOCK"
+    clear_workspace_policy(ws.workspace_id)
+
+
+@pytest.mark.parametrize("drata_state", ["unconfigured", "down", "http_5xx", "http_4xx", "ok"])
+def test_outbox_blocked_request_upstream_not_contacted_regardless_of_drata_state(
+    client, workspace, upstream_capture, monkeypatch, drata_state
+):
+    ws, api_key = workspace
+    set_workspace_policy(ws.workspace_id, BLOCK_POLICY)
+    if drata_state != "unconfigured":
+        monkeypatch.setenv(DRATA_CCT_URL_ENV, OUTBOX_DRATA_URL)
+        monkeypatch.setattr("gateway.evidence_export.exporters.time.sleep", lambda _s: None)
+        _drata_urlopen(monkeypatch, drata_state)
+
+    response = client.post(
+        "/gateway/openai/v1/chat/completions",
+        headers={"X-API-Key": api_key},
+        json=_openai_chat(f"Patient SSN is {PHI_SSN}"),
+    )
+
+    assert response.status_code == 403
+    assert upstream_capture["requests"] == []
+    receipt = gateway_evidence.get_gateway_receipt(ws, response.json()["receipt_digest"])
+    assert receipt["payload"]["forwarded"] is False
+    rows = list_outbox_rows(ws.workspace_id)
+    if drata_state == "unconfigured":
+        assert rows == []
+    else:
+        assert len(rows) == 1
+        assert json.loads(rows[0]["evidence_payload"])["upstream_contacted"] is False
+    clear_workspace_policy(ws.workspace_id)
+
+
+def test_outbox_event_written_before_any_drata_network_call(
+    workspace, upstream_capture, drata_configured, monkeypatch
+):
+    ws, _ = workspace
+    set_workspace_policy(ws.workspace_id, BLOCK_POLICY)
+    rows_seen_at_send: list[list[dict]] = []
+
+    def _urlopen(req, timeout=None):
+        rows_seen_at_send.append(list_outbox_rows(ws.workspace_id))
+        return _mock_http_response(200)
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+
+    result = gateway_app._pipeline.process(
+        GatewayRequest(
+            workspace_id=ws.workspace_id,
+            provider_id="openai",
+            method="POST",
+            path="/v1/chat/completions",
+            query_string="",
+            headers={"content-type": "application/json"},
+            body_bytes=json.dumps(_openai_chat(f"Patient SSN is {PHI_SSN}")).encode(),
+            content_type="application/json",
+        ),
+        ws,
+    )
+
+    # Enforcement completed with no Drata call; the event is already queued.
+    assert result.decision.decision == "BLOCK"
+    assert rows_seen_at_send == []
+    rows = list_outbox_rows(ws.workspace_id)
+    assert len(rows) == 1
+    assert rows[0]["status"] == OutboxStatus.PENDING.value
+    assert rows[0]["attempt_count"] == 0
+    event_id = rows[0]["event_id"]
+
+    assert flush_outbox(ws.workspace_id)["exported"] == 1
+    assert len(rows_seen_at_send) == 1
+    assert [r["event_id"] for r in rows_seen_at_send[0]] == [event_id]
+    assert rows_seen_at_send[0][0]["status"] == OutboxStatus.PROCESSING.value
+    assert get_outbox_row(event_id)["status"] == OutboxStatus.EXPORTED.value
+    clear_workspace_policy(ws.workspace_id)
+
+
+def test_outbox_retry_reuses_same_event_id(drata_configured, monkeypatch):
+    event = _sample_event(event_id="evt-retry-0001")
+    enqueue_event(event)
+    sent: list[tuple[str, str]] = []
+    responses = iter(["http_5xx", "http_5xx", "http_5xx", "ok"])
+
+    def _urlopen(req, timeout=None):
+        body = json.loads(req.data.decode("utf-8"))
+        sent.append((req.get_header("X-idempotency-key"), body["data"]["event_id"]))
+        if next(responses) == "ok":
+            return _mock_http_response(200)
+        raise urllib.error.HTTPError(req.full_url, 503, "error", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+
+    assert flush_outbox()["retry_scheduled"] == 1
+    assert get_outbox_row(event.event_id)["status"] == OutboxStatus.PENDING.value
+    assert flush_outbox(now=_future(1))["exported"] == 1
+
+    assert len(sent) == 4
+    assert set(sent) == {(event.event_id, event.event_id)}
+    rows = list_outbox_rows()
+    assert [r["event_id"] for r in rows] == [event.event_id]
+    assert rows[0]["status"] == OutboxStatus.EXPORTED.value
+    assert rows[0]["attempt_count"] == 2
+
+
+def test_outbox_rejects_duplicate_event_id():
+    original = _sample_event(event_id="evt-dup-0001", decision="BLOCK")
+    enqueue_event(original)
+
+    with pytest.raises(DuplicateEventError):
+        enqueue_event(_sample_event(event_id="evt-dup-0001", decision="ALLOW"))
+
+    rows = list_outbox_rows()
+    assert len(rows) == 1
+    assert json.loads(rows[0]["evidence_payload"])["decision"] == "BLOCK"
+
+
+def test_outbox_duplicate_insert_does_not_break_gateway_response(
+    client, workspace, upstream_capture, drata_configured, monkeypatch
+):
+    _, api_key = workspace
+    _drata_urlopen(monkeypatch, "ok")
+    import gateway.evidence_export.event as event_module
+
+    monkeypatch.setattr(
+        event_module,
+        "uuid",
+        SimpleNamespace(uuid4=lambda: "fixed-event-id-0001"),
+    )
+    for _ in range(2):
+        response = client.post(
+            "/gateway/openai/v1/chat/completions",
+            headers={"X-API-Key": api_key},
+            json=_openai_chat("Explain photosynthesis briefly."),
+        )
+        assert response.status_code == 200
+    assert [r["event_id"] for r in list_outbox_rows()] == ["fixed-event-id-0001"]
+
+
+@pytest.mark.parametrize("transient_error", ["HTTP 503", "HTTP 500", "HTTP 429", "timed out"])
+def test_outbox_transient_failure_retries_up_to_max(drata_configured, transient_error):
+    event = _sample_event(event_id="evt-transient-0001")
+    enqueue_event(event)
+
+    with patch(
+        "gateway.evidence_export.exporters._post_json",
+        return_value=(False, 3, transient_error),
+    ) as mock_post:
+        for day in range(MAX_OUTBOX_ATTEMPTS + 3):
+            flush_outbox(now=_future(day))
+
+    assert mock_post.call_count == MAX_OUTBOX_ATTEMPTS
+    row = get_outbox_row(event.event_id)
+    assert row["status"] == OutboxStatus.DEAD_LETTER.value
+    assert row["attempt_count"] == MAX_OUTBOX_ATTEMPTS
+
+
+def test_outbox_transient_failure_schedules_backoff(drata_configured):
+    enqueue_event(_sample_event(event_id="evt-backoff-0001"))
+    start = datetime.now(timezone.utc)
+
+    with patch(
+        "gateway.evidence_export.exporters._post_json",
+        return_value=(False, 3, "HTTP 503"),
+    ) as mock_post:
+        flush_outbox(now=start)
+        flush_outbox(now=start + timedelta(seconds=1))
+
+    assert mock_post.call_count == 1
+    row = get_outbox_row("evt-backoff-0001")
+    assert datetime.fromisoformat(row["next_attempt_at"]) > start
+    assert row["status"] == OutboxStatus.PENDING.value
+
+
+@pytest.mark.parametrize("status_code", [400, 401, 403, 404, 422])
+def test_outbox_permanent_4xx_dead_letters_without_exhausting_retries(
+    drata_configured, monkeypatch, status_code
+):
+    event = _sample_event(event_id=f"evt-perm-{status_code}")
+    enqueue_event(event)
+    calls: list = []
+
+    def _urlopen(req, timeout=None):
+        calls.append(req)
+        raise urllib.error.HTTPError(req.full_url, status_code, "error", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+
+    assert flush_outbox()["dead_lettered"] == 1
+    assert len(calls) == 1
+    row = get_outbox_row(event.event_id)
+    assert row["status"] == OutboxStatus.DEAD_LETTER.value
+    assert row["attempt_count"] == 1
+    assert row["last_error"] == f"HTTP {status_code}"
+
+
+def test_outbox_dead_letter_events_are_not_retried(drata_configured):
+    enqueue_event(_sample_event(event_id="evt-dead-0001"))
+    with patch(
+        "gateway.evidence_export.exporters._post_json",
+        return_value=(False, 1, "HTTP 401"),
+    ):
+        flush_outbox()
+    assert get_outbox_row("evt-dead-0001")["status"] == OutboxStatus.DEAD_LETTER.value
+
+    with patch(
+        "gateway.evidence_export.exporters._post_json",
+        return_value=(True, 1, None),
+    ) as mock_post:
+        for day in range(1, 5):
+            assert flush_outbox(now=_future(day)) == {
+                "exported": 0,
+                "retry_scheduled": 0,
+                "dead_lettered": 0,
+            }
+
+    mock_post.assert_not_called()
+    row = get_outbox_row("evt-dead-0001")
+    assert row["status"] == OutboxStatus.DEAD_LETTER.value
+    assert row["attempt_count"] == 1
+
+
+def test_outbox_reclaims_expired_processing_lease(drata_configured):
+    enqueue_event(_sample_event(event_id="evt-lease-0001"))
+    conn = outbox._connect()
+    try:
+        outbox._claim_due_rows(conn, None, datetime.now(timezone.utc), 10)
+    finally:
+        conn.close()
+    assert get_outbox_row("evt-lease-0001")["status"] == OutboxStatus.PROCESSING.value
+
+    with patch(
+        "gateway.evidence_export.exporters._post_json",
+        return_value=(True, 1, None),
+    ) as mock_post:
+        flush_outbox()
+        mock_post.assert_not_called()
+        flush_outbox(now=_future(1))
+
+    assert mock_post.call_count == 1
+    row = get_outbox_row("evt-lease-0001")
+    assert row["status"] == OutboxStatus.EXPORTED.value
+    assert row["attempt_count"] == 2
+
+
+def test_outbox_flush_noop_when_drata_not_configured():
+    enqueue_event(_sample_event(event_id="evt-unconfigured-0001"))
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        flush_outbox()
+    mock_urlopen.assert_not_called()
+    row = get_outbox_row("evt-unconfigured-0001")
+    assert row["status"] == OutboxStatus.PENDING.value
+    assert row["attempt_count"] == 0
+
+
+def test_outbox_flush_only_touches_requested_workspace(drata_configured):
+    enqueue_event(_sample_event(event_id="evt-ws-a", workspace_id="ws-a"))
+    enqueue_event(_sample_event(event_id="evt-ws-b", workspace_id="ws-b"))
+    with patch(
+        "gateway.evidence_export.exporters._post_json",
+        return_value=(True, 1, None),
+    ):
+        flush_outbox("ws-a")
+    assert get_outbox_row("evt-ws-a")["status"] == OutboxStatus.EXPORTED.value
+    assert get_outbox_row("evt-ws-b")["status"] == OutboxStatus.PENDING.value
+
+
+def _raise_exporter(self, event):
+    raise RuntimeError("exporter exploded")
+
+
+def _malformed_status_urlopen(req, timeout=None):
+    return _mock_http_response(status="not-a-status")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "patch_target,replacement",
+    [
+        ("send_evidence", lambda self, event: "garbage-response"),
+        ("send_evidence", lambda self, event: ExportResult(exporter="drata_cct", success="yes")),  # type: ignore[arg-type]
+        ("send_evidence", lambda self, event: None),
+        ("send_evidence", _raise_exporter),
+        ("urlopen", _malformed_status_urlopen),
+    ],
+)
+def test_outbox_malformed_exporter_response_does_not_corrupt_enforcement(
+    client, workspace, upstream_capture, drata_configured, monkeypatch, patch_target, replacement
+):
+    ws, api_key = workspace
+    set_workspace_policy(ws.workspace_id, BLOCK_POLICY)
+    if patch_target == "urlopen":
+        monkeypatch.setattr("urllib.request.urlopen", replacement)
+    else:
+        monkeypatch.setattr(DrataConnector, "send_evidence", replacement)
+
+    response = client.post(
+        "/gateway/openai/v1/chat/completions",
+        headers={"X-API-Key": api_key},
+        json=_openai_chat(f"Patient SSN is {PHI_SSN}"),
+    )
+
+    assert response.status_code == 403
+    body = response.json()
+    assert body["error"]["code"] == "phi_detected"
+    assert upstream_capture["requests"] == []
+    receipt = gateway_evidence.get_gateway_receipt(ws, body["receipt_digest"])
+    assert receipt["payload"]["decision"] == "BLOCK"
+    assert receipt["payload"]["forwarded"] is False
+    rows = list_outbox_rows(ws.workspace_id)
+    assert len(rows) == 1
+    assert rows[0]["status"] == OutboxStatus.PENDING.value
+    assert rows[0]["last_error"]
+    assert json.loads(rows[0]["evidence_payload"])["receipt_digest"] == body["receipt_digest"]
+    clear_workspace_policy(ws.workspace_id)
+
+
+def test_outbox_rows_contain_no_phi(client, workspace, upstream_capture, drata_configured, monkeypatch):
+    ws, api_key = workspace
+    _drata_urlopen(monkeypatch, "down")
+    phi_values = (PHI_SSN, PHI_NAME, PHI_MRN, PHI_EMAIL, PHI_PHONE)
+    prompt = f"Patient {PHI_NAME} SSN {PHI_SSN} MRN {PHI_MRN} email {PHI_EMAIL} phone {PHI_PHONE}"
+
+    client.post(
+        "/gateway/openai/v1/chat/completions",
+        headers={"X-API-Key": api_key},
+        json=_openai_chat(prompt),
+    )
+    set_workspace_policy(ws.workspace_id, BLOCK_POLICY)
+    client.post(
+        "/gateway/openai/v1/chat/completions?ssn=123-45-6789",
+        headers={"X-API-Key": api_key},
+        json=_openai_chat(prompt),
+    )
+    clear_workspace_policy(ws.workspace_id)
+
+    rows = list_outbox_rows(ws.workspace_id)
+    assert len(rows) == 2
+    raw_db = outbox.outbox_db_path().read_bytes().decode("latin-1")
+    for row in rows:
+        stored = json.dumps(row)
+        for phi in phi_values:
+            assert phi not in stored
+        payload = json.loads(row["evidence_payload"])
+        assert set(payload) <= set(EvidenceEvent.model_fields)
+        for forbidden in ("raw_request_body", "request_body", "prompt", "completion", "messages", "content"):
+            assert forbidden not in payload
+        assert "photosynthesis" not in stored
+    for phi in phi_values:
+        assert phi not in raw_db
+
+
+def test_outbox_refuses_phi_unsafe_event():
+    with pytest.raises(ValueError, match="forbidden PHI"):
+        enqueue_event(_sample_event(endpoint_path=f"/v1/chat?ssn={PHI_SSN}"))
+    assert list_outbox_rows() == []
+
+
+def test_outbox_last_error_contains_no_credentials(drata_configured, monkeypatch, caplog):
+    enqueue_event(_sample_event(event_id="evt-cred-0001"))
+    leaked = (
+        f"POST {OUTBOX_DRATA_URL} failed: Authorization: Bearer {DRATA_SECRET_KEY} "
+        "api_key=sk-live-0123456789abcdefghij token=tok_abcdef "
+        "host api.drata.com:443 unreachable"
+    )
+
+    def _leaky(self, event):
+        raise RuntimeError(leaked)
+
+    monkeypatch.setattr(DrataConnector, "send_evidence", _leaky)
+    with caplog.at_level(logging.DEBUG):
+        flush_outbox()
+
+    last_error = get_outbox_row("evt-cred-0001")["last_error"]
+    assert last_error
+    for secret in (
+        DRATA_SECRET_KEY,
+        OUTBOX_DRATA_URL,
+        "secret-connection-777",
+        "api.drata.com",
+        "sk-live-0123456789abcdefghij",
+        "tok_abcdef",
+        "https://",
+    ):
+        assert secret not in last_error
+        assert secret not in caplog.text
+
+
+def test_outbox_last_error_from_network_failure_has_no_credentials(drata_configured, monkeypatch):
+    enqueue_event(_sample_event(event_id="evt-cred-0002"))
+
+    def _urlopen(req, timeout=None):
+        raise urllib.error.URLError(f"cannot reach {OUTBOX_DRATA_URL} with key {DRATA_SECRET_KEY}")
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+    flush_outbox()
+
+    last_error = get_outbox_row("evt-cred-0002")["last_error"]
+    for secret in (DRATA_SECRET_KEY, OUTBOX_DRATA_URL, "secret-connection-777", "api.drata.com"):
+        assert secret not in last_error
+
+
+def test_sanitize_error_strips_urls_hosts_and_credentials():
+    raw = (
+        "https://user:pw@example.com/path?api_key=abc failed; "
+        "Authorization: Basic dXNlcjpwYXNz; password=hunter2; "
+        f"ssn {PHI_SSN}; token ghp_abcdefghijklmnopqrstuvwxyz0123"
+    )
+    cleaned = sanitize_error(raw)
+    for secret in ("example.com", "user:pw", "dXNlcjpwYXNz", "hunter2", PHI_SSN, "ghp_abcdefghijklmnopqrstuvwxyz0123"):
+        assert secret not in cleaned
+    assert len(sanitize_error("x" * 1000)) <= outbox.MAX_ERROR_LENGTH
+    assert sanitize_error("HTTP 503") == "HTTP 503"
+
+
+@pytest.mark.parametrize("policy", [None, BLOCK_POLICY])
+def test_outbox_write_failure_still_returns_gateway_response(
+    client, workspace, upstream_capture, drata_configured, monkeypatch, tmp_path, caplog, policy
+):
+    ws, api_key = workspace
+    if policy is not None:
+        set_workspace_policy(ws.workspace_id, policy)
+    unwritable = tmp_path / "outbox-is-a-directory"
+    unwritable.mkdir()
+    monkeypatch.setattr(outbox, "outbox_db_path", lambda: unwritable)
+    drata_calls = _drata_urlopen(monkeypatch, "ok")
+
+    with caplog.at_level(logging.WARNING, logger="hermes.gateway.evidence_export"):
+        response = client.post(
+            "/gateway/openai/v1/chat/completions",
+            headers={"X-API-Key": api_key},
+            json=_openai_chat(f"Patient SSN is {PHI_SSN}"),
+        )
+
+    assert response.status_code == (403 if policy is not None else 200)
+    assert len(gateway_evidence.list_gateway_receipts(ws)) == 1
+    assert "outbox write failed" in caplog.text
+    assert drata_calls == []
+    if policy is not None:
+        assert upstream_capture["requests"] == []
+        clear_workspace_policy(ws.workspace_id)

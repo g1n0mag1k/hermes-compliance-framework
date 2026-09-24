@@ -6,7 +6,7 @@ import time
 from collections import defaultdict
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
 from hermes.classifier import DetectorFailureError, scrub_payload
@@ -18,6 +18,7 @@ from gateway.evidence import (
     preload_gateway_signer,
     validate_gateway_signing_config,
 )
+from gateway.evidence_export.outbox import flush_outbox
 from gateway.pipeline import GatewayPipeline, GatewayRequest
 from gateway.policy import PolicyEngine, reload_policy
 from gateway.providers import PROVIDER_REGISTRY, resolve_provider, validate_path
@@ -97,6 +98,7 @@ async def gateway_relay(
     provider_id: str,
     path: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     workspace: Workspace = Depends(_authenticate),
 ) -> Response:
     try:
@@ -133,6 +135,9 @@ async def gateway_relay(
         result = _pipeline.process(gateway_request, workspace)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    # Runs after the response is sent, so Drata never delays enforcement.
+    background_tasks.add_task(flush_outbox, workspace.workspace_id)
 
     phi_detected = bool(result.receipt.payload.get("phi_categories_detected"))
     _record_stats(

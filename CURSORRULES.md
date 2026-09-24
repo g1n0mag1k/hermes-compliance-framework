@@ -64,6 +64,7 @@ against mocks only; live Drata acceptance is UNKNOWN — see Honest State)
 - gateway/evidence_export/exporters.py — DrataExporter, thin wrapper around DrataConnector
 - hermes/drata_state.py — DrataConfigState state machine shared by hermes/api.py and DrataConnector
 - gateway/evidence_export/dispatch.py — gateway evidence export dispatch (Drata Path B)
+- gateway/evidence_export/outbox.py — persistent Drata evidence outbox, retry/dead-letter (Drata Path B)
 - tests/test_gateway_evidence_export.py — gateway evidence export / DrataExporter contract tests
 
 ---
@@ -140,8 +141,12 @@ Two active Drata export paths exist:
   background task, no retries, no idempotency. Called from
   /v1/scrub and /v1/trial-scan.
 - Path B: gateway/evidence_export/exporters.py DrataExporter —
-  {data:…} wrapper, runs inline in the gateway event loop, 2
-  retries, per-event X-Idempotency-Key. Called from the gateway.
+  {data:…} wrapper, 2 retries, per-event X-Idempotency-Key. Called
+  from the gateway via the persistent evidence outbox
+  (gateway/evidence_export/outbox.py): events are enqueued to local
+  SQLite after the receipt is persisted and flushed to Drata in a
+  background task after the response is sent. Whether Drata honors
+  X-Idempotency-Key is UNKNOWN.
 
 These two paths send different payload shapes. Whether Drata
 accepts either shape is UNKNOWN.

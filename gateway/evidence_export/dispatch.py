@@ -6,14 +6,23 @@ from typing import Optional
 import httpx
 
 from gateway.credentials import CredentialManager
+from gateway.evidence_export.drata_connector import CONNECTOR_NAME as DRATA_CONNECTOR_NAME
 from gateway.evidence_export.event import EvidenceEvent, build_evidence_event
-from gateway.evidence_export.exporters import ExportResult, get_configured_exporters
+from gateway.evidence_export.exporters import (
+    EvidenceExporter,
+    ExportResult,
+    get_configured_exporters,
+)
+from gateway.evidence_export.outbox import enqueue_event, sanitize_error
 from hermes.receipts.v2.builder import ReceiptV2
 
 logger = logging.getLogger("hermes.gateway.evidence_export")
 
 
-def dispatch_evidence_export(event: EvidenceEvent) -> list[ExportResult]:
+def dispatch_evidence_export(
+    event: EvidenceEvent,
+    exporters: Optional[list[EvidenceExporter]] = None,
+) -> list[ExportResult]:
     """
     Export evidence to all configured exporters.
 
@@ -21,7 +30,9 @@ def dispatch_evidence_export(event: EvidenceEvent) -> list[ExportResult]:
     """
     event.assert_phi_safe()
     results: list[ExportResult] = []
-    for exporter in get_configured_exporters():
+    if exporters is None:
+        exporters = get_configured_exporters()
+    for exporter in exporters:
         try:
             results.append(exporter.export(event))
         except Exception as exc:
@@ -44,7 +55,9 @@ def try_export_evidence(receipt: ReceiptV2, workspace_id: str) -> Optional[list[
     """
     Build and export gateway evidence after receipt persistence.
 
-    Returns None when no exporters are configured. Never raises.
+    Drata evidence is only written to the local outbox here; the Drata network
+    call happens later in ``outbox.flush_outbox``. Results cover inline
+    exporters only. Returns None when no exporters are configured. Never raises.
     """
     exporters = get_configured_exporters()
     if not exporters:
@@ -52,7 +65,25 @@ def try_export_evidence(receipt: ReceiptV2, workspace_id: str) -> Optional[list[
 
     try:
         event = build_evidence_event(receipt, workspace_id)
-        return dispatch_evidence_export(event)
+    except Exception as exc:
+        logger.warning("Gateway evidence export skipped due to error: %s", exc)
+        return []
+
+    inline_exporters = [e for e in exporters if e.name != DRATA_CONNECTOR_NAME]
+    if len(inline_exporters) != len(exporters):
+        try:
+            enqueue_event(event)
+        except Exception as exc:
+            logger.warning(
+                "Gateway evidence outbox write failed for event %s: %s",
+                event.event_id,
+                sanitize_error(str(exc)),
+            )
+
+    if not inline_exporters:
+        return []
+    try:
+        return dispatch_evidence_export(event, inline_exporters)
     except Exception as exc:
         logger.warning("Gateway evidence export skipped due to error: %s", exc)
         return []
