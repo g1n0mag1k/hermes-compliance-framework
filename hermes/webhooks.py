@@ -35,6 +35,9 @@ WEBHOOK_URL_ENV_VAR = "HERMES_WEBHOOK_URL"
 WEBHOOK_AUTH_HEADER_ENV_VAR = "HERMES_WEBHOOK_AUTH_HEADER"
 WEBHOOK_AUTH_VALUE_ENV_VAR = "HERMES_WEBHOOK_AUTH_VALUE"
 WEBHOOK_TIMEOUT_SECONDS = 3.0
+SPRINTO_API_KEY_ENV_VAR = "HERMES_SPRINTO_API_KEY"
+SPRINTO_GRAPHQL_URL_ENV_VAR = "HERMES_SPRINTO_GRAPHQL_URL"
+SPRINTO_MUTATION_ENV_VAR = "HERMES_SPRINTO_MUTATION"
 
 
 def build_event_payload(receipt: ComplianceReceipt, event_type: str = "scrub") -> dict:
@@ -272,17 +275,7 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
 
 def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> bool:
     """
-    POST a Hermes scan receipt as custom evidence to Sprinto via GraphQL API.
-
-    Sprinto uses API key auth and a GraphQL endpoint.
-    Confirm the exact mutation name and input type with Atharva Lad on the
-    partner call before wiring HERMES_SPRINTO_MUTATION.
-
-    Env vars required:
-        HERMES_SPRINTO_API_KEY
-    Optional:
-        HERMES_SPRINTO_GRAPHQL_URL  (default: https://app.sprinto.com/dev-api/graphql)
-        HERMES_SPRINTO_MUTATION     (confirm with Sprinto before setting)
+    Confirm with Sprinto whether mutation name is CONFIRM_WITH_SPRINTO or something else. Default is intentionally a no-op until HERMES_SPRINTO_MUTATION is set.
     """
     import json, urllib.request, urllib.error, os, logging
     logger = logging.getLogger("hermes.webhooks")
