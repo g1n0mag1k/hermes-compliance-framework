@@ -505,7 +505,7 @@ def status_endpoint(workspace=Depends(verify_api_key)):
         critical_findings_open=critical_findings_open,
         evidence_current_as_of=latest["issued_at"],
         chain_integrity=(
-            "verified" if chain_obj.verify_chain() else "no_data"
+            "verified" if chain_obj.verify_chain() else "broken"
         ),
         scans_used=scans_used,
         scans_remaining=scans_remaining,
