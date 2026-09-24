@@ -106,6 +106,11 @@ export async function updateSentryConfig() {
   return response.json();
 }
 
+/**
+ * Drata sync is not implemented server-side. The endpoint answers HTTP 501
+ * with the configuration state (NOT_CONFIGURED / CONFIGURED / ...), which is
+ * returned here. Any other response is treated as an error.
+ */
 export async function syncDrataConfig() {
   const response = await fetch(`${API_URL}/api/v1/drata/config`, {
     method: "POST",
@@ -114,8 +119,8 @@ export async function syncDrataConfig() {
       Accept: "application/json",
     },
   });
-  if (!response.ok) {
-    throw new Error(`Drata config sync failed with HTTP ${response.status}`);
+  if (response.status === 501) {
+    return response.json();
   }
-  return response.json();
+  throw new Error(`Drata status check failed with HTTP ${response.status}`);
 }

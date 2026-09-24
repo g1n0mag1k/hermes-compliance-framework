@@ -121,7 +121,7 @@ STATUS: CONTRACT-TESTED | NOT LIVE-VALIDATED | NOT PARTNER-APPROVED | NOT PARTNE
 Two Drata export paths exist. They must not be conflated with a validated integration:
 - Path A (scrub): dispatch_drata_cct() in hermes/webhooks.py — flat JSON payload, no retries, no idempotency key
 - Path B (gateway): DrataExporter in gateway/evidence_export/ — {"data":...} wrapper, X-Idempotency-Key, 2 retries
-- Dashboard: "Sync Drata" button + POST /api/v1/drata/config are stubs. They do NOT call Drata.
+- Dashboard: "Check Drata Status" button + POST /api/v1/drata/config do NOT call Drata. The endpoint returns HTTP 501 not_implemented with state NOT_CONFIGURED or CONFIGURED derived from HERMES_DRATA_CCT_URL. No connection test exists, so CONNECTION_TEST_* states are never reported.
 - Payload shape mismatch between Path A and Path B is unresolved — live Drata behavior unknown.
 - No per-workspace Drata config. Both paths use a single global HERMES_DRATA_CCT_URL.
 
@@ -143,8 +143,9 @@ Two active Drata export paths exist:
 These two paths send different payload shapes. Whether Drata
 accepts either shape is UNKNOWN.
 
-POST /api/v1/drata/config and the 'Sync Drata' dashboard button
-are stubs. They do not contact Drata. They must not claim success.
+POST /api/v1/drata/config and the 'Check Drata Status' dashboard
+button do not contact Drata. The endpoint returns HTTP 501 with the
+env-derived config state and must never claim success.
 
 ANTI-HALLUCINATION RULE:
 NEVER invent Drata API endpoints, request schemas, permissions,

@@ -15,6 +15,13 @@ import {
 
 export const WorkspaceContext = createContext({ workspace: null })
 
+const DRATA_STATE_LABELS = {
+  NOT_CONFIGURED: 'Drata not configured (set HERMES_DRATA_CCT_URL)',
+  CONFIGURED: 'Drata configured, connection not tested',
+  CONNECTION_TEST_FAILED: 'Drata connection test failed',
+  CONNECTION_TEST_SUCCEEDED: 'Drata connection test passed',
+}
+
 export default function App() {
   const [status, setStatus] = useState(null)
   const [workspaces, setWorkspaces] = useState(null)
@@ -73,8 +80,9 @@ export default function App() {
 
   async function handleSyncDrata() {
     try {
-      await syncDrataConfig()
-      setAdminMessage('Drata sync complete')
+      const result = await syncDrataConfig()
+      const label = DRATA_STATE_LABELS[result.state] || 'Drata status unknown'
+      setAdminMessage(`${label} — Drata sync from the dashboard is not implemented`)
     } catch (err) {
       setAdminMessage(err.message)
     }
@@ -150,7 +158,7 @@ export default function App() {
                     onClick={handleSyncDrata}
                     className="px-3 py-2 text-sm bg-slate-800 text-white rounded hover:bg-slate-700"
                   >
-                    Sync Drata
+                    Check Drata Status
                   </button>
                   {adminMessage && (
                     <span className="text-xs text-slate-500">{adminMessage}</span>

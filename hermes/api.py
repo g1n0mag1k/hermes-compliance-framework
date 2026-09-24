@@ -5,10 +5,12 @@ import threading
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from hermes.attestation import (
@@ -677,10 +679,58 @@ def sentry_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tec
     return {"status": "updated"}
 
 
+class DrataConfigState(str, Enum):
+    NOT_CONFIGURED = "NOT_CONFIGURED"
+    CONFIGURED = "CONFIGURED"
+    CONNECTION_TEST_FAILED = "CONNECTION_TEST_FAILED"
+    CONNECTION_TEST_SUCCEEDED = "CONNECTION_TEST_SUCCEEDED"
+
+
+DRATA_CCT_URL_ENV_VAR = "HERMES_DRATA_CCT_URL"
+DRATA_API_KEY_ENV_VAR = "HERMES_DRATA_API_KEY"
+
+
+def get_drata_config_state(connection_test_passed: Optional[bool] = None) -> DrataConfigState:
+    """
+    Derive the Drata configuration state from the environment.
+
+    connection_test_passed must be None unless a connection test actually
+    ran. No Drata connection test exists in this repository, so production
+    callers always pass None and can never reach a CONNECTION_TEST_* state.
+    """
+    if not os.environ.get(DRATA_CCT_URL_ENV_VAR):
+        return DrataConfigState.NOT_CONFIGURED
+    if connection_test_passed is None:
+        return DrataConfigState.CONFIGURED
+    if connection_test_passed:
+        return DrataConfigState.CONNECTION_TEST_SUCCEEDED
+    return DrataConfigState.CONNECTION_TEST_FAILED
+
+
 @app.post("/api/v1/drata/config", tags=["Integrations"])
 def drata_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech"]))):
-    """Update Drata sync configuration for this workspace (RBAC-gated stub)."""
-    return {"status": "updated"}
+    """
+    Report Drata configuration state. Configuring or syncing Drata from the
+    dashboard is not implemented: this endpoint stores nothing and does not
+    contact Drata. Credential values are never included in the response.
+    """
+    state = get_drata_config_state()
+    return JSONResponse(
+        status_code=501,
+        content={
+            "status": "not_implemented",
+            "state": state.value,
+            "cct_url_configured": state is not DrataConfigState.NOT_CONFIGURED,
+            "api_key_configured": bool(os.environ.get(DRATA_API_KEY_ENV_VAR)),
+            "connection_tested": False,
+            "detail": (
+                "Drata configuration and sync from the dashboard are not implemented. "
+                f"Drata CCT export is configured only via the {DRATA_CCT_URL_ENV_VAR} and "
+                f"{DRATA_API_KEY_ENV_VAR} environment variables, and no connection test "
+                "has been run."
+            ),
+        },
+    )
 
 
 @app.post("/api/v1/evaluate", tags=["Canary"])
