@@ -169,3 +169,27 @@ Sui-Generis LLC — Rocky Top, Tennessee
 ## Vanta Integration Environment Variables
 
 ## Sprinto Integration Environment Variables
+
+STATUS: CONTRACT-TESTED against mocks only | NOT LIVE-VALIDATED | mutation name UNKNOWN
+
+`dispatch_sprinto_custom_evidence()` in `hermes/webhooks.py` is scheduled as a
+background task after every `/v1/scrub` and `/v1/trial-scan` receipt, alongside
+the generic webhook and the legacy Drata CCT dispatch. It is best-effort: a
+Sprinto failure is logged and never fails the scrub.
+
+| Variable | Required | Description |
+|---|---|---|
+| HERMES_SPRINTO_API_KEY | Yes (Sprinto) | Sent as the `api-key` header (not `Authorization: Bearer`). If unset, dispatch is a no-op and no network call is made. |
+| HERMES_SPRINTO_GRAPHQL_URL | Optional | GraphQL endpoint. Default: `https://app.sprinto.com/dev-api/graphql` |
+| HERMES_SPRINTO_MUTATION | Optional | GraphQL mutation name. Default placeholder: `CONFIRM_WITH_SPRINTO`. Confirm the real name with Sprinto before setting. |
+
+The request body is a GraphQL `AddHermesEvidence` operation whose `input` holds
+`receipt_id`, `scan_timestamp`, `phi_classes_detected`,
+`zero_pii_egress_confirmed`, `chain_position`, and `chain_integrity`. It carries
+PHI class names and receipt metadata only, never raw payload text. The mutation
+name, the `HermesEvidenceInput` type, and whether Sprinto accepts this shape are
+UNKNOWN until confirmed with Sprinto.
+
+Note: with `HERMES_SPRINTO_API_KEY` set and `HERMES_SPRINTO_MUTATION` unset, the
+current code still POSTs using the `CONFIRM_WITH_SPRINTO` placeholder mutation.
+Leave `HERMES_SPRINTO_API_KEY` unset until the mutation name is confirmed.
