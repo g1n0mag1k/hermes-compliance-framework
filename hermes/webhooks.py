@@ -275,7 +275,6 @@ def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> 
     POST a Hermes scan receipt as custom evidence to Sprinto via GraphQL API.
 
     Sprinto uses API key auth and a GraphQL endpoint.
-    Confirm the exact mutation name and input type with Atharva Lad on the
     partner call before wiring HERMES_SPRINTO_MUTATION.
 
     Env vars required:
