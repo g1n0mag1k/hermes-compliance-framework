@@ -297,6 +297,8 @@ class AttestationChain:
         # OCCURRENCE GAPS: surviving PHI in clean_text falsifies zero-egress
         # even when flags_triggered == flags_redacted (false sufficiency).
         zero_egress = flags_triggered == flags_redacted and not occurrence_gaps
+        if any(state == "ran_error" for state in detectors_executed.values()):
+            zero_egress = False
 
         with self._lock:
             position = len(self._chain)
