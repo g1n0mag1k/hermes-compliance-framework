@@ -19,3 +19,7 @@ cbor2==6.1.4
 # ecdsa 0.19.2 — transitive dep of pycose, no CVE fix available (PYSEC-2026-1325)
 # pycose uses it as a legacy fallback; Hermes signing uses cryptography directly
 ecdsa==0.19.2
+# Security: pin vulnerable transitives
+anyio>=4.14.2
+requests>=2.33.0
+urllib3>=2.7.0
