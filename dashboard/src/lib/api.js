@@ -124,3 +124,24 @@ export async function syncDrataConfig() {
   }
   throw new Error(`Drata status check failed with HTTP ${response.status}`);
 }
+
+/**
+ * Drata integration status computed from local Hermes state only (offline
+ * config check + evidence outbox counts). Never contacts Drata and never
+ * returns the Drata URL or API key.
+ */
+export async function fetchDrataStatus() {
+  const response = await fetch(`${API_URL}/v1/integrations/drata/status`, {
+    method: "GET",
+    headers: {
+      "X-API-Key": API_KEY,
+      Accept: "application/json",
+    },
+  });
+  if (!response.ok) {
+    const err = new Error(`Drata status request failed with HTTP ${response.status}`);
+    err.status = response.status;
+    throw err;
+  }
+  return response.json();
+}

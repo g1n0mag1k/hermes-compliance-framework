@@ -31,6 +31,7 @@ as a FastAPI background task, which runs after the response has been sent.
 | `next_attempt_at` | Next retry time (PENDING) or lease expiry (PROCESSING) |
 | `status` | `PENDING`, `PROCESSING`, `EXPORTED`, `DEAD_LETTER` (`FAILED` is not used) |
 | `last_error` | `sanitize_error()` output: URLs, hosts, bearer/basic tokens, key=value secrets, long tokens, configured Drata URL/key, and PHI-shaped values removed; max 200 chars |
+| `exported_at` | UTC ISO-8601 time the flush recorded Drata's 2xx; `NULL` for other states and for rows exported before this column was added (migrated in place, not backfilled) |
 
 Retry semantics:
 
@@ -43,6 +44,27 @@ Retry semantics:
 - Every attempt sends the same `event_id` as `X-Idempotency-Key`. Whether Drata honors that header is **UNKNOWN**, so a retry after a lost 2xx could create a duplicate Drata record.
 
 If the outbox write fails, the error is logged and the gateway response is returned unchanged.
+
+### Status endpoint
+
+`GET /v1/integrations/drata/status` (Hermes API, `msp_admin` / `msp_tech`) reports
+state computed only from local Hermes state; it makes no network call.
+
+| Field | Source |
+|---|---|
+| `configured` | `HERMES_DRATA_CCT_URL` is set (global env config) |
+| `connection_state` | `DrataConnector.test_connection()`: `NOT_CONFIGURED`, `CONFIG_INVALID`, or `CONFIGURED` |
+| `live_validated` | always `false` — no live tenant test exists |
+| `transport` | always `"CCT"` |
+| `events_pending` / `events_exported` / `events_dead_letter` | `outbox_stats()` for the caller's `workspace_id`; pending includes `PROCESSING` |
+| `last_exported_at` | latest `exported_at` for the workspace, or `null` |
+| `last_error` | stored `last_error` of the most recently enqueued row that has one, re-sanitized, or `null` |
+| `partner_connection` | always `false` — not implemented |
+
+The outbox database is a single global file, but every row carries `workspace_id`
+and the endpoint only counts the caller's rows. MSP parent workspaces are not
+aggregated with their client workspaces. If the outbox cannot be read, the five
+outbox fields are `null` and the request still returns 200.
 
 ## EvidenceEvent
 
@@ -208,7 +230,7 @@ Category names (e.g. `HIPAA_SSN`) and counts of categories are metadata — not 
 
 - Drata adapter implemented and contract-tested; live tenant validation pending
 - Outbox is flushed only by gateway traffic for the same workspace; there is no periodic scheduler, so queued events for an idle workspace wait for its next request (or a manual `flush_outbox()` call)
-- No API or dashboard view of `DEAD_LETTER` rows yet; inspect `evidence_outbox.db` directly
+- Only aggregate counts are exposed (status endpoint and dashboard); there is no API to list, inspect, or requeue individual `DEAD_LETTER` rows — inspect `evidence_outbox.db` directly
 - No immutable external storage (WORM/TSA/SCITT)
 - No streaming enforcement evidence
 - SQLite receipt storage remains mutable local filesystem

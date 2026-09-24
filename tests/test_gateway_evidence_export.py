@@ -1559,6 +1559,95 @@ def test_sanitize_error_strips_urls_hosts_and_credentials():
     assert sanitize_error("HTTP 503") == "HTTP 503"
 
 
+def test_outbox_records_exported_at_only_on_success(drata_configured):
+    enqueue_event(_sample_event(event_id="evt-exp-ok"))
+    flushed_at = datetime.now(timezone.utc)
+    with patch("gateway.evidence_export.exporters._post_json", return_value=(True, 1, None)):
+        flush_outbox(now=flushed_at)
+    enqueue_event(_sample_event(event_id="evt-exp-dead"))
+    with patch("gateway.evidence_export.exporters._post_json", return_value=(False, 1, "HTTP 401")):
+        flush_outbox()
+    assert get_outbox_row("evt-exp-dead")["status"] == OutboxStatus.DEAD_LETTER.value
+
+    conn = outbox._connect()
+    try:
+        exported_at = dict(conn.execute("SELECT event_id, exported_at FROM evidence_outbox").fetchall())
+    finally:
+        conn.close()
+    assert exported_at == {"evt-exp-ok": flushed_at.isoformat(), "evt-exp-dead": None}
+
+
+def test_outbox_migrates_legacy_schema_without_exported_at(drata_configured):
+    import sqlite3
+
+    path = outbox.outbox_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    legacy = sqlite3.connect(str(path))
+    legacy.executescript(
+        """
+        CREATE TABLE evidence_outbox (
+            event_id TEXT PRIMARY KEY,
+            workspace_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            evidence_payload TEXT NOT NULL,
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at TEXT NOT NULL,
+            status TEXT NOT NULL,
+            last_error TEXT
+        );
+        INSERT INTO evidence_outbox VALUES
+            ('evt-legacy', 'ws-01', '2026-09-01T00:00:00+00:00', '{}', 1,
+             '2026-09-01T00:00:00+00:00', 'EXPORTED', NULL);
+        """
+    )
+    legacy.commit()
+    legacy.close()
+
+    stats = outbox.outbox_stats("ws-01")
+    assert stats["exported"] == 1
+    assert stats["last_exported_at"] is None
+
+    enqueue_event(_sample_event(event_id="evt-post-migration"))
+    with patch("gateway.evidence_export.exporters._post_json", return_value=(True, 1, None)):
+        flush_outbox("ws-01")
+    stats = outbox.outbox_stats("ws-01")
+    assert stats["exported"] == 2
+    assert stats["last_exported_at"] is not None
+
+
+def test_outbox_stats_counts_by_status_per_workspace(drata_configured):
+    enqueue_event(_sample_event(event_id="evt-s-ok"))
+    with patch("gateway.evidence_export.exporters._post_json", return_value=(True, 1, None)):
+        flush_outbox()
+    enqueue_event(_sample_event(event_id="evt-s-dead"))
+    with patch("gateway.evidence_export.exporters._post_json", return_value=(False, 1, "HTTP 403")):
+        flush_outbox()
+    enqueue_event(_sample_event(event_id="evt-s-pending"))
+    enqueue_event(_sample_event(event_id="evt-s-other", workspace_id="ws-other"))
+
+    conn = outbox._connect()
+    try:
+        outbox._claim_due_rows(conn, "ws-01", datetime.now(timezone.utc), 10)
+    finally:
+        conn.close()
+    assert get_outbox_row("evt-s-pending")["status"] == OutboxStatus.PROCESSING.value
+
+    stats = outbox.outbox_stats("ws-01")
+    assert stats["pending"] == 1
+    assert stats["exported"] == 1
+    assert stats["dead_letter"] == 1
+    assert stats["last_error"] == "HTTP 403"
+    assert stats["last_exported_at"] is not None
+    assert outbox.outbox_stats("ws-other") == {
+        "pending": 1,
+        "exported": 0,
+        "dead_letter": 0,
+        "last_exported_at": None,
+        "last_error": None,
+    }
+    assert outbox.outbox_stats("ws-missing")["pending"] == 0
+
+
 @pytest.mark.parametrize("policy", [None, BLOCK_POLICY])
 def test_outbox_write_failure_still_returns_gateway_response(
     client, workspace, upstream_capture, drata_configured, monkeypatch, tmp_path, caplog, policy

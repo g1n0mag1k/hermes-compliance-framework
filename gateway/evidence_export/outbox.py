@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS evidence_outbox (
     attempt_count INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TEXT NOT NULL,
     status TEXT NOT NULL,
-    last_error TEXT
+    last_error TEXT,
+    exported_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_evidence_outbox_due
     ON evidence_outbox (status, next_attempt_at);
@@ -118,7 +119,21 @@ def _connect() -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), timeout=5.0, isolation_level=None)
     conn.executescript(_OUTBOX_SCHEMA)
+    _migrate_exported_at(conn)
     return conn
+
+
+def _migrate_exported_at(conn: sqlite3.Connection) -> None:
+    # Rows exported before this column existed keep exported_at NULL: their
+    # export time was never recorded and is not reconstructed.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(evidence_outbox)")}
+    if "exported_at" in columns:
+        return
+    try:
+        conn.execute("ALTER TABLE evidence_outbox ADD COLUMN exported_at TEXT")
+    except sqlite3.OperationalError as exc:
+        if "duplicate column" not in str(exc).lower():
+            raise
 
 
 def sanitize_error(message: Optional[str]) -> str:
@@ -234,6 +249,48 @@ def list_outbox_rows(workspace_id: Optional[str] = None) -> list[dict[str, Any]]
         conn.close()
 
 
+def outbox_stats(workspace_id: str) -> dict[str, Any]:
+    """
+    Read-only outbox summary for one workspace. No network I/O.
+
+    pending counts PENDING and PROCESSING rows (not yet exported, not dead).
+    last_error is the stored, already-sanitized error of the most recently
+    enqueued row that currently has one, sanitized again before returning.
+    Raises on database errors; callers decide how to degrade.
+    """
+    conn = _connect()
+    try:
+        counts = dict(
+            conn.execute(
+                "SELECT status, COUNT(*) FROM evidence_outbox WHERE workspace_id = ? GROUP BY status",
+                (workspace_id,),
+            ).fetchall()
+        )
+        (last_exported_at,) = conn.execute(
+            "SELECT MAX(exported_at) FROM evidence_outbox WHERE workspace_id = ? AND status = ?",
+            (workspace_id, OutboxStatus.EXPORTED.value),
+        ).fetchone()
+        error_row = conn.execute(
+            """
+            SELECT last_error FROM evidence_outbox
+            WHERE workspace_id = ? AND last_error IS NOT NULL AND last_error != ''
+            ORDER BY created_at DESC, rowid DESC
+            LIMIT 1
+            """,
+            (workspace_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    return {
+        "pending": counts.get(OutboxStatus.PENDING.value, 0)
+        + counts.get(OutboxStatus.PROCESSING.value, 0),
+        "exported": counts.get(OutboxStatus.EXPORTED.value, 0),
+        "dead_letter": counts.get(OutboxStatus.DEAD_LETTER.value, 0),
+        "last_exported_at": last_exported_at,
+        "last_error": (sanitize_error(error_row[0]) or None) if error_row else None,
+    }
+
+
 def _claim_due_rows(
     conn: sqlite3.Connection,
     workspace_id: Optional[str],
@@ -307,8 +364,14 @@ def _record_outcome(
     *,
     next_attempt_at: Optional[datetime] = None,
     last_error: Optional[str] = None,
+    exported_at: Optional[datetime] = None,
 ) -> None:
-    if next_attempt_at is None:
+    if exported_at is not None:
+        conn.execute(
+            "UPDATE evidence_outbox SET status = ?, last_error = ?, exported_at = ? WHERE event_id = ?",
+            (status.value, last_error, _iso(exported_at), event_id),
+        )
+    elif next_attempt_at is None:
         conn.execute(
             "UPDATE evidence_outbox SET status = ?, last_error = ? WHERE event_id = ?",
             (status.value, last_error, event_id),
@@ -369,7 +432,7 @@ def flush_outbox(
         for event_id, payload, attempt_count in claimed:
             success, raw_error = _send(connector, payload)
             if success:
-                _record_outcome(conn, event_id, OutboxStatus.EXPORTED)
+                _record_outcome(conn, event_id, OutboxStatus.EXPORTED, exported_at=current)
                 counts["exported"] += 1
                 continue
 

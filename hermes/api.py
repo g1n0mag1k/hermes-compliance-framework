@@ -1,4 +1,5 @@
 import hmac
+import logging
 import os
 import sqlite3
 import threading
@@ -6,7 +7,7 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 
 from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -714,6 +715,67 @@ def drata_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech
                 "has been run."
             ),
         },
+    )
+
+
+class DrataIntegrationStatus(BaseModel):
+    configured: bool
+    connection_state: Literal["NOT_CONFIGURED", "CONFIG_INVALID", "CONFIGURED"]
+    live_validated: Literal[False] = False
+    transport: Literal["CCT"] = "CCT"
+    events_pending: Optional[int]
+    events_exported: Optional[int]
+    events_dead_letter: Optional[int]
+    last_exported_at: Optional[str]
+    last_error: Optional[str]
+    partner_connection: Literal[False] = False
+
+
+@app.get(
+    "/v1/integrations/drata/status",
+    response_model=DrataIntegrationStatus,
+    tags=["Integrations"],
+)
+def drata_integration_status_endpoint(
+    workspace=Depends(require_role(["msp_admin", "msp_tech"])),
+):
+    """
+    Report Drata integration state computed only from local Hermes state.
+
+    connection_state is the offline structural check from
+    DrataConnector.test_connection(); no network call is made and no live
+    validation exists, so live_validated is always false. Drata config is
+    global (env vars); outbox counts are scoped to the caller's workspace_id.
+    If the outbox cannot be read, outbox fields are null instead of failing.
+    """
+    from gateway.evidence_export.drata_connector import DrataConnector
+    from gateway.evidence_export.outbox import outbox_stats, sanitize_error
+
+    result = DrataConnector().test_connection()
+    status = DrataIntegrationStatus(
+        configured=result.state != DrataConfigState.NOT_CONFIGURED.value,
+        connection_state=result.state,
+        events_pending=None,
+        events_exported=None,
+        events_dead_letter=None,
+        last_exported_at=None,
+        last_error=None,
+    )
+    try:
+        stats = outbox_stats(workspace.workspace_id)
+    except Exception as exc:
+        logging.getLogger("hermes.api").warning(
+            "Drata status: evidence outbox unavailable: %s", sanitize_error(str(exc))
+        )
+        return status
+    return status.model_copy(
+        update={
+            "events_pending": stats["pending"],
+            "events_exported": stats["exported"],
+            "events_dead_letter": stats["dead_letter"],
+            "last_exported_at": stats["last_exported_at"],
+            "last_error": stats["last_error"],
+        }
     )
 
 

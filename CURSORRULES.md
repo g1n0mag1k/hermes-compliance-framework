@@ -125,7 +125,8 @@ Two Drata export paths exist. They must not be conflated with a validated integr
 - Path A (scrub): dispatch_drata_cct() in hermes/webhooks.py — flat JSON payload, no retries, no idempotency key
 - Path B (gateway, CANONICAL): DrataConnector in gateway/evidence_export/drata_connector.py — {"data":...} wrapper, X-Idempotency-Key, 2 retries. DrataExporter in exporters.py is a thin wrapper around it. send_test_evidence() returns UNSUPPORTED (no network call). test_connection() is an offline STRUCTURAL check only (NOT_CONFIGURED / CONFIG_INVALID / CONFIGURED, live_validated always False); test_connection(live=True) returns UNSUPPORTED. send_evidence() refuses non-https CCT URLs with a warning.
 - Path A is LEGACY: kept unchanged for backward compatibility, not routed through DrataConnector.
-- Dashboard: "Check Drata Status" button + POST /api/v1/drata/config do NOT call Drata. The endpoint returns HTTP 501 not_implemented with state NOT_CONFIGURED, CONFIG_INVALID, or CONFIGURED from DrataConnector.test_connection() (URL set, https, API key present). No live connection test exists, so CONNECTION_TEST_* / CONNECTION_* states are never reported.
+- POST /api/v1/drata/config does NOT call Drata. It returns HTTP 501 not_implemented with state NOT_CONFIGURED, CONFIG_INVALID, or CONFIGURED from DrataConnector.test_connection() (URL set, https, API key present). No live connection test exists, so CONNECTION_TEST_* / CONNECTION_* states are never reported. It is kept but no longer used by the dashboard.
+- GET /v1/integrations/drata/status (msp_admin / msp_tech) does NOT call Drata. It returns configured, connection_state (offline test_connection() state), live_validated=false, transport="CCT", partner_connection=false, and the caller workspace's outbox counts (pending incl. PROCESSING / exported / dead_letter), last_exported_at, and sanitized last_error. Outbox fields are null if the outbox cannot be read. The dashboard "Check Drata Status" button calls this endpoint; CONNECTED / SYNCING labels are reserved and never shown.
 - Payload shape mismatch between Path A and Path B is unresolved — live Drata behavior unknown.
 - No per-workspace Drata config. Both paths use a single global HERMES_DRATA_CCT_URL.
 
@@ -151,9 +152,10 @@ Two active Drata export paths exist:
 These two paths send different payload shapes. Whether Drata
 accepts either shape is UNKNOWN.
 
-POST /api/v1/drata/config and the 'Check Drata Status' dashboard
-button do not contact Drata. The endpoint returns HTTP 501 with the
-env-derived config state and must never claim success.
+POST /api/v1/drata/config, GET /v1/integrations/drata/status, and
+the 'Check Drata Status' dashboard button do not contact Drata. They
+report env-derived config state and local outbox counts only and must
+never claim success, live validation, or a Partner Connection.
 
 ANTI-HALLUCINATION RULE:
 NEVER invent Drata API endpoints, request schemas, permissions,
