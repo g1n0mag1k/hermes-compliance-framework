@@ -1,4 +1,5 @@
 import hmac
+import json
 import logging
 import os
 import sqlite3
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Tuple
 
-from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -826,6 +827,96 @@ async def evaluate_phi_canary(
         )
 
     return {"status": "evaluated", "drift_detected": drift_detected}
+
+
+class TelemetryReceiptIngestResponse(BaseModel):
+    status: Literal["ingested"] = "ingested"
+    receipt_id: str
+    repository: str
+    commit_sha: str
+    state_drift_detected: bool
+    prior_receipt_id: Optional[str] = None
+    ingested_at: str
+    drata_cct: dict
+
+
+@app.post(
+    "/v1/telemetry/receipt",
+    response_model=TelemetryReceiptIngestResponse,
+    tags=["Telemetry"],
+)
+async def ingest_telemetry_receipt(
+    request: Request,
+    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_hermes_signature_256: Optional[str] = Header(
+        None, alias="X-Hermes-Signature-256"
+    ),
+):
+    """
+    Ingest a signed CI telemetry compliance receipt (metadata only).
+
+    The raw request body must be signed with HMAC-SHA256 using the workspace API
+    secret; the digest is sent in X-Hermes-Signature-256.
+    """
+    from hermes.telemetry_receipts import (
+        TelemetryReceiptPayload,
+        store_telemetry_receipt,
+        sync_telemetry_receipt_to_drata_cct,
+        telemetry_db_path,
+        verify_request_signature,
+    )
+
+    body = await request.body()
+    if not verify_request_signature(x_api_key, body, x_hermes_signature_256):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: invalid or missing X-Hermes-Signature-256",
+        )
+
+    try:
+        workspace = verify_api_key(x_api_key)
+    except HTTPException:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: invalid or missing X-Hermes-Signature-256",
+        ) from None
+
+    try:
+        payload_dict = json.loads(body.decode("utf-8"))
+        receipt_payload = TelemetryReceiptPayload.model_validate(payload_dict)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid JSON body") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    chain_db_path = (
+        workspace.chain_db_path
+        if not isinstance(workspace, _LegacyWorkspace)
+        else None
+    )
+    db_path = telemetry_db_path(workspace.workspace_id, chain_db_path)
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
+    stored = store_telemetry_receipt(
+        workspace_id=workspace.workspace_id,
+        payload=receipt_payload,
+        db_path=db_path,
+    )
+    drata_result = sync_telemetry_receipt_to_drata_cct(stored)
+
+    return TelemetryReceiptIngestResponse(
+        receipt_id=stored.receipt_id,
+        repository=stored.repository,
+        commit_sha=stored.commit_sha,
+        state_drift_detected=stored.state_drift_detected,
+        prior_receipt_id=stored.prior_receipt_id,
+        ingested_at=stored.ingested_at,
+        drata_cct={
+            "attempted": drata_result.attempted,
+            "synchronized": drata_result.synchronized,
+            "reason": drata_result.reason,
+        },
+    )
 
 
 @app.post("/v1/workspaces/{workspace_id}/rotate-key", tags=["Workspaces"])
