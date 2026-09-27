@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from hermes.attestation import (
@@ -1083,6 +1083,17 @@ def verify_v2_receipt_endpoint(
         errors=result.errors,
         warnings=warnings + result.warnings,
     )
+
+
+_DEMO_PROCUREMENT_HTML = Path(__file__).parent.parent / "demo_procurement.html"
+
+
+@app.get("/demo/procurement", include_in_schema=False)
+def demo_procurement_page():
+    """Serve the procurement demo page same-origin so it can call /v2/*."""
+    if not _DEMO_PROCUREMENT_HTML.exists():
+        raise HTTPException(status_code=404, detail="Demo page not installed.")
+    return FileResponse(str(_DEMO_PROCUREMENT_HTML), media_type="text/html")
 
 
 # Serve React dashboard — API routes take priority, static files fall through

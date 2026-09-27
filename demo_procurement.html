@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hermes Relay — Verifiable Agent Action Demo</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #12161f;
+    --panel-2: #171c28;
+    --line: #232a38;
+    --text: #e6e9ef;
+    --muted: #8b93a4;
+    --accent: #5b9dff;
+    --pass: #35c48b;
+    --fail: #ff5d5d;
+    --warn: #e0a83c;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 18px 28px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .brand { font-weight: 650; letter-spacing: -0.01em; }
+  .brand span { color: var(--muted); font-weight: 400; margin-left: 10px; }
+  .keybox { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .keybox label { color: var(--muted); font-size: 13px; }
+  input[type="text"], input[type="password"], input[type="number"] {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 7px; padding: 7px 10px; font-family: var(--mono); font-size: 13px;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 28px 80px; }
+  .steps { display: flex; gap: 8px; margin-bottom: 28px; flex-wrap: wrap; }
+  .step {
+    display: flex; align-items: center; gap: 8px; padding: 7px 13px;
+    border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 13px;
+  }
+  .step.active { border-color: var(--accent); color: var(--text); }
+  .step.done { border-color: var(--pass); color: var(--pass); }
+  .step b { font-family: var(--mono); }
+  section { display: none; }
+  section.active { display: block; }
+  h1 { font-size: 27px; line-height: 1.25; margin: 0 0 10px; letter-spacing: -0.02em; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 30px 0 12px; }
+  p.lede { color: var(--muted); max-width: 68ch; margin: 0 0 22px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .card + .card { margin-top: 16px; }
+  pre {
+    margin: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 16px; overflow-x: auto; color: #cfd6e4;
+  }
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 320px; min-width: 0; }
+  button {
+    font: inherit; font-weight: 550; cursor: pointer; border-radius: 9px;
+    padding: 11px 18px; border: 1px solid var(--accent);
+    background: var(--accent); color: #07101f;
+  }
+  button.ghost { background: transparent; color: var(--text); border-color: var(--line); }
+  button.danger { background: var(--fail); border-color: var(--fail); color: #1a0505; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 22px; flex-wrap: wrap; }
+  dl.fields { display: grid; grid-template-columns: max-content 1fr; gap: 9px 20px; margin: 0; }
+  dl.fields dt { color: var(--muted); font-size: 13px; }
+  dl.fields dd { margin: 0; font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  table.claims { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.claims th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  table.claims td { padding: 9px 10px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 13px; }
+  table.claims tr:last-child td { border-bottom: none; }
+  .verdict { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-family: var(--mono); }
+  .pass { color: var(--pass); }
+  .fail { color: var(--fail); }
+  .neutral { color: var(--muted); }
+  .banner { border-radius: 9px; padding: 13px 16px; font-size: 13.5px; margin-top: 16px; border: 1px solid; }
+  .banner.warn { border-color: var(--warn); background: rgba(224,168,60,0.09); color: #f0cd89; }
+  .banner.fail { border-color: var(--fail); background: rgba(255,93,93,0.09); color: #ffb0b0; }
+  .banner.pass { border-color: var(--pass); background: rgba(53,196,139,0.09); color: #9fe6c6; }
+  .banner ul { margin: 8px 0 0; padding-left: 20px; }
+  .big-digest { font-family: var(--mono); font-size: 21px; letter-spacing: 0.02em; color: var(--accent); word-break: break-all; }
+  .diffline { font-family: var(--mono); font-size: 13px; padding: 3px 0; }
+  .diffline.del { color: #ff9c9c; }
+  .diffline.add { color: #9fe6c6; }
+  footer { border-top: 1px solid var(--line); margin-top: 48px; padding-top: 18px; color: var(--muted); font-size: 12.5px; max-width: 68ch; }
+  code { font-family: var(--mono); font-size: 0.92em; color: #cfd6e4; }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #07101f; border-radius: 50%; animation: s 0.7s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Hermes Relay <span>Verifiable Agent Action — Procurement</span></div>
+  <div class="keybox">
+    <label for="apikey">X-API-Key</label>
+    <input id="apikey" type="password" size="22" placeholder="HERMES_API_KEY" autocomplete="off" />
+  </div>
+</header>
+
+<main>
+  <div class="steps">
+    <div class="step active" data-step="1"><b>1</b> The gap</div>
+    <div class="step" data-step="2"><b>2</b> Agent acts</div>
+    <div class="step" data-step="3"><b>3</b> Auditor verifies</div>
+    <div class="step" data-step="4"><b>4</b> Record is edited</div>
+  </div>
+
+  <!-- ------------------------------------------------ Screen 1 -->
+  <section id="screen1" class="active">
+    <h1>An AI agent just approved a $12,480 purchase order.</h1>
+    <p class="lede">
+      Six months from now, in a dispute with the vendor, you will be asked to prove
+      exactly what the agent approved. Today the answer is an application log —
+      a mutable row in a database that anyone with write access can change, with
+      nothing to show it was not changed.
+    </p>
+    <div class="card">
+      <h2 style="margin-top:0">What this demo shows</h2>
+      <p style="margin:0 0 14px">
+        Hermes signs the agent's action into a COSE_Sign1 receipt using an Ed25519
+        key held locally. An auditor with only the public key can confirm the exact
+        payload that was approved — and any edit to that payload, however small,
+        breaks verification.
+      </p>
+      <p style="margin:0; color:var(--muted)">
+        Every digest, signature, and verification result on the next three screens
+        comes from live calls to this Hermes instance. Nothing here is precomputed.
+      </p>
+    </div>
+    <div class="actions">
+      <button onclick="go(2)">Start the run</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------ Screen 2 -->
+  <section id="screen2">
+    <h1>Screen 2 — The agent approves the order</h1>
+    <p class="lede">
+      This is the action payload. Approving it posts the payload to
+      <code>POST /v2/receipts</code>, which signs it and returns a receipt.
+    </p>
+    <div class="row">
+      <div>
+        <h2>Action payload</h2>
+        <pre id="po-payload"></pre>
+      </div>
+      <div>
+        <h2>Receipt</h2>
+        <div class="card" id="receipt-card">
+          <p class="neutral" id="receipt-empty" style="margin:0">
+            No receipt yet. Approve the order to issue one.
+          </p>
+          <dl class="fields" id="receipt-fields" style="display:none">
+            <dt>receipt_id</dt><dd id="f-receipt-id"></dd>
+            <dt>issued_at</dt><dd id="f-issued-at"></dd>
+            <dt>key_id</dt><dd id="f-key-id"></dd>
+            <dt>algorithm</dt><dd id="f-algorithm"></dd>
+          </dl>
+        </div>
+        <div class="card" id="digest-card" style="display:none">
+          <h2 style="margin-top:0">action_digest</h2>
+          <div class="big-digest" id="f-action-digest"></div>
+          <p style="margin:10px 0 0; color:var(--muted); font-size:13px">
+            Truncated for display. Full 64-hex value:
+            <span class="mono" id="f-action-digest-full" style="font-family:var(--mono); word-break:break-all"></span>
+          </p>
+        </div>
+        <div id="issue-banner"></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="btn-issue" onclick="issueReceipt()">Approve &amp; issue receipt</button>
+      <button class="ghost" onclick="go(1)">Back</button>
+      <button class="ghost" id="btn-to-3" onclick="go(3)" disabled>Next: hand it to the auditor</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------ Screen 3 -->
+  <section id="screen3">
+    <h1>Screen 3 — The auditor verifies the receipt</h1>
+    <p class="lede">
+      <code>POST /v2/verify</code> reloads the stored COSE_Sign1 envelope and runs
+      <code>verify_receipt()</code> against the signer's public key. Every claim is
+      reported independently — there is no single pass/fail flag in the verifier.
+    </p>
+    <div class="card">
+      <table class="claims" id="verify-table">
+        <thead><tr><th>Claim</th><th>Result</th><th>Value</th></tr></thead>
+        <tbody id="verify-body">
+          <tr><td colspan="3" class="neutral">Not verified yet.</td></tr>
+        </tbody>
+      </table>
+      <div id="verify-banner"></div>
+    </div>
+    <div class="actions">
+      <button id="btn-verify" onclick="verifyStored()">Verify receipt</button>
+      <button class="ghost" onclick="go(2)">Back</button>
+      <button class="ghost" id="btn-to-4" onclick="go(4)" disabled>Next: someone edits the record</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------ Screen 4 -->
+  <section id="screen4">
+    <h1>Screen 4 — Someone edits the approved amount</h1>
+    <p class="lede">
+      The signed payload is changed and the signature is left untouched — exactly
+      what an edit to a stored record looks like. The altered payload goes to
+      <code>POST /v2/verify</code> as <code>tampered_payload</code>.
+    </p>
+    <div class="row">
+      <div>
+        <h2>The edit</h2>
+        <div class="card">
+          <div class="diffline del">- "amount_usd": <span id="orig-amount">12480</span></div>
+          <div class="diffline add">
+            + "amount_usd":
+            <input id="tamper-amount" type="number" step="0.01" value="124800" style="width:140px" />
+          </div>
+          <p style="margin:14px 0 0; color:var(--muted); font-size:13px">
+            One field. Every other byte of the payload is preserved.
+          </p>
+        </div>
+      </div>
+      <div>
+        <h2>Verification of the edited record</h2>
+        <div class="card">
+          <table class="claims" id="tamper-table">
+            <thead><tr><th>Claim</th><th>Result</th><th>Value</th></tr></thead>
+            <tbody id="tamper-body">
+              <tr><td colspan="3" class="neutral">Not verified yet.</td></tr>
+            </tbody>
+          </table>
+          <div id="tamper-banner"></div>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="danger" id="btn-tamper" onclick="verifyTampered()">Verify the edited record</button>
+      <button class="ghost" onclick="go(3)">Back</button>
+      <button class="ghost" onclick="go(1)">Restart</button>
+    </div>
+  </section>
+
+  <footer>
+    Demo signing oracle. <code>POST /v2/receipts</code> signs a payload supplied by
+    this page, so it will attest to anything sent to it. In production, V2 receipts
+    are issued by the gateway enforcement path from a decision the gateway observed
+    itself, never from a client-supplied payload.
+  </footer>
+</main>
+
+<script>
+const PO_PAYLOAD = {
+  action: "purchase_order.approve",
+  actor: "agent:procurement-copilot",
+  actor_type: "ai_agent",
+  po_number: "PO-2026-04817",
+  vendor: "Meridian Medical Supply",
+  vendor_id: "VEND-3391",
+  cost_center: "CC-4420",
+  requested_by: "j.okafor@northstar-clinic.example",
+  approval_policy: "under_25k_auto_approve",
+  amount_usd: 12480.0,
+  currency: "USD",
+  authorized: true
+};
+
+const state = { receipt: null, claims: null };
+
+const $ = (id) => document.getElementById(id);
+
+document.getElementById("po-payload").textContent = JSON.stringify(PO_PAYLOAD, null, 2);
+document.getElementById("orig-amount").textContent = PO_PAYLOAD.amount_usd;
+
+const keyInput = $("apikey");
+keyInput.value = sessionStorage.getItem("hermes_api_key") || "";
+keyInput.addEventListener("input", () =>
+  sessionStorage.setItem("hermes_api_key", keyInput.value)
+);
+
+function go(n) {
+  document.querySelectorAll("section").forEach((s) => s.classList.remove("active"));
+  $("screen" + n).classList.add("active");
+  document.querySelectorAll(".step").forEach((el) => {
+    const step = Number(el.dataset.step);
+    el.classList.toggle("active", step === n);
+    el.classList.toggle("done", step < n);
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function busy(button, on, label) {
+  button.disabled = on;
+  if (on) {
+    button.dataset.label = button.textContent;
+    button.innerHTML = '<span class="spin"></span> ' + label;
+  } else {
+    button.textContent = button.dataset.label || button.textContent;
+  }
+}
+
+function banner(id, kind, html) {
+  $(id).innerHTML = html ? '<div class="banner ' + kind + '">' + html + "</div>" : "";
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+}
+
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-Key": keyInput.value },
+    body: JSON.stringify(body)
+  });
+  let data = null;
+  try { data = await response.json(); } catch (_) { /* non-JSON error body */ }
+  if (!response.ok) {
+    const detail = data && data.detail ? JSON.stringify(data.detail) : response.statusText;
+    throw new Error("HTTP " + response.status + " — " + detail);
+  }
+  return data;
+}
+
+async function issueReceipt() {
+  const button = $("btn-issue");
+  banner("issue-banner", "fail", "");
+  busy(button, true, "Signing…");
+  try {
+    const data = await post("/v2/receipts", { payload: PO_PAYLOAD });
+    state.receipt = data;
+    state.claims = null;
+    $("receipt-empty").style.display = "none";
+    $("receipt-fields").style.display = "grid";
+    $("f-receipt-id").textContent = data.receipt_id;
+    $("f-issued-at").textContent = data.issued_at;
+    $("f-key-id").textContent = data.key_id;
+    $("f-algorithm").textContent = data.algorithm;
+    $("f-action-digest").textContent = data.action_digest;
+    $("f-action-digest-full").textContent = data.action_digest_full;
+    $("digest-card").style.display = "block";
+    $("btn-to-3").disabled = false;
+    if (data.warning) {
+      banner("issue-banner", "warn", "<b>Ephemeral signing key</b><br />" + escapeHtml(data.warning));
+    } else {
+      banner("issue-banner", "pass", "Signed with keystore key <code>" + escapeHtml(data.key_id) + "</code>.");
+    }
+  } catch (error) {
+    banner("issue-banner", "fail", escapeHtml(error.message));
+  } finally {
+    busy(button, false);
+  }
+}
+
+const CLAIM_ROWS = [
+  ["signature_valid", "Ed25519 signature over COSE Sig_Structure"],
+  ["receipt_digest_valid", "Domain-separated SHA-256 of canonical payload"],
+  ["chain_link_valid", "Link to preceding receipt"],
+  ["signer_key_id", "Key that produced the signature"],
+  ["algorithm", "COSE algorithm"],
+  ["issued_at", "Issuance timestamp"],
+  ["fully_valid", "signature_valid AND receipt_digest_valid"]
+];
+
+function renderClaims(tbodyId, result) {
+  const rows = CLAIM_ROWS.map(([field, description]) => {
+    const value = result[field];
+    let verdict;
+    if (value === true) verdict = '<span class="verdict pass">PASS</span>';
+    else if (value === false) verdict = '<span class="verdict fail">FAIL</span>';
+    else if (value === null || value === undefined || value === "")
+      verdict = '<span class="verdict neutral">n/a</span>';
+    else verdict = '<span class="verdict neutral">—</span>';
+    const shown =
+      typeof value === "boolean" || value === null || value === undefined
+        ? description
+        : escapeHtml(value);
+    return (
+      "<tr><td>" + field + "</td><td>" + verdict + "</td><td>" + shown + "</td></tr>"
+    );
+  });
+  $(tbodyId).innerHTML = rows.join("");
+}
+
+function renderDiagnostics(bannerId, result) {
+  const parts = [];
+  if (result.errors && result.errors.length) {
+    parts.push(
+      '<div class="banner fail"><b>Verifier errors</b><ul>' +
+        result.errors.map((e) => "<li>" + escapeHtml(e) + "</li>").join("") +
+        "</ul></div>"
+    );
+  }
+  if (result.warnings && result.warnings.length) {
+    parts.push(
+      '<div class="banner warn"><b>Warnings</b><ul>' +
+        result.warnings.map((w) => "<li>" + escapeHtml(w) + "</li>").join("") +
+        "</ul></div>"
+    );
+  }
+  if (!parts.length && result.fully_valid) {
+    parts.push(
+      '<div class="banner pass">Receipt verified. The payload below is byte-for-byte ' +
+        "what was signed, confirmed with the public key alone.</div>"
+    );
+  }
+  $(bannerId).innerHTML = parts.join("");
+}
+
+async function verifyStored() {
+  const button = $("btn-verify");
+  if (!state.receipt) {
+    banner("verify-banner", "fail", "Issue a receipt on screen 2 first.");
+    return;
+  }
+  busy(button, true, "Verifying…");
+  try {
+    const data = await post("/v2/verify", { receipt_id: state.receipt.receipt_id });
+    state.claims = data.claims;
+    renderClaims("verify-body", data);
+    renderDiagnostics("verify-banner", data);
+    $("btn-to-4").disabled = false;
+  } catch (error) {
+    banner("verify-banner", "fail", escapeHtml(error.message));
+  } finally {
+    busy(button, false);
+  }
+}
+
+async function verifyTampered() {
+  const button = $("btn-tamper");
+  if (!state.receipt) {
+    banner("tamper-banner", "fail", "Issue a receipt on screen 2 first.");
+    return;
+  }
+  busy(button, true, "Verifying…");
+  try {
+    if (!state.claims) {
+      const stored = await post("/v2/verify", { receipt_id: state.receipt.receipt_id });
+      state.claims = stored.claims;
+    }
+    const tampered = Object.assign({}, state.claims, {
+      amount_usd: Number($("tamper-amount").value)
+    });
+    const data = await post("/v2/verify", {
+      receipt_id: state.receipt.receipt_id,
+      tampered_payload: tampered
+    });
+    renderClaims("tamper-body", data);
+    renderDiagnostics("tamper-banner", data);
+  } catch (error) {
+    banner("tamper-banner", "fail", escapeHtml(error.message));
+  } finally {
+    busy(button, false);
+  }
+}
+</script>
+</body>
+</html>
