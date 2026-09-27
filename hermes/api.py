@@ -8,7 +8,7 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.responses import JSONResponse
@@ -34,6 +34,14 @@ from hermes.classifier import (
     scrub_payload,
 )
 from hermes.auditor import CANARY_CORPUS
+from hermes.demo_receipts import (
+    EPHEMERAL_KEY_WARNING,
+    demo_receipt_db_path,
+    get_demo_receipt,
+    get_signer,
+    issue_demo_receipt,
+    splice_payload,
+)
 
 # -------------------------------------------------------------------------
 # API APPLICATION & CONFIGURATION
@@ -934,6 +942,147 @@ def rotate_key_endpoint(workspace_id: str, workspace=Depends(verify_api_key)):
         raise HTTPException(status_code=403, detail="Cannot rotate a key you do not own.")
     new_key = rotate_api_key(workspace_id)
     return {"workspace_id": workspace_id, "api_key": new_key}
+
+
+# -------------------------------------------------------------------------
+# V2 RECEIPTS — DEMO SIGNING ORACLE
+# -------------------------------------------------------------------------
+# These two endpoints exist for the procurement demo. /v2/receipts signs a
+# client-supplied payload, which makes it a signing oracle: it will attest to
+# anything posted to it. In production, V2 receipts are issued by the gateway
+# enforcement path (issue_gateway_receipt in gateway/evidence.py) from a
+# decision the gateway observed itself. Do not route production evidence here.
+class ReceiptIssueRequest(BaseModel):
+    payload: Dict[str, Any] = Field(..., description="Action payload to sign.")
+
+
+class ReceiptIssueResponse(BaseModel):
+    receipt_id: str
+    action_digest: str          # first 16 hex chars, for display
+    action_digest_full: str
+    issued_at: str
+    key_id: str
+    algorithm: str
+    ephemeral_key: bool
+    warning: Optional[str] = None
+
+
+class ReceiptVerifyRequest(BaseModel):
+    receipt_id: str = Field(..., min_length=1)
+    tampered_payload: Optional[Dict[str, Any]] = Field(
+        None,
+        description=(
+            "Replacement payload spliced into the stored COSE_Sign1 envelope "
+            "in place of the signed one, keeping the original signature. "
+            "Omit to verify the receipt as stored."
+        ),
+    )
+
+
+class ReceiptVerifyResponse(BaseModel):
+    receipt_id: str
+    verified_payload: Literal["stored", "tampered"]
+    fully_valid: bool
+    signature_valid: bool
+    receipt_digest_valid: bool
+    chain_link_valid: Optional[bool] = None
+    signer_key_id: str
+    algorithm: str
+    issued_at: str
+    claims: Dict[str, Any]
+    errors: List[str]
+    warnings: List[str]
+
+
+def _demo_receipt_db(workspace) -> str:
+    chain_db_path = (
+        workspace.chain_db_path
+        if not isinstance(workspace, _LegacyWorkspace)
+        else None
+    )
+    return demo_receipt_db_path(workspace.workspace_id, chain_db_path)
+
+
+@app.post("/v2/receipts", response_model=ReceiptIssueResponse, tags=["Receipts V2"])
+def issue_v2_receipt_endpoint(
+    request: ReceiptIssueRequest,
+    workspace=Depends(verify_api_key),
+):
+    """Sign a caller-supplied payload as a V2 COSE_Sign1 receipt. Demo only."""
+    try:
+        issued = issue_demo_receipt(
+            payload=request.payload,
+            workspace_id=workspace.workspace_id,
+            db_path=_demo_receipt_db(workspace),
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return ReceiptIssueResponse(
+        receipt_id=issued.receipt_id,
+        action_digest=issued.action_digest[:16],
+        action_digest_full=issued.action_digest,
+        issued_at=issued.issued_at,
+        key_id=issued.key_id,
+        algorithm=issued.algorithm,
+        ephemeral_key=issued.ephemeral_key,
+        warning=issued.warning,
+    )
+
+
+@app.post("/v2/verify", response_model=ReceiptVerifyResponse, tags=["Receipts V2"])
+def verify_v2_receipt_endpoint(
+    request: ReceiptVerifyRequest,
+    workspace=Depends(verify_api_key),
+):
+    """Verify a stored V2 receipt claim by claim, optionally after tampering."""
+    from hermes.receipts.v2.verifier import verify_receipt
+
+    stored = get_demo_receipt(request.receipt_id, _demo_receipt_db(workspace))
+    if stored is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Receipt '{request.receipt_id}' not found.",
+        )
+
+    warnings: List[str] = []
+    signer, _ = get_signer()
+    active = signer.public_key_manifest()
+    if active["key_id"] == stored.key_id:
+        public_key_pem = active["public_key_pem"]
+    else:
+        public_key_pem = stored.public_key_pem
+        warnings.append(
+            f"Receipt was signed by key {stored.key_id}, not the key currently "
+            f"loaded ({active['key_id']}). Verified against the public key recorded "
+            "with the receipt, not against a published key manifest."
+        )
+    if stored.ephemeral_key:
+        warnings.append(EPHEMERAL_KEY_WARNING)
+
+    cose_bytes = stored.cose_sign1_bytes
+    verified_payload = "stored"
+    if request.tampered_payload is not None:
+        try:
+            cose_bytes = splice_payload(cose_bytes, request.tampered_payload)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        verified_payload = "tampered"
+
+    result = verify_receipt(cose_bytes, public_key_pem)
+    return ReceiptVerifyResponse(
+        receipt_id=stored.receipt_id,
+        verified_payload=verified_payload,
+        fully_valid=result.fully_valid,
+        signature_valid=result.signature_valid,
+        receipt_digest_valid=result.receipt_digest_valid,
+        chain_link_valid=result.chain_link_valid,
+        signer_key_id=result.signer_key_id,
+        algorithm=result.algorithm,
+        issued_at=result.issued_at or stored.issued_at,
+        claims=result.claims,
+        errors=result.errors,
+        warnings=warnings + result.warnings,
+    )
 
 
 # Serve React dashboard — API routes take priority, static files fall through
