@@ -148,6 +148,5 @@ hermesrelay.dev
 
 Built and maintained by Sui-Generis LLC  
 Rocky Top, Tennessee  
-UEI: YK4VNG1STBA1
 
 This software is intended for deployment by qualified MSPs serving HIPAA-covered entities. A Business Associate Agreement is required prior to production deployment.
