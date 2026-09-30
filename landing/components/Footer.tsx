@@ -15,6 +15,7 @@ export function Footer() {
       <div className="w-full max-w-content mx-auto flex flex-col md:flex-row md:justify-between items-center gap-3 md:gap-6 font-mono text-caption text-muted">
         <span>© 2026 Sui-Generis LLC</span>
         <span>Hermes — hermesrelay.dev</span>
+        <a href="https://github.com/g1n0mag1k/hermes-echo" className="hover:text-signal transition-colors">Hermes Echo — CLI behavioral contracts</a>
         <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">
           <a href="/privacy" className="hover:text-signal transition-colors">Privacy Policy</a>
           <a href="/security" className="hover:text-signal transition-colors">Security</a>
