@@ -8,7 +8,7 @@ const SPECS: readonly { label: string; value: string }[] = [
   { label: "Deployment target", value: "Customer environment — Docker, bare metal, or VM" },
   { label: "External network calls", value: "None during scrubbing. Zero-egress by design." },
   { label: "Detection method", value: "Regex + fixed-version spaCy NER + Microsoft Presidio" },
-  { label: "PHI categories covered", value: "18 of 18 Safe Harbor categories — 16 direct text detection, 2 (biometric, full-face photo) via reference detection with disclosed binary content limitation" },
+  { label: "PHI categories covered", value: "16 of 18 Safe Harbor categories via direct text detection. 2 remaining categories (biometric identifiers §164.514(b)(2)(i)(P) and full-face photographs §164.514(b)(2)(i)(Q)) detected via text reference only — binary content cannot be inspected by a text pipeline. Scope boundary is machine-readable in every attestation receipt via declared_scope and evidence_incomplete_categories fields." },
   { label: "Audit record format", value: "COSE_Sign1 asymmetric-signed, RFC 8785 canonical, Merkle-anchored receipts — independently verifiable" },
   { label: "CFR citation per token", value: "Yes — 45 CFR §164.514(b)(2)(i) subcategory attached" },
   { label: "LLM dependency", value: "None. Deterministic pipeline only." },
