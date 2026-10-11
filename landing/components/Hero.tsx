@@ -121,13 +121,10 @@ export function Hero() {
           </p>
         </div>
 
-        {/* -------------------- RIGHT COLUMN — TICKER --------------------
+        {/* -------------------- RIGHT COLUMN — TICKER (leads), LOGO (follows) --------------------
          * Full-bleed on mobile (no horizontal padding so it spans the
          * viewport), constrained back into the column on desktop. */}
         <div className="flex flex-col">
-          <div className="w-full mb-6 px-6 sm:px-8 lg:px-0">
-            <img src="/hermes-relay-logo.jpg" alt="Hermes Relay" className="w-full h-auto object-cover opacity-90" style={{objectPosition: 'center'}} />
-          </div>
           <p className="font-mono text-caption text-muted mb-3 px-6 sm:px-8 lg:px-0">
             Illustrative output — sample audit stream (CFR citations limited to categories Hermes detects)
           </p>
@@ -176,6 +173,10 @@ export function Hero() {
           <p className="font-mono text-caption text-verify mt-4 px-6 sm:px-8 lg:px-0">
             ✓ Illustrative chain — tamper-evident format shown for demo purposes
           </p>
+
+          <div className="w-full max-w-[22rem] mt-8 px-6 sm:px-8 lg:px-0">
+            <img src="/hermes-relay-logo.jpg" alt="Hermes Relay" className="w-full h-auto object-cover opacity-90" style={{objectPosition: 'center'}} />
+          </div>
         </div>
       </div>
     </section>
