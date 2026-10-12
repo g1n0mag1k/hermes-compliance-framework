@@ -85,9 +85,9 @@ export function Problem() {
 
         <div className="mt-12 bg-signal-dim border-l-2 border-signal px-8 py-7">
           <p className="font-body text-body text-ink">
-            OCR issued seven resolution agreements against business associates
-            in 2025 alone — the highest enforcement total against business
-            associates since 2013. For MSPs serving healthcare clients, the
+            Seven OCR resolution agreements against business associates since
+            November 2024 — the highest enforcement concentration against BAs
+            in over a decade. For MSPs serving healthcare clients, the
             documentation gap is not a hypothetical compliance problem. It is
             an active enforcement trend.
           </p>

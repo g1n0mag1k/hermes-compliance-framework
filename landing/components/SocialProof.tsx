@@ -7,7 +7,8 @@
 const STATS: readonly { figure: string; label: string; source: string }[] = [
   {
     figure: "7",
-    label: "OCR resolution agreements against business associates in 2025 alone",
+    label:
+      "Seven OCR resolution agreements against business associates since November 2024 — the highest enforcement concentration against BAs in over a decade.",
     source: "HHS Office for Civil Rights — 2025 Enforcement Report",
   },
   {
