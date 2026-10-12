@@ -30,8 +30,8 @@ const INTEGRATIONS: readonly Integration[] = [
   {
     category: "Splunk (HTTP Event Collector)",
     platforms: "Splunk Cloud - Splunk Enterprise",
-    role: "Point the webhook at your HEC endpoint and set the auth header to your HEC token. Every scrub call lands as a structured event -- CFR citation, field type, hash chain ID, timestamp -- with no custom parser required.",
-    method: "HEC-compatible JSON POST",
+    role: "Hermes emits a structured JSON event for every scrubbing decision — field type, CFR citation, hash chain ID, payload ID, timestamp. Point a generic webhook at your Splunk HTTP Event Collector endpoint with your HEC token as the auth header. The event structure is HEC-compatible; native HEC envelope formatting with automatic index routing is on the roadmap.",
+    method: "Generic JSON POST — HEC-compatible, manual envelope configuration required",
   },
   {
     category: "SIEM / DLP -- Broader Landscape",
