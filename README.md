@@ -122,7 +122,7 @@ Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriti
 - ReportLab PDF evidence report generation
 - AI enforcement gateway (OpenAI, Azure OpenAI, Anthropic)
 - Legacy scrub proxy paths (OpenAI, Anthropic, Ollama — separate from gateway)
-- Generic JSON webhook dispatcher (compatible with any HTTP JSON webhook receiver; native Splunk HEC event formatting not currently implemented)
+- Generic JSON webhook dispatcher (compatible with any HTTP JSON webhook receiver; HEC-compatible JSON structure with manual HEC envelope configuration required; native Splunk HEC event formatting with automatic index routing not currently implemented)
 - Docker Compose (image built locally from this repository)
 - Render (API + Streamlit demo) / Netlify (landing page)
 
@@ -147,6 +147,6 @@ hermesrelay.dev
 ## Legal
 
 Built and maintained by Sui-Generis LLC  
-Rocky Top, Tennessee  
+Knoxville, Tennessee  
 
 This software is intended for deployment by qualified MSPs serving HIPAA-covered entities. A Business Associate Agreement is required prior to production deployment.
