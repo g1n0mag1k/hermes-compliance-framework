@@ -28,7 +28,7 @@ const FAQS: readonly FAQItem[] = [
   {
     question: "Do you have SOC 2 or a cyber insurance policy today?",
     answer:
-      "Not yet. Hermes is a solo-founder, pre-revenue project moving through pilot engagements now. SOC 2 Type II requires 6-12 months of sustained evidence collection and an independent audit, and is on the roadmap once there is a customer base to audit against. If your organization's vendor risk process requires either as a hard gate today, say so early -- it may mean waiting for a later stage of the product rather than the current pilot.",
+      "SOC 2 certifies a vendor's infrastructure — it answers the question 'can I trust this company with my data?' Hermes runs entirely inside your environment. No PHI transits Sui-Generis infrastructure during scrubbing. There is no Hermes server handling your patient data, which means there is no Sui-Generis infrastructure to audit under SOC 2. The zero-egress architecture eliminates the vendor trust problem SOC 2 exists to solve. On cyber insurance: Hermes is a pre-revenue pilot-stage product. If your vendor risk process requires a cyber insurance certificate as a hard gate today, say so early — it may mean waiting for a later stage of the product.",
   },
   {
     question: "What's the incident response process if something goes wrong?",
