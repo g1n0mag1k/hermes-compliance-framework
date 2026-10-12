@@ -35,7 +35,7 @@ const COLUMNS: readonly Column[] = [
     label: "What MSPs cannot produce",
     content:
       "A per-token, CFR-cited, cryptographically signed record that documents Safe Harbor-aligned de-identification — with core identifier coverage today and full Safe Harbor coverage actively expanding.",
-    source: "OCR Risk Analysis Initiative — 2026",
+    source: "45 CFR §164.308(a)(1), §164.312(b) — Security Rule, in force today",
   },
 ];
 
@@ -69,6 +69,15 @@ export function Problem() {
         </h2>
 
         <p className="font-body text-body text-muted mt-8 max-w-[640px]">
+          Current HIPAA enforcement — BAA requirements under 45 CFR
+          §164.308(b)(1), risk analysis under §164.308(a)(1), and audit
+          controls under §164.312(b) — applies today. The proposed Security
+          Rule update (final action expected mid-2027, RIN 0945-AA22) will add
+          technical specificity to requirements that already exist. The
+          documentation gap is not a future problem.
+        </p>
+
+        <p className="font-body text-body text-muted mt-6 max-w-[640px]">
           When OCR investigates a business associate, they do not ask whether
           you had a scrubbing tool. They ask you to produce the evidence —
           exactly what was found, under which regulation, by which method, in

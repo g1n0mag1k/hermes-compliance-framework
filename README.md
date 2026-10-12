@@ -105,7 +105,7 @@ Per-scan evidence artifact. Contains classification flags, per-flag occurrence c
 When a scan result is reviewed by a person, a `HumanReviewReceipt` is issued and chained into the same attestation chain as the original scan — tamper-evident proof that a control was looked at by a human, not just that the automated scan ran. Supports `accepted`, `overridden`, and `escalated` decisions.
 
 **BA Technical Safeguard Verification Report (BAVR)** *(documentation concept — not a shipped automated generator)*  
-Annual written verification of technical safeguards for covered entity clients. Designed to support annual BA verification workflows under proposed 2026 HIPAA Security Rule updates. Only producible by a zero-egress architecture — cloud-ML vendors cannot make this attestation honestly.
+Annual written verification of technical safeguards for covered entity clients. Designed to support BA verification workflows under Security Rule requirements in force today (including 45 CFR §164.308(b)(1), §164.308(a)(1), and §164.312(b)). The proposed Security Rule update (final action expected mid-2027, RIN 0945-AA22) will add technical specificity to obligations MSPs already face. Only producible by a zero-egress architecture — cloud-ML vendors cannot make this attestation honestly.
 
 **Cyber Insurance Underwriting Attestation Package (CUAP)** *(documentation concept — not a shipped automated generator)*  
 Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriting control categories. Provides tamper-evident evidence records supporting PHI-handling attestation reviews.

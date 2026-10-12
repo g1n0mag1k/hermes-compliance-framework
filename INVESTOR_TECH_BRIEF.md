@@ -206,9 +206,9 @@ The question every investor will ask: *"Why not just use Microsoft Purview or AW
 
 ## Why This Matters Now
 
-The HIPAA enforcement environment around AI is tightening. The OCR's December 2024 HIPAA Security Rule update and FTC AI health data guidance have created a compliance urgency that did not exist 18 months ago. MSPs with healthcare clients are actively looking for a bolt-on compliance layer that works with their existing RMM and PSA tooling — not a rip-and-replace enterprise platform.
+The HIPAA enforcement environment around AI is tightening. Current Security Rule obligations — BAAs under 45 CFR §164.308(b)(1), risk analysis under §164.308(a)(1), audit controls under §164.312(b) — apply today; OCR resolution agreements against business associates hit a multi-year high in 2025. HHS published a proposed Security Rule update (NPRM, December 2024; final action expected mid-2027, RIN 0945-AA22) that would add technical specificity, not create the underlying duty to document controls. FTC AI health data guidance adds parallel pressure. MSPs with healthcare clients are actively looking for a bolt-on compliance layer that works with their existing RMM and PSA tooling — not a rip-and-replace enterprise platform.
 
-Hermes is positioned as the answer to a question MSPs are already asking, ahead of a regulatory tightening cycle that is already underway.
+Hermes is positioned as the answer to a question MSPs are already asking: how to produce defensible evidence for enforcement that is active now, not a hypothetical 2026 rule effective date.
 
 ---
 
