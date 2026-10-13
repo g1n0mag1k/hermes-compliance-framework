@@ -44,3 +44,5 @@ next-env.d.ts
 # re-include this project's source lib/ directory.
 !lib/
 !lib/**
+AGENTS.md
+CLAUDE.md
