@@ -347,18 +347,22 @@ def _canary_payload() -> str:
 
 def _has_trial_quota_row(workspace_id: str) -> bool:
     """Return True if workspace has a trial_quota row (trial tenant, not production)."""
-    import hermes.workspaces as ws_mod
-
-    with ws_mod._registry_lock:
-        conn = ws_mod._get_registry_conn()
-        try:
-            row = conn.execute(
-                "SELECT 1 FROM trial_quota WHERE workspace_id = ?",
-                (workspace_id,),
-            ).fetchone()
-            return row is not None
-        finally:
-            conn.close()
+    db_path = os.environ.get("HERMES_REGISTRY_DB") or os.path.join(
+        os.environ.get("HERMES_DATA_DIR", "data/workspaces"),
+        "registry.db",
+    )
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM trial_quota WHERE workspace_id = ?",
+            (workspace_id,),
+        ).fetchone()
+        return row is not None
+    except sqlite3.OperationalError:
+        return False
+    finally:
+        conn.close()
 
 
 # -------------------------------------------------------------------------
