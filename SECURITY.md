@@ -87,3 +87,10 @@ excludes already-patched versions.
 **Scope:** Affects only the PSA canary-drift subsystem, not the core /v1/scrub or gateway PHI-detection path  
 **Remediation path:** Encrypt api_token column at rest using HERMES_VAULT_KEY via hermes/vault.py AES-256-GCM before storing; decrypt on retrieval. Scheduled for next engineering sprint.  
 **Diligence statement:** PSA credentials are stored in a local SQLite database accessible only within the customer deployment environment. They are not transmitted externally. Encryption at rest is on the roadmap.
+
+### python-ecdsa Minerva timing attack on P-256 (Dependabot alert #54, high)
+
+- **Package:** ecdsa 0.19.2 (transitive dependency via pycose==1.1.0)
+- **Reviewed:** 2026-10-13
+- **Determination:** Not exploitable in this codebase. pycose lists ecdsa as a dependency, but hermes/receipts/v2/software_signer.py uses pyca/cryptography exclusively for all signing operations (Ed25519 via cryptography.hazmat.primitives.asymmetric.ed25519, ES256 via cryptography.hazmat.primitives.asymmetric.ec). The python-ecdsa package is installed as a transitive dependency but is never imported or called from any Hermes code path. Verified by code inspection of software_signer.py.
+- **No fix path exists:** pycose 1.1.0 (latest) still requires ecdsa. Will revisit if pycose releases a version that drops this dependency, or if any Hermes code path calling ecdsa is identified.
