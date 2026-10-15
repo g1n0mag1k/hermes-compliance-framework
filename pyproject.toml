@@ -31,6 +31,8 @@ dependencies = [
     "jcs==0.2.1",
     "pycose==1.1.0",
     "cbor2==6.1.5",
+    "pandas==2.2.3",
+    "openpyxl==3.1.5",
 ]
 
 [project.scripts]
