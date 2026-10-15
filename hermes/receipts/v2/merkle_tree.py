@@ -326,41 +326,25 @@ def _consistency_path(
     leaf_hashes: list[bytes], old_size: int, new_size: int
 ) -> list[bytes]:
     """
-    RFC 9162 §2.1.4 — compute consistency proof path.
-
-    The path contains the minimal set of hashes needed to:
-      1. Recompute old_root from old_size leaves
-      2. Recompute new_root from new_size leaves
+    RFC 9162 §2.1.4 — compute consistency proof path (PROOF(m, n)).
     """
-    # Compute subtree hashes needed to reconstruct old and new roots
-    old_leaves = leaf_hashes[:old_size]
-    new_leaves = leaf_hashes[:new_size]
+    if old_size == new_size:
+        return []
+    k = 1
+    while k < new_size:
+        k <<= 1
+    k >>= 1  # largest power of 2 strictly less than new_size
 
-    # Walk the trees in parallel and collect the boundary hashes
-    path: list[bytes] = []
-
-    def _subtree_hash(leaves: list[bytes]) -> bytes:
-        return _compute_root(leaves) if leaves else b"\x00" * 32
-
-    def _collect(old_lvl: list[bytes], new_lvl: list[bytes]) -> None:
-        if old_lvl == new_lvl:
-            return
-        if len(old_lvl) == len(new_lvl):
-            # Same size — they must differ; add both subtree hashes
-            path.append(_compute_root(old_lvl) if len(old_lvl) > 1 else old_lvl[0])
-            path.append(_compute_root(new_lvl) if len(new_lvl) > 1 else new_lvl[0])
-            return
-        # Split new at old boundary
-        split = len(old_lvl)
-        path.append(_compute_root(old_lvl) if len(old_lvl) > 1 else old_lvl[0])
-        if split < len(new_lvl):
-            remaining = new_lvl[split:]
-            path.append(
-                _compute_root(remaining) if len(remaining) > 1 else remaining[0]
-            )
-
-    _collect(old_leaves, new_leaves)
-    return path
+    if old_size <= k:
+        sub = _consistency_path(leaf_hashes[:k], old_size, k)
+        right_root = _compute_root(leaf_hashes[k:new_size])
+        return sub + [right_root]
+    else:
+        sub = _consistency_path(
+            leaf_hashes[k:new_size], old_size - k, new_size - k
+        )
+        left_root = _compute_root(leaf_hashes[:k])
+        return [left_root] + sub
 
 
 def _verify_consistency(
@@ -371,34 +355,45 @@ def _verify_consistency(
     path: list[bytes],
 ) -> bool:
     """
-    Verify a consistency proof.
-
-    A correct proof means: the first old_size entries of the new tree
-    produce old_root, and all new_size entries produce new_root.
+    RFC 9162 §2.1.4.2 — verify a consistency proof between two tree heads.
     """
-    if old_size == 0 or old_size > new_size:
+    if old_size > new_size:
         return False
     if old_size == new_size:
         return old_root == new_root and not path
-
-    # The path encodes two subtree hashes: the old subtree and the new extension
-    if len(path) < 2:
+    if old_size == 0:
+        return False
+    if not path:
         return False
 
-    # path[0] should equal old_root when old is a power-of-two subtree,
-    # or be a sub-hash that we combine to get old_root.
-    # For our simplified implementation: verify that path hashes are consistent.
-    try:
-        reconstructed_old = path[0] if len(path) >= 1 else b""
-        reconstructed_new = merkle_node(path[0], path[1]) if len(path) >= 2 else b""
-        # Accept if either reconstruction matches, or path directly gives roots
-        old_match = (path[0] == old_root) or (reconstructed_old == old_root)
-        # For new root: it's either path[1] or the node combining both
-        new_match = (
-            path[1] == new_root
-            or reconstructed_new == new_root
-            or merkle_node(path[1], path[0]) == new_root
-        )
-        return old_match and new_match
-    except Exception:
-        return False
+    if old_size & (old_size - 1) == 0:
+        first_elem, rest = old_root, path
+    else:
+        first_elem, rest = path[0], path[1:]
+
+    fn = old_size - 1
+    sn = new_size - 1
+
+    while fn & 1:
+        fn >>= 1
+        sn >>= 1
+
+    fr = first_elem
+    sr = first_elem
+
+    for sibling in rest:
+        if sn == 0:
+            return False
+        if (fn & 1) or fn == sn:
+            fr = merkle_node(sibling, fr)
+            sr = merkle_node(sibling, sr)
+            if not (fn & 1):
+                while not (fn & 1) and fn != 0:
+                    fn >>= 1
+                    sn >>= 1
+        else:
+            sr = merkle_node(sr, sibling)
+        fn >>= 1
+        sn >>= 1
+
+    return fr == old_root and sr == new_root and sn == 0
