@@ -15,6 +15,9 @@ from hermes.classifier import FlagEntry, RedactionAuditLog, scrub_payload
 from hermes.report import generate_evidence_report
 from hermes.webhooks import dispatch_webhook
 
+import pandas as pd
+from hermes.pseudonymizer import Pseudonymizer
+
 
 def _flags_to_counts(flags: Dict[str, FlagEntry]) -> Dict[str, int]:
     """Map audit-log flag entries to per-flag counts for attestation issuance."""
@@ -72,3 +75,92 @@ def run_scan(
         report_bytes=report_bytes,
         audit_log=result.audit_log,
     )
+
+
+@dataclass
+class PseudonymizationResult:
+    transaction_id: str
+    coded_df: pd.DataFrame
+    linkage_table: dict
+    receipt: ComplianceReceipt
+
+
+def run_pseudonymization_scan(
+    df: pd.DataFrame,
+    phi_columns: list[str],
+    transaction_id: Optional[str] = None,
+    downstream_target: Optional[str] = None,
+) -> PseudonymizationResult:
+    """
+    Pseudonymize a DataFrame and issue a signed ComplianceReceipt.
+
+    Steps (in order):
+    1. txn_id = transaction_id or f"txn_pseudo_{uuid.uuid4().hex[:12]}"
+    2. p = Pseudonymizer(phi_columns)
+    3. coded_df, linkage_table = p.pseudonymize(df, txn_id)
+    4. flags_triggered = {
+           col: int(df[col].notna().sum())
+           for col in phi_columns if col in df.columns
+       }
+    5. flags_redacted = flags_triggered  (same — all detected values were coded)
+    6. char_count_in = sum(
+           len(str(v)) for col in phi_columns
+           if col in df.columns
+           for v in df[col].dropna()
+       )
+    7. char_count_out = sum(
+           len(str(v)) for col in phi_columns
+           if col in coded_df.columns
+           for v in coded_df[col].dropna()
+       )
+    8. receipt = ATTESTATION_CHAIN.issue(
+           transaction_id=txn_id,
+           flags_triggered=flags_triggered,
+           flags_redacted=flags_redacted,
+           char_count_in=char_count_in,
+           char_count_out=char_count_out,
+           downstream_target=downstream_target,
+           detectors_executed={
+               "PSEUDONYMIZER": "ok",
+               "STRUCTURED_CSV": "ok",
+           },
+       )
+    9. return PseudonymizationResult(txn_id, coded_df, linkage_table, receipt)
+
+    Do NOT call dispatch_webhook().
+    Do NOT call generate_evidence_report().
+    """
+    txn_id = transaction_id or f"txn_pseudo_{uuid.uuid4().hex[:12]}"
+    p = Pseudonymizer(phi_columns)
+    coded_df, linkage_table = p.pseudonymize(df, txn_id)
+    flags_triggered = {
+        col: int(df[col].notna().sum())
+        for col in phi_columns
+        if col in df.columns
+    }
+    flags_redacted = flags_triggered
+    char_count_in = sum(
+        len(str(v))
+        for col in phi_columns
+        if col in df.columns
+        for v in df[col].dropna()
+    )
+    char_count_out = sum(
+        len(str(v))
+        for col in phi_columns
+        if col in coded_df.columns
+        for v in coded_df[col].dropna()
+    )
+    receipt = ATTESTATION_CHAIN.issue(
+        transaction_id=txn_id,
+        flags_triggered=flags_triggered,
+        flags_redacted=flags_redacted,
+        char_count_in=char_count_in,
+        char_count_out=char_count_out,
+        downstream_target=downstream_target,
+        detectors_executed={
+            "PSEUDONYMIZER": "ok",
+            "STRUCTURED_CSV": "ok",
+        },
+    )
+    return PseudonymizationResult(txn_id, coded_df, linkage_table, receipt)
