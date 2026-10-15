@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 from hermes.attestation import ATTESTATION_CHAIN, ComplianceReceipt
 from hermes.classifier import FlagEntry, RedactionAuditLog, scrub_payload
 from hermes.report import generate_evidence_report
 from hermes.webhooks import dispatch_webhook
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 def _flags_to_counts(flags: Dict[str, FlagEntry]) -> Dict[str, int]:
@@ -31,6 +34,69 @@ class AgentResult:
     receipt: ComplianceReceipt
     report_bytes: Optional[bytes]  # None if engagement_meta not provided
     audit_log: RedactionAuditLog
+
+
+@dataclass
+class PseudonymizationScanResult:
+    transaction_id: str
+    coded_df: "pd.DataFrame"
+    linkage_table: dict
+    receipt: ComplianceReceipt
+
+
+def run_pseudonymization_scan(
+    df: "pd.DataFrame",
+    phi_columns: list[str],
+    downstream_target: Optional[str] = None,
+    transaction_id: Optional[str] = None,
+) -> PseudonymizationScanResult:
+    """Pseudonymize broker CSV columns and issue a compliance receipt."""
+    from hermes.pseudonymizer import Pseudonymizer
+
+    txn_id = transaction_id or f"txn_pseudo_{uuid.uuid4().hex[:12]}"
+    pseudonymizer = Pseudonymizer(phi_columns)
+    coded_df, linkage_table = pseudonymizer.pseudonymize(df, txn_id)
+
+    flags_triggered: Dict[str, int] = {}
+    flags_redacted: Dict[str, int] = {}
+    char_count_in = 0
+    char_count_out = 0
+    for col in phi_columns:
+        if col not in df.columns:
+            continue
+        for value in df[col]:
+            text = str(value)
+            if text == "" or text.lower() == "nan":
+                continue
+            char_count_in += len(text)
+            flags_triggered[f"pseudonymize:{col}"] = (
+                flags_triggered.get(f"pseudonymize:{col}", 0) + 1
+            )
+        for value in coded_df[col]:
+            text = str(value)
+            if text == "" or text.lower() == "nan":
+                continue
+            char_count_out += len(text)
+            flags_redacted[f"pseudonymize:{col}"] = (
+                flags_redacted.get(f"pseudonymize:{col}", 0) + 1
+            )
+
+    receipt = ATTESTATION_CHAIN.issue(
+        transaction_id=txn_id,
+        flags_triggered=flags_triggered,
+        flags_redacted=flags_redacted,
+        char_count_in=char_count_in,
+        char_count_out=char_count_out,
+        downstream_target=downstream_target,
+        detectors_executed={"pseudonymizer": "HMAC_SHA256"},
+    )
+
+    return PseudonymizationScanResult(
+        transaction_id=txn_id,
+        coded_df=coded_df,
+        linkage_table=linkage_table,
+        receipt=receipt,
+    )
 
 
 def run_scan(

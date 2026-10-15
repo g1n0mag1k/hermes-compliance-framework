@@ -19,6 +19,8 @@ import sys
 import textwrap
 from pathlib import Path
 
+from hermes.cli.pseudonymize import cmd_pseudonymize
+
 
 VERSION = "1.0.0"
 
@@ -277,6 +279,16 @@ def main(argv=None):
     export_parser.add_argument("--workspace", required=True, help="Workspace ID")
     export_parser.add_argument("--out", required=True, help="Empty output directory")
 
+    pseudo_parser = subparsers.add_parser(
+        "pseudonymize",
+        help="Pseudonymize a HealthSherpa CSV for safe AI analysis",
+    )
+    pseudo_parser.add_argument("--input", required=True)
+    pseudo_parser.add_argument("--output", required=True)
+    pseudo_parser.add_argument("--linkage", required=True)
+    pseudo_parser.add_argument("--receipt", required=True)
+    pseudo_parser.add_argument("--target", default=None)
+
     args = parser.parse_args(argv)
 
     commands = {
@@ -287,6 +299,7 @@ def main(argv=None):
         "keystore-init": cmd_keystore_init,
         "keystore-public-key": cmd_keystore_public_key,
         "export-receipts": cmd_export_receipts,
+        "pseudonymize": cmd_pseudonymize,
     }
 
     commands[args.command](args)
