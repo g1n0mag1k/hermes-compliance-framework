@@ -1,0 +1,12 @@
+{
+  "name": "hermes-netlify-functions",
+  "version": "1.0.0",
+  "description": "Netlify serverless functions for hermesrelay.dev — Stripe webhook → Keygen license provisioning",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "stripe": "^16.0.0"
+  }
+}

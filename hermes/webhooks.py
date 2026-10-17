@@ -25,6 +25,7 @@ import logging
 import os
 import urllib.request
 import urllib.error
+import warnings
 from typing import Optional
 
 from hermes.attestation import ComplianceReceipt
@@ -127,6 +128,12 @@ def dispatch_drata_cct(receipt: ComplianceReceipt) -> bool:
         HERMES_DRATA_API_KEY    Drata API key for Authorization header.
                                 If unset, no auth header is added.
     """
+    warnings.warn(
+        "dispatch_drata_cct() is deprecated and its behavior is frozen. "
+        "Use DrataConnector in gateway/evidence_export/drata_connector.py instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     cct_url = os.environ.get("HERMES_DRATA_CCT_URL")
     if not cct_url:
         return False
