@@ -21,6 +21,7 @@ from hermes.classifier import COVERED_CFRS, NOT_COVERED_CFRS
 
 REVIEW_DECISIONS = ("accepted", "overridden", "escalated")
 DEFAULT_DB_PATH = "hermes_chain.db"
+RECEIPT_SCHEMA_VERSION = "1.0"
 
 # Fields that are mutable chain metadata — excluded from HMAC signature
 # envelope so that applicability propagation mutations do not invalidate
@@ -87,6 +88,8 @@ class ComplianceReceipt:
     # for categories that flags_triggered declared. Signed into receipt_hash
     # so incompleteness is tamper-evident. Empty dict = no gaps found.
     occurrence_gaps: Dict[str, int] = field(default_factory=dict)
+    # Receipt schema version — identifies the V1 compliance receipt format.
+    schema_version: str = RECEIPT_SCHEMA_VERSION
     # --- Mutable chain metadata (outside signature envelope) ---
     # superseded_by: null = authoritative. Populated = hash of superseding
     # receipt. A verifier MUST NOT treat this receipt as standalone

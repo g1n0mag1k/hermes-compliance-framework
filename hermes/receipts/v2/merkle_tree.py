@@ -36,7 +36,10 @@ class MerkleTree:
     This implementation follows RFC 9162 §2.1:
       - Leaves: SHA-256(0x00 || digest)
       - Nodes:  SHA-256(0x01 || left || right)
-      - Odd-length levels duplicate the last node
+      - MTH(D[n]) is defined recursively by splitting at the largest
+        power of two strictly less than n (RFC 9162 §2.1.1).
+        This differs from Bitcoin-style trees that duplicate the last
+        node on odd-length levels.
 
     Thread safety: not thread-safe. Wrap in a lock if shared.
     """
@@ -275,50 +278,86 @@ class ConsistencyProof:
 # ------------------------------------------------------------------
 
 def _compute_root(leaf_hashes: list[bytes]) -> bytes:
-    """Bottom-up Merkle root computation. Duplicates last node on odd levels."""
-    if not leaf_hashes:
+    """
+    RFC 9162 §2.1.1 Merkle Tree Hash (MTH) — recursive power-of-two split.
+
+    MTH({d(0)}) = SHA-256(0x00 || d(0))
+    MTH(D[n])   = SHA-256(0x01 || MTH(D[0:k]) || MTH(D[k:n]))
+    where k is the largest power of two strictly less than n.
+
+    This is NOT the Bitcoin/duplicate-last style; unbalanced trees are
+    handled by splitting recursively, never by padding.
+    """
+    n = len(leaf_hashes)
+    if n == 0:
         raise ValueError("Empty leaf list")
-    level = list(leaf_hashes)
-    while len(level) > 1:
-        next_level = []
-        for i in range(0, len(level), 2):
-            left = level[i]
-            right = level[i + 1] if i + 1 < len(level) else level[i]
-            next_level.append(merkle_node(left, right))
-        level = next_level
-    return level[0]
+    if n == 1:
+        return leaf_hashes[0]
+    # Largest power of two strictly less than n
+    k = 1
+    while k < n:
+        k <<= 1
+    k >>= 1
+    return merkle_node(
+        _compute_root(leaf_hashes[:k]),
+        _compute_root(leaf_hashes[k:]),
+    )
 
 
 def _inclusion_path(leaf_hashes: list[bytes], index: int) -> list[bytes]:
-    """RFC 9162 §2.1.3 — compute the inclusion path (sibling list) for leaf[index]."""
-    path = []
-    level = list(leaf_hashes)
-    while len(level) > 1:
-        # Pad odd-length levels
-        if len(level) % 2 == 1:
-            level.append(level[-1])
-        sibling = index ^ 1  # XOR with 1 flips the last bit → sibling index
-        path.append(level[sibling])
-        # Move up: compute next level
-        next_level = []
-        for i in range(0, len(level), 2):
-            next_level.append(merkle_node(level[i], level[i + 1]))
-        level = next_level
-        index //= 2
-    return path
+    """
+    RFC 9162 §2.1.3 — compute the inclusion proof PATH(m, D[n]).
+
+    PATH(m, {d(0)}) = {}
+    PATH(m, D[n])   = PATH(m, D[0:k]) + [MTH(D[k:n])]   if m < k
+                    = PATH(m-k, D[k:n]) + [MTH(D[0:k])]  if m >= k
+    where k is the largest power of two strictly less than n.
+
+    Returns the list of sibling hashes from leaf to root.
+    Unlike Bitcoin-style trees, there is no duplicate-last padding.
+    """
+    n = len(leaf_hashes)
+    if n == 1:
+        return []
+    # Largest power of two strictly less than n
+    k = 1
+    while k < n:
+        k <<= 1
+    k >>= 1
+    if index < k:
+        return _inclusion_path(leaf_hashes[:k], index) + [_compute_root(leaf_hashes[k:])]
+    else:
+        return _inclusion_path(leaf_hashes[k:], index - k) + [_compute_root(leaf_hashes[:k])]
 
 
 def _recompute_root_from_inclusion(
     leaf_hash: bytes, index: int, path: list[bytes], tree_size: int
 ) -> bytes:
-    """Recompute the Merkle root from an inclusion proof."""
+    """
+    Recompute the Merkle root from an RFC 9162 §2.1.3 inclusion proof.
+
+    Mirrors the recursive split used by _inclusion_path: at each level we
+    know which subtree contains the leaf (left if index < k, right otherwise),
+    so we know whether the path sibling goes on the right or left.
+    """
     node = leaf_hash
+    n = tree_size
+    idx = index
     for sibling in path:
-        if index % 2 == 0:
+        # Largest power of two strictly less than n
+        k = 1
+        while k < n:
+            k <<= 1
+        k >>= 1
+        if idx < k:
+            # Leaf is in left subtree; sibling is right subtree root
             node = merkle_node(node, sibling)
+            n = k
         else:
+            # Leaf is in right subtree; sibling is left subtree root
             node = merkle_node(sibling, node)
-        index //= 2
+            idx -= k
+            n = n - k
     return node
 
 

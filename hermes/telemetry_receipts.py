@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from hermes.attestation import DEFAULT_DB_PATH
+from hermes.attestation import DEFAULT_DB_PATH, RECEIPT_SCHEMA_VERSION
 from hermes.drata_state import DRATA_API_KEY_ENV_VAR, DRATA_CCT_URL_ENV_VAR
 
 logger = logging.getLogger("hermes.telemetry")
@@ -41,6 +41,7 @@ SAFE_HARBOR_SUMMARY_KEYS = frozenset(
 
 
 class TelemetryReceiptPayload(BaseModel):
+    schema_version: str = Field(default=RECEIPT_SCHEMA_VERSION)
     receipt_id: str = Field(..., min_length=1)
     timestamp: str = Field(..., min_length=1)
     repository: str = Field(..., min_length=1)

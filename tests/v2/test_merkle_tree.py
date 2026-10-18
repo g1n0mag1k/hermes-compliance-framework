@@ -220,3 +220,64 @@ class TestConsistencyProofs:
 
         assert t1.root_at(3) == t2.root_at(3)  # first 3 are the same
         assert t1.root() != t2.root()           # but full roots differ
+
+    # D5: verify() tests for non-power-of-two old_size values
+
+    def test_consistency_verify_non_pow2_m3_n7(self):
+        """Consistency proof verify() works for m=3, n=7 (non-power-of-two)."""
+        t = MerkleTree()
+        for i in range(7):
+            t.append(_digest(i))
+        old_root = t.root_at(3)
+        proof = t.consistency_proof(3)
+        assert proof.verify(old_root, t.root()), (
+            "ConsistencyProof.verify() failed for m=3, n=7"
+        )
+
+    def test_consistency_verify_non_pow2_m5_n10(self):
+        """Consistency proof verify() works for m=5, n=10 (non-power-of-two)."""
+        t = MerkleTree()
+        for i in range(10):
+            t.append(_digest(i))
+        old_root = t.root_at(5)
+        proof = t.consistency_proof(5)
+        assert proof.verify(old_root, t.root()), (
+            "ConsistencyProof.verify() failed for m=5, n=10"
+        )
+
+    def test_consistency_verify_non_pow2_m3_n10(self):
+        """Consistency proof verify() works for m=3, n=10 (non-power-of-two both)."""
+        t = MerkleTree()
+        for i in range(10):
+            t.append(_digest(i))
+        old_root = t.root_at(3)
+        proof = t.consistency_proof(3)
+        assert proof.verify(old_root, t.root()), (
+            "ConsistencyProof.verify() failed for m=3, n=10"
+        )
+
+    def test_consistency_verify_all_non_pow2_pairs_up_to_16(self):
+        """D5: Exhaustive verify() over all (m, n) pairs with n ≤ 16."""
+        MAX_N = 16
+        t = MerkleTree()
+        roots: list[bytes] = []
+        for i in range(MAX_N):
+            t.append(_digest(i))
+            roots.append(t.root())
+
+        failures = []
+        for n in range(2, MAX_N + 1):
+            for m in range(1, n):
+                old_root = roots[m - 1]
+                new_root = roots[n - 1]
+                # Build tree of size n and generate the proof
+                tn = MerkleTree()
+                for i in range(n):
+                    tn.append(_digest(i))
+                proof = tn.consistency_proof(m)
+                if not proof.verify(old_root, new_root):
+                    failures.append((m, n))
+
+        assert failures == [], (
+            f"ConsistencyProof.verify() failed for (m, n) pairs: {failures}"
+        )

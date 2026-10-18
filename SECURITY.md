@@ -45,6 +45,34 @@ Dependabot and other automated scanners will periodically flag vulnerabilities i
 - **API authentication:** `/v1/scrub` requires `X-API-Key` matching `HERMES_API_KEY`. Gateway routes require workspace `X-API-Key`. There is currently no rate limiting and no automated key rotation.
 - **Workspace isolation:** Multiple workspaces per deployment are supported with per-workspace receipt chains. Deployments remain single-customer-environment (not multi-tenant SaaS).
 
+## Operational Key Rotation
+
+### HERMES_SIGNING_KEY (attestation chain HMAC key)
+
+The signing key is a raw UTF-8 secret (not hex-decoded bytes) loaded at startup from the `HERMES_SIGNING_KEY` environment variable. Rotation procedure:
+
+1. **Generate a new key:** `openssl rand -hex 32` — store the output as the new secret value.
+2. **Set the new key** in your deployment environment (Netlify UI, Render dashboard, Doppler, etc.) before restarting. The old key is still needed for verification of historical receipts.
+3. **Restart the service.** New receipts will be signed with the new key immediately.
+4. **Verify the chain:** run `hermes-verify` against the existing chain DB. Historical receipts signed with the old key will fail verification if the key is replaced — archive or export the chain before rotation if historical audit trail portability is required.
+5. **Rotate `HERMES_API_KEY`** at the same time to invalidate any client tokens in flight.
+
+> ⚠️ There is currently no automated key rotation. Rotation is a manual operator step. Tracking automated rotation (e.g. AWS Secrets Manager integration) as a future roadmap item.
+
+### HERMES_VAULT_KEY (reversible redaction AES-256-GCM key)
+
+The vault key encrypts reversible redaction tokens. Rotating it invalidates all existing vault tokens — detokenization of prior redacted payloads will fail. Only rotate if the key is suspected compromised; otherwise leave it stable for the lifetime of the deployment.
+
+Rotation procedure: generate a new 32-byte key (`openssl rand -hex 32`), update the environment variable, and restart. Accept that any in-flight reversible redactions will need to be re-scrubbed.
+
+### Gateway Ed25519 keystore (HERMES_GATEWAY_KEYSTORE_PATH)
+
+The gateway keystore persists the Ed25519 signing identity across restarts. To rotate:
+1. Stop the gateway service.
+2. Back up and then delete the existing keystore file at `HERMES_GATEWAY_KEYSTORE_PATH`.
+3. Restart — a new ephemeral identity is generated. Update `HERMES_GATEWAY_KEYSTORE_PASSPHRASE` to a new value at the same time.
+4. Re-verify any gateway V2 receipts issued before rotation with the backed-up old keystore.
+
 ## Supported Versions
 
 Pre-1.0 solo-founder project. There is currently one actively maintained branch: `main`. No formal LTS or backport policy exists yet.
