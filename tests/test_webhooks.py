@@ -13,6 +13,8 @@ from hermes.webhooks import (
     build_event_payload,
     dispatch_webhook,
     dispatch_drata_cct,
+    dispatch_vanta_custom_resource,
+    dispatch_sprinto_custom_evidence,
 )
 
 
@@ -237,3 +239,195 @@ def test_dispatch_drata_cct_legacy_single_attempt_on_5xx(monkeypatch):
         assert dispatch_drata_cct(_sample_receipt()) is False
 
     assert mock_urlopen.call_count == 1
+
+
+# -------------------------------------------------------------------------
+# Vanta custom resource dispatcher tests
+# -------------------------------------------------------------------------
+
+@pytest.fixture(autouse=False)
+def _vanta_env(monkeypatch):
+    monkeypatch.setenv("HERMES_VANTA_CLIENT_ID", "vanta-client-id-test")
+    monkeypatch.setenv("HERMES_VANTA_CLIENT_SECRET", "vanta-client-secret-test")
+    monkeypatch.setenv("HERMES_VANTA_RESOURCE_ID", "hermes-scan-receipts")
+
+
+def _make_token_response(token: str = "vanta-access-token-abc") -> MagicMock:
+    """Return a mock urlopen response that returns a Vanta OAuth token."""
+    tok_resp = MagicMock()
+    tok_resp.read.return_value = json.dumps({"access_token": token}).encode("utf-8")
+    tok_resp.__enter__.return_value = tok_resp
+    return tok_resp
+
+
+def _make_ok_response() -> MagicMock:
+    resp = MagicMock()
+    resp.status = 200
+    resp.__enter__.return_value = resp
+    return resp
+
+
+def test_dispatch_vanta_noop_when_env_not_set():
+    """All three Vanta env vars must be set; missing any one → False, no network call."""
+    receipt = _sample_receipt()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        result = dispatch_vanta_custom_resource(receipt)
+    assert result is False
+    mock_urlopen.assert_not_called()
+
+
+def test_dispatch_vanta_fetches_token_and_puts_resource(_vanta_env):
+    """Happy path: fetches OAuth token, then PUTs resource to Vanta."""
+    receipt = _sample_receipt()
+    token_resp = _make_token_response()
+    put_resp = _make_ok_response()
+
+    with patch("urllib.request.urlopen", side_effect=[token_resp, put_resp]) as mock_urlopen:
+        result = dispatch_vanta_custom_resource(receipt, chain_integrity=True)
+
+    assert result is True
+    assert mock_urlopen.call_count == 2
+
+    # First call: token endpoint
+    token_req = mock_urlopen.call_args_list[0][0][0]
+    assert "vanta.com/oauth/token" in token_req.full_url
+
+    # Second call: resource PUT
+    resource_req = mock_urlopen.call_args_list[1][0][0]
+    assert resource_req.get_method() == "PUT"
+    assert "custom_resource" in resource_req.full_url
+    assert resource_req.get_header("Authorization") == "Bearer vanta-access-token-abc"
+
+    body = json.loads(resource_req.data.decode("utf-8"))
+    assert body["resourceId"] == "hermes-scan-receipts"
+    assert len(body["resources"]) == 1
+    res = body["resources"][0]
+    assert res["uniqueId"] == receipt.receipt_id
+    assert res["customProperties"]["chain_integrity"] is True
+    assert res["customProperties"]["zero_pii_egress_confirmed"] is True
+
+
+def test_dispatch_vanta_returns_false_on_token_fetch_failure(_vanta_env):
+    """Network failure during token fetch → False, resource PUT never attempted."""
+    receipt = _sample_receipt()
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=urllib.error.URLError("token endpoint unreachable"),
+    ) as mock_urlopen:
+        result = dispatch_vanta_custom_resource(receipt)
+
+    assert result is False
+    assert mock_urlopen.call_count == 1
+
+
+def test_dispatch_vanta_returns_false_on_missing_access_token(_vanta_env):
+    """Token response without access_token field → False, no resource PUT."""
+    receipt = _sample_receipt()
+    bad_tok_resp = MagicMock()
+    bad_tok_resp.read.return_value = json.dumps({"error": "invalid_client"}).encode("utf-8")
+    bad_tok_resp.__enter__.return_value = bad_tok_resp
+
+    with patch("urllib.request.urlopen", side_effect=[bad_tok_resp]) as mock_urlopen:
+        result = dispatch_vanta_custom_resource(receipt)
+
+    assert result is False
+    assert mock_urlopen.call_count == 1
+
+
+def test_dispatch_vanta_returns_false_on_put_network_failure(_vanta_env):
+    """Network failure on the resource PUT → False (does not raise)."""
+    receipt = _sample_receipt()
+    token_resp = _make_token_response()
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=[token_resp, urllib.error.URLError("connection refused")],
+    ):
+        result = dispatch_vanta_custom_resource(receipt)
+
+    assert result is False
+
+
+# -------------------------------------------------------------------------
+# Sprinto custom evidence dispatcher tests
+# -------------------------------------------------------------------------
+
+@pytest.fixture(autouse=False)
+def _sprinto_env(monkeypatch):
+    monkeypatch.setenv("HERMES_SPRINTO_API_KEY", "sprinto-api-key-test")
+
+
+def test_dispatch_sprinto_noop_when_api_key_not_set():
+    """No HERMES_SPRINTO_API_KEY → False, no network call."""
+    receipt = _sample_receipt()
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        result = dispatch_sprinto_custom_evidence(receipt)
+    assert result is False
+    mock_urlopen.assert_not_called()
+
+
+def test_dispatch_sprinto_posts_graphql_mutation(_sprinto_env):
+    """Happy path: POSTs GraphQL mutation to Sprinto endpoint with api-key header."""
+    receipt = _sample_receipt()
+
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.__enter__.return_value = mock_resp
+
+    with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
+        result = dispatch_sprinto_custom_evidence(receipt, chain_integrity=True)
+
+    assert result is True
+    assert mock_urlopen.call_count == 1
+
+    req = mock_urlopen.call_args[0][0]
+    assert req.get_method() == "POST"
+    assert "sprinto.com" in req.full_url
+    assert req.get_header("Api-key") == "sprinto-api-key-test"
+    assert req.get_header("Content-type") == "application/json"
+
+    body = json.loads(req.data.decode("utf-8"))
+    assert "mutation" in body["query"].lower()
+    variables = body["variables"]["input"]
+    assert variables["receipt_id"] == receipt.receipt_id
+    assert variables["zero_pii_egress_confirmed"] is True
+    assert variables["chain_integrity"] is True
+
+
+def test_dispatch_sprinto_uses_custom_graphql_url(monkeypatch, _sprinto_env):
+    """HERMES_SPRINTO_GRAPHQL_URL overrides the default endpoint."""
+    monkeypatch.setenv("HERMES_SPRINTO_GRAPHQL_URL", "https://custom.sprinto.example/graphql")
+    receipt = _sample_receipt()
+
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.__enter__.return_value = mock_resp
+
+    with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
+        dispatch_sprinto_custom_evidence(receipt)
+
+    req = mock_urlopen.call_args[0][0]
+    assert req.full_url == "https://custom.sprinto.example/graphql"
+
+
+def test_dispatch_sprinto_returns_false_on_network_failure(_sprinto_env):
+    """Network failure → False (never raises)."""
+    receipt = _sample_receipt()
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=urllib.error.URLError("connection refused"),
+    ):
+        result = dispatch_sprinto_custom_evidence(receipt)
+    assert result is False
+
+
+def test_dispatch_sprinto_returns_false_on_non_2xx(_sprinto_env):
+    """Non-2xx response → False."""
+    receipt = _sample_receipt()
+    mock_resp = MagicMock()
+    mock_resp.status = 403
+    mock_resp.__enter__.return_value = mock_resp
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        result = dispatch_sprinto_custom_evidence(receipt)
+    assert result is False
