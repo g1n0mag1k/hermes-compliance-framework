@@ -50,12 +50,12 @@ CANARY_CORPUS: List[Dict[str, str]] = [
     {
         "category": "45 CFR §164.514(b)(2)(i)(D)",
         "flag": "HIPAA_PHI_PHONE",
-        "value": "555-867-5309",
+        "value": "555-0100",
     },
     {
         "category": "45 CFR §164.514(b)(2)(i)(E)",
         "flag": "HIPAA_PHI_FAX",
-        "value": "fax: 555-321-9876",
+        "value": "fax: 555-0199",
     },
     {
         "category": "45 CFR §164.514(b)(2)(i)(F)",

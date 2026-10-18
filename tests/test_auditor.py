@@ -9,7 +9,7 @@ from hermes.auditor import (
     run_canary,
     save_result,
 )
-from hermes.classifier import COVERED_FLAGS
+from hermes.classifier import COVERED_FLAGS, scrub_payload
 
 
 def test_canary_corpus_covers_all_covered_flags() -> None:
@@ -22,9 +22,28 @@ def test_run_canary_fires_all_covered_flags() -> None:
     assert isinstance(result, CanaryRunResult)
     assert result.flags_missed == []
     assert set(COVERED_FLAGS).issubset(set(result.flags_detected))
+    # G4: No unexpected flags should fire — confirms corpus is tightly scoped
+    assert result.flags_unexpected == [], (
+        f"Unexpected flags fired during canary run: {result.flags_unexpected}. "
+        "Update CANARY_CORPUS or COVERED_FLAGS so the sets align."
+    )
     assert result.receipt.zero_pii_egress_confirmed is True
     assert result.report_bytes is None
     assert result.run_at.endswith("+00:00") or "T" in result.run_at
+
+
+def test_run_canary_scrub_removes_canary_values() -> None:
+    """G4: Canary values must be absent from clean_text after scrubbing."""
+    payload = "\n".join(
+        f"{entry['flag']}: {entry['value']}" for entry in CANARY_CORPUS
+    )
+    scrub_result = scrub_payload(transaction_id="txn_canary_scrub_test", text=payload)
+    clean = scrub_result.clean_text
+    for entry in CANARY_CORPUS:
+        assert entry["value"] not in clean, (
+            f"Canary value for {entry['flag']} ({entry['value']!r}) "
+            f"survived scrubbing and is still present in clean_text."
+        )
 
 
 def test_run_canary_no_drift_on_identical_runs() -> None:
