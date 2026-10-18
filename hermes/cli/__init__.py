@@ -205,7 +205,7 @@ def cmd_keystore_public_key(args):
 
 def cmd_export_receipts(args):
     """Write every gateway receipt of a workspace to OUT as ordered .cose files."""
-    from gateway.evidence import list_gateway_receipts
+    from hermes.gateway_integration import list_gateway_receipts
     from hermes.workspaces import get_workspace
 
     workspace = get_workspace(args.workspace)

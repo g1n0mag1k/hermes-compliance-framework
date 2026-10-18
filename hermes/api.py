@@ -700,9 +700,9 @@ def drata_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech
     state comes from DrataConnector.test_connection(), an offline structural
     check (URL set, https, API key present). It is never a live validation.
     """
-    from gateway.evidence_export.drata_connector import DrataConnector
+    from hermes.gateway_integration import drata_test_connection
 
-    result = DrataConnector().test_connection()
+    result = drata_test_connection()
     return JSONResponse(
         status_code=501,
         content={
@@ -753,10 +753,13 @@ def drata_integration_status_endpoint(
     global (env vars); outbox counts are scoped to the caller's workspace_id.
     If the outbox cannot be read, outbox fields are null instead of failing.
     """
-    from gateway.evidence_export.drata_connector import DrataConnector
-    from gateway.evidence_export.outbox import outbox_stats, sanitize_error
+    from hermes.gateway_integration import (
+        drata_outbox_stats,
+        drata_sanitize_error,
+        drata_test_connection,
+    )
 
-    result = DrataConnector().test_connection()
+    result = drata_test_connection()
     status = DrataIntegrationStatus(
         configured=result.state != DrataConfigState.NOT_CONFIGURED.value,
         connection_state=result.state,
@@ -767,10 +770,10 @@ def drata_integration_status_endpoint(
         last_error=None,
     )
     try:
-        stats = outbox_stats(workspace.workspace_id)
+        stats = drata_outbox_stats(workspace.workspace_id)
     except Exception as exc:
         logging.getLogger("hermes.api").warning(
-            "Drata status: evidence outbox unavailable: %s", sanitize_error(str(exc))
+            "Drata status: evidence outbox unavailable: %s", drata_sanitize_error(str(exc))
         )
         return status
     return status.model_copy(
@@ -791,8 +794,8 @@ async def evaluate_phi_canary(
     workspace=Depends(verify_api_key),
 ):
     """Run PHI canary evaluation; open a PSA ticket on drift via BackgroundTasks."""
-    from gateway.evidence_export.dispatch import dispatch_psa_ticket
     from hermes.auditor import load_prior_result, run_canary, save_result
+    from hermes.gateway_integration import dispatch_psa_ticket
 
     canary_db = None
     if not isinstance(workspace, _LegacyWorkspace):

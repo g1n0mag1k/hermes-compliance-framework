@@ -88,7 +88,9 @@ gateway/credentials.py      — credential injection, auth stripping
 gateway/response_headers.py — provider disclosure header stripping
 Dockerfile + docker-compose.yml (repo root) — the one container deployment
                               (API + gateway, one image); see docs/DEPLOYMENT.md
-NOTE: The root Caddyfile was deleted in commit 9f99c97. docker-compose.yml still references it. This must be resolved before docker compose up will succeed.
+NOTE: The root Caddyfile was deleted in commit 9f99c97. docker-compose.yml no longer references it (resolved). docker compose up succeeds without a Caddyfile.
+scripts/demo.py             — Streamlit investor demo (run: streamlit run scripts/demo.py)
+scripts/install_workspaces.py — bootstrap workspace installer (moved from repo root)
 tests/test_gateway.py       — gateway app/pipeline/policy/provider tests
                               (one of several gateway test files)
 

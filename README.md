@@ -128,6 +128,30 @@ Machine-generated evidence mapped to Coalition, At-Bay, and Travelers underwriti
 
 ---
 
+## CLI entry points
+
+Two commands are installed by `pip install -e .` (or `make install-dev`):
+
+| Command | Entry point | Purpose |
+|---------|------------|---------|
+| `hermes-relay` | `hermes.cli:main` | Start the Hermes API, run canary checks, manage workspaces |
+| `hermes-verify` | `hermes.receipts.v2.cli:main` | Verify a V2 signed receipt off-line |
+
+```bash
+# Start the API server
+hermes-relay serve
+
+# Verify a V2 receipt
+hermes-verify path/to/receipt.cose --public-key public.pem
+
+# Run a one-shot canary check
+hermes-relay canary
+```
+
+See `AGENTS.md` and `docs/DEPLOYMENT.md` for full CLI reference and environment variables.
+
+---
+
 ## Deployment
 
 Hermes is designed for on-premise or private cloud deployment inside the customer environment.
