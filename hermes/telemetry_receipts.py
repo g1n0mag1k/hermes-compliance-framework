@@ -18,6 +18,7 @@ import os
 import sqlite3
 import urllib.error
 import urllib.request
+import warnings
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -272,7 +273,18 @@ def sync_telemetry_receipt_to_drata_cct(
     """
     Best-effort Drata CCT POST for telemetry metadata (flat JSON, Path A style).
     No-op when Drata is not configured; failures do not affect ingestion.
+
+    .. deprecated::
+        Use ``gateway.evidence_export.drata_connector.DrataConnector`` (Path B) instead.
+        This function (Path A) duplicates Drata dispatch and will be removed in a
+        future release once the dual-path architecture is consolidated.
     """
+    warnings.warn(
+        "sync_telemetry_receipt_to_drata_cct is deprecated and will be removed. "
+        "Use gateway.evidence_export.drata_connector.DrataConnector instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     cct_url = os.environ.get(DRATA_CCT_URL_ENV_VAR)
     if not cct_url:
         return DrataCctSyncResult(

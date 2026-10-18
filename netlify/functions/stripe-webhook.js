@@ -23,7 +23,10 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const KEYGEN_BASE = "https://api.keygen.sh/v1";
 const KEYGEN_ACCOUNT = process.env.KEYGEN_ACCOUNT_SLUG;
-const KEYGEN_PRODUCT_ID = process.env.KEYGEN_PRODUCT_ID;
+// KEYGEN_PRODUCT_ID is intentionally not used here: the policy already belongs to the
+// product in Keygen, so scoping by policy ID alone is sufficient for license creation.
+// If you ever need to scope by product directly, add:
+//   const KEYGEN_PRODUCT_ID = process.env.KEYGEN_PRODUCT_ID;
 const KEYGEN_POLICY_ID = process.env.KEYGEN_POLICY_ID;
 const KEYGEN_ADMIN_TOKEN = process.env.KEYGEN_ADMIN_TOKEN;
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
@@ -49,10 +52,6 @@ async function createKeygenLicense({ customerEmail, stripeCustomerId, stripeSubs
         policy: {
           data: { type: "policies", id: KEYGEN_POLICY_ID },
         },
-        // Scopes to the correct product — only licenses under this product
-        // will pass validation when canary-action checks the policy ID.
-        // The policy already belongs to the product; this is belt-and-suspenders.
-        // Remove if your Keygen plan doesn't support the relationship directly.
       },
     },
   };
@@ -97,7 +96,7 @@ async function revokeLicense(licenseId) {
 // Look up a Keygen license by Stripe subscription ID stored in metadata.
 // Used for cancellation to find the license to revoke.
 async function findLicenseBySubscriptionId(stripeSubscriptionId) {
-  const url = `${KEYGEN_BASE}/accounts/${KEYGEN_ACCOUNT}/licenses?meta[stripeSubscriptionId]=${encodeURIComponent(stripeSubscriptionId)}&limit=1`;
+  const url = `${KEYGEN_BASE}/accounts/${KEYGEN_ACCOUNT}/licenses?metadata[stripeSubscriptionId]=${encodeURIComponent(stripeSubscriptionId)}&limit=1`;
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${KEYGEN_ADMIN_TOKEN}`,
@@ -175,12 +174,17 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  // Verify Stripe webhook signature
+  // Verify Stripe webhook signature.
+  // Netlify may base64-encode the raw body for non-text content types;
+  // decode it first so constructEvent receives the exact bytes Stripe signed.
   const sig = event.headers["stripe-signature"];
+  const rawBody = event.isBase64Encoded
+    ? Buffer.from(event.body, "base64").toString("utf8")
+    : event.body;
   let stripeEvent;
   try {
     stripeEvent = stripe.webhooks.constructEvent(
-      event.body,
+      rawBody,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
@@ -212,28 +216,56 @@ exports.handler = async (event) => {
 
     console.log(`Provisioning license for ${customerEmail} (sub: ${stripeSubscriptionId})`);
 
+    // Idempotency: if a license for this subscription already exists (e.g. Stripe
+    // retried the webhook), reuse it rather than creating a duplicate.
     let licenseId, licenseKey;
+    let isExisting = false;
     try {
-      ({ licenseId, licenseKey } = await createKeygenLicense({
-        customerEmail,
-        stripeCustomerId,
-        stripeSubscriptionId,
-      }));
-      console.log(`Keygen license created: ${licenseId} for ${customerEmail}`);
+      const existingId = await findLicenseBySubscriptionId(stripeSubscriptionId);
+      if (existingId) {
+        console.log(`License already exists for subscription ${stripeSubscriptionId}: ${existingId} — reusing`);
+        licenseId = existingId;
+        isExisting = true;
+        // We don't have the key to re-send; fall through to email only if we can fetch it.
+        const keyUrl = `${KEYGEN_BASE}/accounts/${KEYGEN_ACCOUNT}/licenses/${existingId}`;
+        const keyRes = await fetch(keyUrl, {
+          headers: {
+            Authorization: `Bearer ${KEYGEN_ADMIN_TOKEN}`,
+            Accept: "application/vnd.api+json",
+          },
+        });
+        if (keyRes.ok) {
+          const keyJson = await keyRes.json();
+          licenseKey = keyJson.data?.attributes?.key;
+        } else {
+          console.warn(`Could not fetch existing license key for ${existingId} — skipping email`);
+        }
+      } else {
+        ({ licenseId, licenseKey } = await createKeygenLicense({
+          customerEmail,
+          stripeCustomerId,
+          stripeSubscriptionId,
+        }));
+        console.log(`Keygen license created: ${licenseId} for ${customerEmail}`);
+      }
     } catch (err) {
-      console.error("Keygen license creation error:", err.message);
+      console.error("Keygen license provisioning error:", err.message);
       // Return 500 so Stripe retries — critical path
       return { statusCode: 500, body: "License provisioning failed" };
     }
 
-    try {
-      await sendLicenseEmail({ toEmail: customerEmail, licenseKey, licenseId });
-      console.log(`License email sent to ${customerEmail}`);
-    } catch (err) {
-      // Don't return 500 — license was created, email failure shouldn't cause Stripe to retry
-      // and double-provision. Log and alert manually.
-      console.error("SendGrid email error (license already created):", err.message);
-      // TODO: Add fallback alert (e.g. send to support@hermesrelay.dev with the key)
+    if (licenseKey) {
+      try {
+        await sendLicenseEmail({ toEmail: customerEmail, licenseKey, licenseId });
+        console.log(`License email sent to ${customerEmail}${isExisting ? " (resent for existing license)" : ""}`);
+      } catch (err) {
+        // Don't return 500 — license was created/found, email failure shouldn't cause Stripe to retry
+        // and double-provision. Log and alert manually.
+        console.error("SendGrid email error (license already provisioned):", err.message);
+        // TODO: Add fallback alert (e.g. send to support@hermesrelay.dev with the key)
+      }
+    } else {
+      console.warn(`Skipping license email for ${customerEmail} — could not retrieve license key`);
     }
 
     return { statusCode: 200, body: "OK" };
@@ -246,17 +278,28 @@ exports.handler = async (event) => {
 
     console.log(`Subscription cancelled: ${stripeSubscriptionId} — revoking Keygen license`);
 
+    let licenseId;
     try {
-      const licenseId = await findLicenseBySubscriptionId(stripeSubscriptionId);
-      if (licenseId) {
+      licenseId = await findLicenseBySubscriptionId(stripeSubscriptionId);
+    } catch (err) {
+      console.error("License lookup error:", err.message);
+      // Return 500 so Stripe retries — a lookup failure may be transient.
+      return { statusCode: 500, body: "License lookup failed" };
+    }
+
+    if (licenseId) {
+      try {
         await revokeLicense(licenseId);
         console.log(`Keygen license revoked: ${licenseId}`);
-      } else {
-        console.warn(`No Keygen license found for subscription ${stripeSubscriptionId}`);
+      } catch (err) {
+        console.error("License revocation error:", err.message);
+        // Return 500 so Stripe retries — revocation is idempotent (DELETE is safe to retry).
+        return { statusCode: 500, body: "License revocation failed" };
       }
-    } catch (err) {
-      console.error("License revocation error:", err.message);
-      // Don't fail — Stripe shouldn't retry a cancellation event
+    } else {
+      // No license found — log and acknowledge. This can happen if the subscription
+      // was cancelled before a license was provisioned (e.g. checkout abandoned).
+      console.warn(`No Keygen license found for subscription ${stripeSubscriptionId} — nothing to revoke`);
     }
 
     return { statusCode: 200, body: "OK" };

@@ -3,5 +3,11 @@
   command = "npm run build"
   publish = ".next"
 
+# `base` is set to "landing/" for the Next.js build, so Netlify would look for
+# functions at landing/netlify/functions by default. Point it to the repo root's
+# netlify/functions directory explicitly so the Stripe webhook is deployed.
+[functions]
+  directory = "../netlify/functions"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
