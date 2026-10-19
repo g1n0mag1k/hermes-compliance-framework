@@ -83,8 +83,8 @@ class _MockDrataResponse:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *exc: object) -> bool:
-        return False
+    def __exit__(self, *exc: object) -> None:
+        return None
 
 
 class MockDrataServer:
@@ -114,7 +114,7 @@ class MockDrataServer:
         )
         if 200 <= self.status < 300:
             return _MockDrataResponse(self.status)
-        raise urllib.error.HTTPError(req.full_url, self.status, "mock drata error", {}, None)
+        raise urllib.error.HTTPError(req.full_url, self.status, "mock drata error", {}, None)  # type: ignore[arg-type]
 
     @property
     def idempotency_keys(self) -> list[str]:
@@ -247,7 +247,7 @@ def _assert_no_credentials(text: str) -> None:
         assert value not in text, f"credential material {value!r} leaked"
 
 
-def _row(ctx, index: int) -> dict:
+def _row(ctx, index: int) -> dict:  # type: ignore[return-value]
     return get_outbox_row(ctx.events[index].event_id)
 
 
@@ -397,8 +397,8 @@ def step6_drata_failure_enforcement_unaffected(ctx) -> None:
     for original in ctx.results:
         assert original.decision.decision == "BLOCK"
         stored = gateway_evidence.get_gateway_receipt(ctx.ws, original.receipt.receipt_digest)
-        assert stored["payload"]["decision"] == "BLOCK"
-        assert stored["payload"]["forwarded"] is False
+        assert stored["payload"]["decision"] == "BLOCK"  # type: ignore[index]
+        assert stored["payload"]["forwarded"] is False  # type: ignore[index]
     assert _row(ctx, 0)["status"] == OutboxStatus.EXPORTED.value
     assert ctx.upstream == []
 

@@ -14,7 +14,7 @@ from gateway.exceptions import ReceiptPersistenceError
 from gateway.policy import EnforcementDecision, PolicyDecision
 from hermes.receipts.v2.builder import ReceiptV2, ReceiptV2Builder
 from hermes.receipts.v2.key_store import KeyStore
-from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
+from hermes.receipts.v2.software_signer import SoftwareSignerEd25519, SoftwareSignerES256
 from hermes.workspaces import Workspace, get_chain_for_workspace
 
 _GATEWAY_RECEIPTS_SCHEMA = """
@@ -53,7 +53,7 @@ def validate_gateway_signing_config() -> None:
         )
 
 
-def _load_signer_from_env() -> SoftwareSignerEd25519:
+def _load_signer_from_env() -> SoftwareSignerEd25519 | SoftwareSignerES256:
     validate_gateway_signing_config()
     keystore_path = os.environ.get("HERMES_GATEWAY_KEYSTORE_PATH")
     keystore_passphrase = os.environ.get("HERMES_GATEWAY_KEYSTORE_PASSPHRASE")
@@ -68,10 +68,10 @@ def _load_signer_from_env() -> SoftwareSignerEd25519:
     return SoftwareSignerEd25519.generate()
 
 
-_GATEWAY_SIGNER: SoftwareSignerEd25519 | None = None
+_GATEWAY_SIGNER: SoftwareSignerEd25519 | SoftwareSignerES256 | None = None
 
 
-def _get_gateway_signer() -> SoftwareSignerEd25519:
+def _get_gateway_signer() -> SoftwareSignerEd25519 | SoftwareSignerES256:
     global _GATEWAY_SIGNER
     if _GATEWAY_SIGNER is None:
         _GATEWAY_SIGNER = _load_signer_from_env()

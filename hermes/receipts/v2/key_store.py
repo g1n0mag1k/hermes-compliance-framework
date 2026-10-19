@@ -118,7 +118,7 @@ class KeyStore:
         if algorithm == "EdDSA":
             private_key = ed25519.Ed25519PrivateKey.generate()
         elif algorithm == "ES256":
-            private_key = ec.generate_private_key(ec.SECP256R1())
+            private_key = ec.generate_private_key(ec.SECP256R1())  # type: ignore[assignment]
         else:
             raise ValueError(f"Unsupported algorithm {algorithm!r}. Use 'EdDSA' or 'ES256'.")
 
@@ -205,7 +205,7 @@ class KeyStore:
 
         # Eagerly verify passphrase — better to fail fast here than on first sign
         store._decrypt(passphrase)  # raises on wrong passphrase
-        store._passphrase = passphrase  # cache for load_signer()
+        store._passphrase = passphrase  # type: ignore[attr-defined]  # cache for load_signer()
         return store
 
     # ------------------------------------------------------------------

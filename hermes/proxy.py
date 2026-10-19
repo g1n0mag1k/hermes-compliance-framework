@@ -117,7 +117,7 @@ class ProxyRelay:
                     k: v.count if isinstance(v, FlagEntry) else v["count"]
                     for k, v in result.audit_log.flags_redacted.items()
                 }
-                detectors_executed = dict(result.audit_log.detectors_executed)
+                detectors_executed = dict(result.audit_log.detectors_executed)  # type: ignore[attr-defined]
 
         scrubbed_size = len(scrubbed_body) if scrubbed_body else 0
 

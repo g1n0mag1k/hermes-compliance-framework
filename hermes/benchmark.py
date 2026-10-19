@@ -176,11 +176,11 @@ def generate_report(results: list[BenchmarkResult]) -> str:
         )
 
     for tool, data in COMPETITOR_BASELINES.items():
-        ssn = data.get("HIPAA_SSN", {})
-        pan = data.get("PCI_PAN", {})
-        rev = "✅" if data.get("reversible_redaction") else "❌"
-        att = "✅" if data.get("compliance_receipts") else "❌"
-        egress = "❌" if any(x in data.get("note", "").lower() for x in ["egress", "cloud", "network"]) else "✅"
+        ssn = data.get("HIPAA_SSN", {})  # type: ignore[attr-defined]
+        pan = data.get("PCI_PAN", {})  # type: ignore[attr-defined]
+        rev = "✅" if data.get("reversible_redaction") else "❌"  # type: ignore[attr-defined]
+        att = "✅" if data.get("compliance_receipts") else "❌"  # type: ignore[attr-defined]
+        egress = "❌" if any(x in data.get("note", "").lower() for x in ["egress", "cloud", "network"]) else "✅"  # type: ignore[attr-defined]
         lines.append(
             f"| {tool} | "
             f"{ssn.get('detection_rate', 0):.0%} | "

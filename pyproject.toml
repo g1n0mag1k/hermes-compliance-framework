@@ -70,6 +70,13 @@ ignore = [
     "DTZ011",
 ]
 
+[tool.mypy]
+# Baseline mypy config — codebase predates strict type annotations.
+# Pre-existing type issues are suppressed inline with # type: ignore[code]
+# comments to maintain a zero-error baseline without masking new errors.
+python_version = "3.12"
+ignore_missing_imports = true
+
 [tool.bandit]
 skips = ["B101", "B601"]
 

@@ -191,7 +191,7 @@ def _sample_event(**overrides: Any) -> EvidenceEvent:
         "cose_sign1_hex": "aabbcc",
     }
     defaults.update(overrides)
-    return EvidenceEvent(**defaults)
+    return EvidenceEvent(**defaults)  # type: ignore[arg-type]
 
 
 def _openai_chat(content: str) -> dict:

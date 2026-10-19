@@ -173,7 +173,7 @@ def run_ceremony(
         m = signer.public_key_manifest()
         return ManifestEntry(
             key_id=m["key_id"],
-            tier=tier,
+            tier=tier,  # type: ignore[arg-type]
             algorithm=m["algorithm"],
             public_key_pem=m["public_key_pem"],
             public_key_spki_sha256=m["public_key_spki_sha256"],

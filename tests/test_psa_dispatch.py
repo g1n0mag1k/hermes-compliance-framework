@@ -50,7 +50,7 @@ def test_dispatch_halopsa_posts_correct_payload(manager: CredentialManager) -> N
         )
 
     mock_client.post.assert_awaited_once()
-    args, kwargs = mock_client.post.await_args
+    args, kwargs = mock_client.post.await_args  # type: ignore[misc]
     assert args[0] == "https://halo.example.com/api/Tickets"
     assert kwargs["json"] == {
         "summary": "Hermes Relay Drift Detected: HIPAA_SSN",
@@ -91,7 +91,7 @@ def test_dispatch_connectwise_posts_correct_payload(manager: CredentialManager) 
         )
 
     mock_client.post.assert_awaited_once()
-    args, kwargs = mock_client.post.await_args
+    args, kwargs = mock_client.post.await_args  # type: ignore[misc]
     assert args[0] == (
         "https://cw.example.com/v4_6_release/apis/3.0/service/tickets"
     )

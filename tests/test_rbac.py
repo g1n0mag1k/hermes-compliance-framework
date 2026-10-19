@@ -12,7 +12,8 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from hermes.api import DrataConfigState, app, get_drata_config_state
+from hermes.api import DrataConfigState, app
+from hermes.drata_state import get_drata_config_state
 from hermes.workspaces import create_workspace
 
 

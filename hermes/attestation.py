@@ -143,7 +143,7 @@ class AttestationChain:
         self._lock = threading.Lock()
         self._genesis_hash = hashlib.sha256(b"hermes-genesis-block").hexdigest()
         self._db_path = db_path or os.environ.get("HERMES_DB_PATH", DEFAULT_DB_PATH)
-        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)  # type: ignore[arg-type]
         self._init_db()
         self._load_from_db()
 
@@ -338,7 +338,7 @@ class AttestationChain:
 
             signature = self._sign_receipt(sign_content)
 
-            receipt = ComplianceReceipt(
+            receipt = ComplianceReceipt(  # type: ignore[arg-type]
                 **sign_content,
                 receipt_hash=signature,
                 superseded_by=None,
@@ -396,7 +396,7 @@ class AttestationChain:
 
             signature = self._sign_receipt(sign_content)
 
-            review = HumanReviewReceipt(
+            review = HumanReviewReceipt(  # type: ignore[arg-type]
                 **sign_content,
                 review_receipt_hash=signature,
                 superseded_by=None,
@@ -433,7 +433,7 @@ class AttestationChain:
                 # and verify HMAC
                 sign_content = self._build_sign_content(item)
                 stored_hash = (
-                    item.review_receipt_hash if is_review else item.receipt_hash
+                    item.review_receipt_hash if is_review else item.receipt_hash  # type: ignore[union-attr]
                 )
                 expected_sig = self._sign_receipt(sign_content)
                 if not hmac.compare_digest(stored_hash, expected_sig):
@@ -724,7 +724,7 @@ class AttestationChain:
             tail = self._chain[-1]
             is_review = isinstance(tail, HumanReviewReceipt)
             head_hash = (
-                tail.review_receipt_hash if is_review else tail.receipt_hash
+                tail.review_receipt_hash if is_review else tail.receipt_hash  # type: ignore[union-attr]
             )
             return {
                 "head_hash": head_hash,

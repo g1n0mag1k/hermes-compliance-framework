@@ -101,8 +101,8 @@ class KeyManifestDocument:
         })
         digest = hashlib.sha256(b"HERMES-KEY-MANIFEST-V1\x00" + canonical).digest()
         self.manifest_digest = digest.hex()
-        self.root_signature = root_signer.sign_cose_sig_structure(digest).hex()
-        self.root_key_id = root_signer.key_id.hex()
+        self.root_signature = root_signer.sign_cose_sig_structure(digest).hex()  # type: ignore[attr-defined]
+        self.root_key_id = root_signer.key_id.hex()  # type: ignore[attr-defined]
         return self
 
     # ------------------------------------------------------------------

@@ -215,7 +215,7 @@ def test_vault_tamper_detection() -> None:
     from hermes.vault import VAULT, VAULT_KEY, _aesgcm_decrypt
     token = VAULT.store("SSN", "372-18-5421", "txn_tamper_test")
     entry = VAULT.retrieve_entry(token)
-    ct_bytes = bytearray(bytes.fromhex(entry.encrypted_value))
+    ct_bytes = bytearray(bytes.fromhex(entry.encrypted_value))  # type: ignore[union-attr]
     ct_bytes[20] ^= 0xFF
     tampered_hex = bytes(ct_bytes).hex()
     try:
