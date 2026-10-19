@@ -42,3 +42,34 @@ hermes-verify = "hermes.receipts.v2.cli:main"
 where = ["."]
 include = ["hermes*", "gateway*"]
 
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Rules intentionally not enforced in this codebase:
+#   BLE001 — broad `except Exception` catches are used deliberately in
+#             health-check endpoints, CLI dispatch, and receipt export paths
+#             where we log and degrade gracefully rather than crash.
+#   B008   — FastAPI's Depends() in default arguments is the idiomatic
+#             pattern for dependency injection; flagging it produces 14+
+#             false positives with no actionable fix.
+#   S110   — try/except/pass is used in optional-feature probe paths.
+#   RUF059 — unpacked-but-unused loop vars (e.g. `for _, ws in ...`)
+#             are intentional iteration discards, not bugs.
+#   SIM118 — `key in d.keys()` is used for readability in a few spots.
+#   PLR0133— constant-comparison in test fixtures is intentional.
+#   DTZ011 — date.today() without tz is fine for audit timestamps.
+ignore = [
+    "BLE001",
+    "B008",
+    "S110",
+    "RUF059",
+    "SIM118",
+    "PLR0133",
+    "DTZ011",
+]
+
+[tool.bandit]
+skips = ["B101", "B601"]
+

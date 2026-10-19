@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 
 from hermes.attestation import ATTESTATION_CHAIN, ComplianceReceipt
 from hermes.classifier import FlagEntry, RedactionAuditLog, scrub_payload
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     import pandas as pd
 
 
-def _flags_to_counts(flags: Dict[str, FlagEntry]) -> Dict[str, int]:
+def _flags_to_counts(flags: dict[str, FlagEntry]) -> dict[str, int]:
     """Map audit-log flag entries to per-flag counts for attestation issuance."""
     return {
         k: v.count if isinstance(v, FlagEntry) else v["count"]
@@ -32,23 +32,23 @@ class AgentResult:
     transaction_id: str
     clean_text: str
     receipt: ComplianceReceipt
-    report_bytes: Optional[bytes]  # None if engagement_meta not provided
+    report_bytes: bytes | None  # None if engagement_meta not provided
     audit_log: RedactionAuditLog
 
 
 @dataclass
 class PseudonymizationScanResult:
     transaction_id: str
-    coded_df: "pd.DataFrame"
+    coded_df: pd.DataFrame
     linkage_table: dict
     receipt: ComplianceReceipt
 
 
 def run_pseudonymization_scan(
-    df: "pd.DataFrame",
+    df: pd.DataFrame,
     phi_columns: list[str],
-    downstream_target: Optional[str] = None,
-    transaction_id: Optional[str] = None,
+    downstream_target: str | None = None,
+    transaction_id: str | None = None,
 ) -> PseudonymizationScanResult:
     """Pseudonymize broker CSV columns and issue a compliance receipt."""
     from hermes.pseudonymizer import Pseudonymizer
@@ -57,8 +57,8 @@ def run_pseudonymization_scan(
     pseudonymizer = Pseudonymizer(phi_columns)
     coded_df, linkage_table = pseudonymizer.pseudonymize(df, txn_id)
 
-    flags_triggered: Dict[str, int] = {}
-    flags_redacted: Dict[str, int] = {}
+    flags_triggered: dict[str, int] = {}
+    flags_redacted: dict[str, int] = {}
     char_count_in = 0
     char_count_out = 0
     for col in phi_columns:
@@ -101,9 +101,9 @@ def run_pseudonymization_scan(
 
 def run_scan(
     text: str,
-    transaction_id: Optional[str] = None,
-    downstream_target: Optional[str] = None,
-    engagement_meta: Optional[dict] = None,
+    transaction_id: str | None = None,
+    downstream_target: str | None = None,
+    engagement_meta: dict | None = None,
     fire_webhook: bool = True,
 ) -> AgentResult:
     """Run one full scrub → attest → optional report/webhook scan."""
@@ -124,7 +124,7 @@ def run_scan(
         detectors_executed=result.detectors_executed,
     )
 
-    report_bytes: Optional[bytes] = None
+    report_bytes: bytes | None = None
     if engagement_meta is not None:
         report_bytes = generate_evidence_report(receipt, engagement_meta)
 

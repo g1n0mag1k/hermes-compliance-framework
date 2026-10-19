@@ -3,13 +3,18 @@ tests/v2/test_builder.py — ReceiptV2Builder tests.
 """
 
 import uuid
-import pytest
+from dataclasses import FrozenInstanceError
+
 import cbor2
+import pytest
 
 from hermes.receipts.v2.builder import ReceiptV2, ReceiptV2Builder
 from hermes.receipts.v2.canonical import receipt_digest_hex
-from hermes.receipts.v2.software_signer import SoftwareSignerEd25519, SoftwareSignerES256
 from hermes.receipts.v2.signer import COSE_ALG_EDDSA, COSE_ALG_ES256
+from hermes.receipts.v2.software_signer import (
+    SoftwareSignerEd25519,
+    SoftwareSignerES256,
+)
 
 
 @pytest.fixture
@@ -68,7 +73,7 @@ class TestReceiptV2Structure:
 
     def test_frozen_dataclass(self, ed25519_builder):
         r = ed25519_builder.build(SAMPLE_PAYLOAD)
-        with pytest.raises(Exception):  # FrozenInstanceError
+        with pytest.raises(FrozenInstanceError):
             r.receipt_id = "tampered"
 
 
@@ -128,8 +133,6 @@ class TestCOSEEnvelope:
 
     def test_tampered_payload_detectable(self, ed25519_builder):
         """Mutating the COSE payload bytes must make signature verification fail."""
-        from pycose.messages import Sign1Message
-        from pycose.keys import OKPKey
         r = ed25519_builder.build(SAMPLE_PAYLOAD)
         raw = bytearray(r.cose_sign1_bytes)
         # Flip a byte in the middle of the payload portion
@@ -182,8 +185,9 @@ class TestChaining:
 
 class TestV1Isolation:
     def test_builder_has_no_v1_imports(self):
+        import inspect
+
         import hermes.receipts.v2.builder as builder_mod
-        import ast, inspect
         src = inspect.getsource(builder_mod)
         assert "hermes.attestation" not in src
         assert "from hermes.attestation" not in src

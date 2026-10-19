@@ -4,7 +4,6 @@ tests/test_gateway.py — Hermes Relay enforcement gateway tests.
 
 from __future__ import annotations
 
-import json
 import threading
 from typing import Any
 
@@ -17,8 +16,7 @@ import gateway.evidence as gateway_evidence
 import gateway.policy as gateway_policy
 from gateway.app import app
 from gateway.pipeline import GatewayPipeline
-from gateway.policy import Policy, set_workspace_policy, clear_workspace_policy
-from gateway.providers import PROVIDER_REGISTRY
+from gateway.policy import Policy, clear_workspace_policy, set_workspace_policy
 from hermes.classifier import DetectorFailureError
 from hermes.workspaces import create_workspace
 
@@ -342,7 +340,7 @@ def test_query_string_phi_is_sanitized_before_forwarding(
     _, api_key = workspace
     monkeypatch.setenv("HERMES_OPENAI_API_KEY", "test-key")
 
-    response = client.post(
+    client.post(
         "/gateway/openai/v1/chat/completions?debug_ssn=123-45-6789",
         headers={"X-API-Key": api_key},
         json={"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]},
@@ -359,7 +357,7 @@ def test_clean_query_string_passes_through(client, workspace, upstream_capture, 
     _, api_key = workspace
     monkeypatch.setenv("HERMES_OPENAI_API_KEY", "test-key")
 
-    response = client.post(
+    client.post(
         "/gateway/openai/v1/chat/completions?stream=false",
         headers={"X-API-Key": api_key},
         json={"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]},

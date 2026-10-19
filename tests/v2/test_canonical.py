@@ -3,17 +3,17 @@ tests/v2/test_canonical.py — RFC 8785 canonicalization tests with golden vecto
 """
 
 import hashlib
+
 import pytest
 
 from hermes.receipts.v2.canonical import (
+    build_merkle_root,
     canonicalize,
-    receipt_digest,
-    receipt_digest_hex,
     merkle_leaf,
     merkle_node,
-    build_merkle_root,
+    receipt_digest,
+    receipt_digest_hex,
 )
-
 
 # ---------------------------------------------------------------------------
 # Canonicalize golden vectors
@@ -37,7 +37,7 @@ class TestCanonicalize:
     def test_unicode_strings(self):
         # RFC 8785 requires Unicode characters to be preserved, not escaped
         result = canonicalize({"key": "café"})
-        assert "café".encode("utf-8") in result
+        assert "café".encode() in result
 
     def test_nested_object_sorted(self):
         result = canonicalize({"outer": {"z": 1, "a": 2}})

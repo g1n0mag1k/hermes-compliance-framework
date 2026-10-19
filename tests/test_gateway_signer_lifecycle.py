@@ -112,6 +112,7 @@ def _run_fresh_gateway_process(tmp_path: Path, keystore_path: Path) -> dict:
         env=env,
         capture_output=True,
         text=True,
+        check=False,
         timeout=180,
     )
     assert proc.returncode == 0, proc.stderr

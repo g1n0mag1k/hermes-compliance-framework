@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -68,7 +68,7 @@ class Pseudonymizer:
         """
         coded_df = df.copy()
         linkage_table: dict[str, dict] = {}
-        coded_at = datetime.now(timezone.utc).isoformat()
+        coded_at = datetime.now(UTC).isoformat()
 
         for col in self._phi_columns:
             if col not in coded_df.columns:

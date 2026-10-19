@@ -3,16 +3,14 @@ tests/v2/test_merkle_tree.py — RFC 9162 Merkle tree tests.
 """
 
 import hashlib
+
 import pytest
 
 from hermes.receipts.v2.canonical import merkle_leaf, merkle_node
 from hermes.receipts.v2.merkle_tree import (
-    MerkleTree,
-    InclusionProof,
     ConsistencyProof,
-    _compute_root,
-    _inclusion_path,
-    _recompute_root_from_inclusion,
+    InclusionProof,
+    MerkleTree,
 )
 
 

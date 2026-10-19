@@ -2,15 +2,14 @@
 hermes/benchmark.py — Competitive Benchmark Suite
 """
 import json
-import time
 import statistics
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
-from typing import Dict, List, Tuple, Optional
+import time
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 
 from hermes.classifier import scrub_payload
 
-TEST_CORPUS: List[Tuple[str, Optional[str], str]] = [
+TEST_CORPUS: list[tuple[str, str | None, str]] = [
     ("Patient SSN is 372-18-5421.", "[REDACTED_SSN]", "HIPAA_SSN"),
     ("SSN: 541-22-8765 on file.", "[REDACTED_SSN]", "HIPAA_SSN"),
     ("Social security number 123-45-6789 verified.", "[REDACTED_SSN]", "HIPAA_SSN"),
@@ -91,9 +90,9 @@ HERMES_CAPABILITIES = {
     "self_hostable": True,
 }
 
-def _run_hermes_benchmark() -> List[BenchmarkResult]:
+def _run_hermes_benchmark() -> list[BenchmarkResult]:
     results = []
-    latencies: List[float] = []
+    latencies: list[float] = []
 
     for text, expected_token, pii_class in TEST_CORPUS:
         start = time.perf_counter()
@@ -141,18 +140,18 @@ def _run_hermes_benchmark() -> List[BenchmarkResult]:
             p95_latency_ms=round(p95, 3),
             p99_latency_ms=round(p99, 3),
             test_cases_run=len(class_cases),
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         ))
 
     return results
 
-def generate_report(results: List[BenchmarkResult]) -> str:
+def generate_report(results: list[BenchmarkResult]) -> str:
     hermes_ssn = next((r for r in results if r.pii_class == "HIPAA_SSN"), None)
     hermes_pan = next((r for r in results if r.pii_class == "PCI_PAN"), None)
 
     lines = [
         "# Hermes Relay — Competitive Benchmark Report",
-        f"\n_Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}_\n",
+        f"\n_Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}_\n",
         "## Methodology",
         "- Synthetic test corpus: 17 cases across SSN, PAN, and combined PHI+PAN",
         "- **Scope note:** rates below measure SSN and PAN detection only on this corpus — not full Safe Harbor coverage",
@@ -220,7 +219,7 @@ def generate_report(results: List[BenchmarkResult]) -> str:
 
     return "\n".join(lines)
 
-def run_benchmark() -> Dict:
+def run_benchmark() -> dict:
     print("Running Hermes benchmark suite...")
     results = _run_hermes_benchmark()
 
@@ -228,7 +227,7 @@ def run_benchmark() -> Dict:
         "hermes_results": [asdict(r) for r in results],
         "competitor_baselines": COMPETITOR_BASELINES,
         "hermes_capabilities": HERMES_CAPABILITIES,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }
 
     with open("benchmark_results.json", "w") as f:

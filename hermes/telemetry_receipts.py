@@ -20,9 +20,9 @@ import urllib.error
 import urllib.request
 import warnings
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -47,12 +47,12 @@ class TelemetryReceiptPayload(BaseModel):
     repository: str = Field(..., min_length=1)
     commit_sha: str = Field(..., min_length=1)
     status: str = Field(..., min_length=1)
-    controls_verified: List[str] = Field(default_factory=list)
-    summary: Dict[str, Any]
+    controls_verified: list[str] = Field(default_factory=list)
+    summary: dict[str, Any]
 
     @field_validator("summary")
     @classmethod
-    def _validate_summary_keys(cls, summary: Dict[str, Any]) -> Dict[str, Any]:
+    def _validate_summary_keys(cls, summary: dict[str, Any]) -> dict[str, Any]:
         keys = frozenset(summary.keys())
         if keys != SAFE_HARBOR_SUMMARY_KEYS:
             missing = SAFE_HARBOR_SUMMARY_KEYS - keys
@@ -79,17 +79,17 @@ class StoredTelemetryReceipt:
     repository: str
     commit_sha: str
     status: str
-    controls_verified: List[str]
-    summary: Dict[str, Any]
+    controls_verified: list[str]
+    summary: dict[str, Any]
     state_drift_detected: bool
-    prior_receipt_id: Optional[str]
+    prior_receipt_id: str | None
 
 
 @dataclass(frozen=True)
 class DrataCctSyncResult:
     attempted: bool
     synchronized: bool
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 def _normalize_signature_header(value: str) -> str:
@@ -111,7 +111,7 @@ def compute_body_signature(api_secret: str, body: bytes) -> str:
 def verify_request_signature(
     api_secret: str,
     body: bytes,
-    signature_header: Optional[str],
+    signature_header: str | None,
 ) -> bool:
     if not signature_header:
         return False
@@ -125,7 +125,7 @@ def verify_request_signature(
         return False
 
 
-def telemetry_db_path(workspace_id: str, chain_db_path: Optional[str] = None) -> str:
+def telemetry_db_path(workspace_id: str, chain_db_path: str | None = None) -> str:
     if chain_db_path:
         return str(Path(chain_db_path).parent / "telemetry_receipts.db")
     base = os.environ.get("HERMES_DB_PATH", DEFAULT_DB_PATH)
@@ -166,7 +166,7 @@ def _load_latest_for_repository(
     conn: sqlite3.Connection,
     workspace_id: str,
     repository: str,
-) -> Optional[dict]:
+) -> dict | None:
     row = conn.execute(
         """
         SELECT receipt_id, status, controls_verified, summary_json
@@ -187,16 +187,14 @@ def _load_latest_for_repository(
     }
 
 
-def _detect_state_drift(prior: Optional[dict], payload: TelemetryReceiptPayload) -> bool:
+def _detect_state_drift(prior: dict | None, payload: TelemetryReceiptPayload) -> bool:
     if prior is None:
         return False
     if prior["status"] != payload.status:
         return True
     if sorted(prior["controls_verified"]) != sorted(payload.controls_verified):
         return True
-    if prior["summary"] != payload.summary:
-        return True
-    return False
+    return prior["summary"] != payload.summary
 
 
 def store_telemetry_receipt(
@@ -204,7 +202,7 @@ def store_telemetry_receipt(
     payload: TelemetryReceiptPayload,
     db_path: str,
 ) -> StoredTelemetryReceipt:
-    ingested_at = datetime.now(timezone.utc).isoformat()
+    ingested_at = datetime.now(UTC).isoformat()
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
         with conn:

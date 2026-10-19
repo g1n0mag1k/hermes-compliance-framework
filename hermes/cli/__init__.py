@@ -21,7 +21,6 @@ from pathlib import Path
 
 from hermes.cli.pseudonymize import cmd_pseudonymize
 
-
 VERSION = "1.0.0"
 
 SYSTEMD_SERVICE = textwrap.dedent("""\

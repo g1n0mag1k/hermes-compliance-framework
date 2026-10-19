@@ -48,7 +48,7 @@ from hermes.receipts.v2 import (
     verify_receipt,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022  # grouped by version for readability
     # V1
     "ComplianceReceipt",
     "HermesChain",

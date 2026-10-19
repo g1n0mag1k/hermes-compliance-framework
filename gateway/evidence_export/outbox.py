@@ -28,10 +28,10 @@ import logging
 import os
 import re
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from gateway.evidence_export.drata_connector import (
     INSECURE_URL_ERROR,
@@ -100,11 +100,11 @@ _LONG_TOKEN_RE = re.compile(r"\b[A-Za-z0-9_\-]{24,}\b")
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _iso(value: datetime) -> str:
-    return value.astimezone(timezone.utc).isoformat()
+    return value.astimezone(UTC).isoformat()
 
 
 def outbox_db_path() -> Path:
@@ -136,7 +136,7 @@ def _migrate_exported_at(conn: sqlite3.Connection) -> None:
             raise
 
 
-def sanitize_error(message: Optional[str]) -> str:
+def sanitize_error(message: str | None) -> str:
     """Strip URLs, hosts, credentials, and PHI-shaped values before storage."""
     if not message:
         return ""
@@ -156,7 +156,7 @@ def sanitize_error(message: Optional[str]) -> str:
     return text[:MAX_ERROR_LENGTH]
 
 
-def is_permanent_failure(error: Optional[str]) -> bool:
+def is_permanent_failure(error: str | None) -> bool:
     """4xx except 429 and connector refusals are permanent; all else is transient."""
     if error in _PERMANENT_CONNECTOR_ERRORS:
         return True
@@ -172,7 +172,7 @@ def retry_delay_seconds(attempt_count: int) -> int:
     return min(RETRY_BASE_DELAY_SECONDS * (2**exponent), RETRY_MAX_DELAY_SECONDS)
 
 
-def enqueue_event(event: EvidenceEvent, *, now: Optional[datetime] = None) -> None:
+def enqueue_event(event: EvidenceEvent, *, now: datetime | None = None) -> None:
     """
     Persist a metadata-only EvidenceEvent as PENDING. No network I/O.
 
@@ -225,7 +225,7 @@ _SELECT_COLUMNS = """
 """
 
 
-def get_outbox_row(event_id: str) -> Optional[dict[str, Any]]:
+def get_outbox_row(event_id: str) -> dict[str, Any] | None:
     conn = _connect()
     try:
         row = conn.execute(f"{_SELECT_COLUMNS} WHERE event_id = ?", (event_id,)).fetchone()
@@ -234,7 +234,7 @@ def get_outbox_row(event_id: str) -> Optional[dict[str, Any]]:
         conn.close()
 
 
-def list_outbox_rows(workspace_id: Optional[str] = None) -> list[dict[str, Any]]:
+def list_outbox_rows(workspace_id: str | None = None) -> list[dict[str, Any]]:
     conn = _connect()
     try:
         if workspace_id is None:
@@ -293,7 +293,7 @@ def outbox_stats(workspace_id: str) -> dict[str, Any]:
 
 def _claim_due_rows(
     conn: sqlite3.Connection,
-    workspace_id: Optional[str],
+    workspace_id: str | None,
     current: datetime,
     limit: int,
 ) -> list[tuple[str, str, int]]:
@@ -362,9 +362,9 @@ def _record_outcome(
     event_id: str,
     status: OutboxStatus,
     *,
-    next_attempt_at: Optional[datetime] = None,
-    last_error: Optional[str] = None,
-    exported_at: Optional[datetime] = None,
+    next_attempt_at: datetime | None = None,
+    last_error: str | None = None,
+    exported_at: datetime | None = None,
 ) -> None:
     if exported_at is not None:
         conn.execute(
@@ -387,7 +387,7 @@ def _record_outcome(
         )
 
 
-def _send(connector: DrataConnector, payload: str) -> tuple[bool, Optional[str]]:
+def _send(connector: DrataConnector, payload: str) -> tuple[bool, str | None]:
     """Return (success, raw_error). Never raises."""
     try:
         event = EvidenceEvent.model_validate_json(payload)
@@ -405,10 +405,10 @@ def _send(connector: DrataConnector, payload: str) -> tuple[bool, Optional[str]]
 
 
 def flush_outbox(
-    workspace_id: Optional[str] = None,
+    workspace_id: str | None = None,
     *,
-    connector: Optional[DrataConnector] = None,
-    now: Optional[datetime] = None,
+    connector: DrataConnector | None = None,
+    now: datetime | None = None,
     limit: int = FLUSH_BATCH_LIMIT,
 ) -> dict[str, int]:
     """

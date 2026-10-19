@@ -1,16 +1,17 @@
 """
 hermes/proxy.py — Zero-Trust LLM Scrub Proxy
 """
-import httpx
 import json
 import os
 import uuid
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
-from hermes.classifier import scrub_payload, FlagEntry
+import httpx
+
 from hermes.attestation import ATTESTATION_CHAIN
+from hermes.classifier import FlagEntry, scrub_payload
 
-PROXY_TARGETS: Dict[str, str] = {
+PROXY_TARGETS: dict[str, str] = {
     "openai":    "https://api.openai.com",
     "anthropic": "https://api.anthropic.com",
     "ollama":    os.environ.get("HERMES_OLLAMA_BASE", "http://localhost:11434"),
@@ -23,9 +24,9 @@ _TEXT_FIELDS = {"content", "text", "prompt", "input", "query", "message", "instr
 def _scrub_str(
     text: str,
     transaction_id: str,
-    flags_triggered: Dict[str, int],
-    flags_redacted: Dict[str, int],
-    detectors_executed: Dict[str, str],
+    flags_triggered: dict[str, int],
+    flags_redacted: dict[str, int],
+    detectors_executed: dict[str, str],
 ) -> str:
     result = scrub_payload(transaction_id=transaction_id, text=text)
 
@@ -52,10 +53,10 @@ def _scrub_str(
 def _deep_scrub(
     obj: Any,
     transaction_id: str,
-) -> Tuple[Any, Dict[str, int], Dict[str, int], Dict[str, str]]:
-    flags_triggered: Dict[str, int] = {}
-    flags_redacted: Dict[str, int] = {}
-    detectors_executed: Dict[str, str] = {}
+) -> tuple[Any, dict[str, int], dict[str, int], dict[str, str]]:
+    flags_triggered: dict[str, int] = {}
+    flags_redacted: dict[str, int] = {}
+    detectors_executed: dict[str, str] = {}
 
     def _walk(node: Any) -> Any:
         if isinstance(node, dict):
@@ -81,9 +82,9 @@ class ProxyRelay:
         target: str,
         method: str,
         path: str,
-        headers: Dict[str, str],
-        body: Optional[bytes],
-    ) -> Tuple[httpx.Response, str, Dict[str, int]]:
+        headers: dict[str, str],
+        body: bytes | None,
+    ) -> tuple[httpx.Response, str, dict[str, int]]:
         transaction_id = f"proxy_{uuid.uuid4().hex[:12]}"
 
         base_url = PROXY_TARGETS.get(target, target)
@@ -93,9 +94,9 @@ class ProxyRelay:
         upstream_url = f"{base_url}{path}"
         original_size = len(body) if body else 0
         scrubbed_body = body
-        flags_triggered: Dict[str, int] = {}
-        flags_redacted: Dict[str, int] = {}
-        detectors_executed: Dict[str, str] = {}
+        flags_triggered: dict[str, int] = {}
+        flags_redacted: dict[str, int] = {}
+        detectors_executed: dict[str, str] = {}
 
         if body:
             try:

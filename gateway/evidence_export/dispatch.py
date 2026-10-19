@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import httpx
 
 from gateway.credentials import CredentialManager
-from gateway.evidence_export.drata_connector import CONNECTOR_NAME as DRATA_CONNECTOR_NAME
+from gateway.evidence_export.drata_connector import (
+    CONNECTOR_NAME as DRATA_CONNECTOR_NAME,
+)
 from gateway.evidence_export.event import EvidenceEvent, build_evidence_event
 from gateway.evidence_export.exporters import (
     EvidenceExporter,
@@ -21,7 +22,7 @@ logger = logging.getLogger("hermes.gateway.evidence_export")
 
 def dispatch_evidence_export(
     event: EvidenceEvent,
-    exporters: Optional[list[EvidenceExporter]] = None,
+    exporters: list[EvidenceExporter] | None = None,
 ) -> list[ExportResult]:
     """
     Export evidence to all configured exporters.
@@ -51,7 +52,7 @@ def dispatch_evidence_export(
     return results
 
 
-def try_export_evidence(receipt: ReceiptV2, workspace_id: str) -> Optional[list[ExportResult]]:
+def try_export_evidence(receipt: ReceiptV2, workspace_id: str) -> list[ExportResult] | None:
     """
     Build and export gateway evidence after receipt persistence.
 

@@ -5,12 +5,15 @@ tests/v2/test_verifier.py — Public verifier tests.
 import json
 import os
 import tempfile
+
 import pytest
 
 from hermes.receipts.v2.builder import ReceiptV2Builder
-from hermes.receipts.v2.software_signer import SoftwareSignerEd25519, SoftwareSignerES256
+from hermes.receipts.v2.software_signer import (
+    SoftwareSignerEd25519,
+    SoftwareSignerES256,
+)
 from hermes.receipts.v2.verifier import VerificationResult, verify_receipt
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -180,6 +183,7 @@ class TestMalformedInput:
 class TestNoV1Imports:
     def test_verifier_has_no_v1_imports(self):
         import inspect
+
         import hermes.receipts.v2.verifier as verifier_mod
         src = inspect.getsource(verifier_mod)
         assert "hermes.attestation" not in src
@@ -187,6 +191,7 @@ class TestNoV1Imports:
 
     def test_cli_has_no_v1_imports(self):
         import inspect
+
         import hermes.receipts.v2.cli as cli_mod
         src = inspect.getsource(cli_mod)
         assert "hermes.attestation" not in src
@@ -199,13 +204,12 @@ class TestNoV1Imports:
 
 class TestCLI:
     def _write_temp(self, content: bytes | str, suffix: str) -> str:
-        f = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-        if isinstance(content, str):
-            f.write(content.encode("ascii"))
-        else:
-            f.write(content)
-        f.close()
-        return f.name
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+            if isinstance(content, str):
+                f.write(content.encode("ascii"))
+            else:
+                f.write(content)
+            return f.name
 
     def test_cli_exit_0_on_valid(self, ed25519_signer, ed25519_builder):
         from hermes.receipts.v2.cli import main

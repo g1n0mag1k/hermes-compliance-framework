@@ -20,12 +20,10 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-import cbor2
+from pycose.headers import KID, Algorithm, ContentType
 from pycose.messages import Sign1Message
-from pycose.headers import Algorithm, KID, ContentType
 
 from hermes.receipts.v2.canonical import canonicalize, receipt_digest_hex
 from hermes.receipts.v2.signer import ALLOWED_ALGORITHMS, Signer
@@ -48,7 +46,7 @@ class ReceiptV2:
     """
     receipt_id: str
     receipt_digest: str        # hex SHA-256 over "HERMES-RECEIPT-V2\0" + canonical
-    prev_receipt_digest: Optional[str]  # hex, links to previous V2 receipt
+    prev_receipt_digest: str | None  # hex, links to previous V2 receipt
     cose_sign1_bytes: bytes    # CBOR-tagged COSE_Sign1 envelope
     payload: dict              # original payload dict (not re-serialized)
     canonical_bytes: bytes     # RFC 8785 canonical bytes (matches COSE payload)
@@ -75,7 +73,7 @@ class ReceiptV2Builder:
     def build(
         self,
         payload: dict,
-        prev_receipt_digest: Optional[str] = None,
+        prev_receipt_digest: str | None = None,
     ) -> ReceiptV2:
         """
         Build and sign a single V2 receipt.
@@ -92,7 +90,7 @@ class ReceiptV2Builder:
             ValueError: if payload contains NaN/Infinity, the algorithm is blocked,
                         or signer.sign_cose_sig_structure returns empty bytes.
         """
-        issued_at = datetime.now(timezone.utc).isoformat()
+        issued_at = datetime.now(UTC).isoformat()
         receipt_id = str(uuid.uuid4())
 
         # Step 1: Build the full signed payload dict.
@@ -160,7 +158,7 @@ class ReceiptV2Builder:
     def build_chain(
         self,
         payloads: list[dict],
-        first_prev_digest: Optional[str] = None,
+        first_prev_digest: str | None = None,
     ) -> list[ReceiptV2]:
         """
         Build a chain of receipts, each linked to the previous.

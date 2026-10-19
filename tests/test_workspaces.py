@@ -2,9 +2,8 @@
 tests/test_workspaces.py — Multi-tenant workspace model tests.
 """
 
-import os
 import pytest
-import tempfile
+
 
 # Point workspace system at a temp directory for all tests
 @pytest.fixture(autouse=True)
@@ -25,13 +24,13 @@ def isolated_workspace_env(tmp_path, monkeypatch):
 
 from hermes.workspaces import (
     create_workspace,
+    get_chain_for_workspace,
+    get_vault_for_workspace,
     get_workspace,
     get_workspace_by_api_key,
     list_workspaces,
     rotate_api_key,
     update_plan,
-    get_chain_for_workspace,
-    get_vault_for_workspace,
 )
 
 
@@ -62,6 +61,7 @@ class TestCreateWorkspace:
     def test_creates_workspace_directory(self, tmp_path):
         ws, _ = create_workspace("test-msp-04", "Test", "t@test.com")
         from pathlib import Path
+
         import hermes.workspaces as ws_mod
         ws_dir = Path(ws_mod._DEFAULT_DATA_DIR) / "test-msp-04"
         assert ws_dir.exists()

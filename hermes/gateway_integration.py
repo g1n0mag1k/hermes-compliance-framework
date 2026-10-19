@@ -31,8 +31,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from gateway.evidence_export.drata_connector import ConnectionResult, DrataConnector
-    from gateway.evidence_export.outbox import OutboxStats
+    from gateway.evidence_export.drata_connector import ConnectionResult
 
 
 # ---------------------------------------------------------------------------
@@ -40,7 +39,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def drata_test_connection() -> "ConnectionResult":
+def drata_test_connection() -> ConnectionResult:
     """Return the offline structural connection result for the Drata CCT connector."""
     from gateway.evidence_export.drata_connector import DrataConnector
 

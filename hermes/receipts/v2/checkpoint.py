@@ -25,15 +25,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
-from typing import Optional
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import cbor2
-from pycose.headers import Algorithm, KID, ContentType
+from pycose.headers import KID, Algorithm, ContentType
 from pycose.messages import Sign1Message
 
-from hermes.receipts.v2.canonical import canonicalize, receipt_digest_hex
+from hermes.receipts.v2.canonical import canonicalize
 from hermes.receipts.v2.merkle_tree import MerkleTree
 from hermes.receipts.v2.signer import ALLOWED_ALGORITHMS, Signer
 
@@ -64,7 +63,7 @@ class CheckpointRecord:
     merkle_root: str              # hex SHA-256 Merkle root
 
     # Chain link
-    prev_checkpoint_digest: Optional[str]   # hex, None for genesis checkpoint
+    prev_checkpoint_digest: str | None   # hex, None for genesis checkpoint
 
     # Policy/config digests — detect drift between checkpoints
     policy_digest: str            # hex SHA-256 of current policy document
@@ -90,7 +89,7 @@ class CheckpointEngine:
     signer: Signer
     tree: MerkleTree = field(default_factory=MerkleTree)
     _sequence: int = field(default=0, init=False)
-    _prev_checkpoint_digest: Optional[str] = field(default=None, init=False)
+    _prev_checkpoint_digest: str | None = field(default=None, init=False)
     _checkpoints: list[CheckpointRecord] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
@@ -140,7 +139,7 @@ class CheckpointEngine:
         if self.tree.size == 0:
             raise ValueError("Cannot issue checkpoint over empty tree.")
 
-        issued_at = datetime.now(timezone.utc).isoformat()
+        issued_at = datetime.now(UTC).isoformat()
         checkpoint_id = str(_uuid.uuid4())
         merkle_root = self.tree.root_hex()
         sequence = self._sequence
@@ -213,10 +212,10 @@ class CheckpointEngine:
         return len(self._checkpoints)
 
     @property
-    def latest_checkpoint(self) -> Optional[CheckpointRecord]:
+    def latest_checkpoint(self) -> CheckpointRecord | None:
         return self._checkpoints[-1] if self._checkpoints else None
 
-    def get_checkpoint(self, sequence: int) -> Optional[CheckpointRecord]:
+    def get_checkpoint(self, sequence: int) -> CheckpointRecord | None:
         for cp in self._checkpoints:
             if cp.sequence == sequence:
                 return cp
@@ -232,7 +231,7 @@ class CheckpointVerificationResult:
     signature_valid: bool = False
     checkpoint_digest_valid: bool = False
     sequence_monotonic: bool = False
-    chain_link_valid: Optional[bool] = None
+    chain_link_valid: bool | None = None
     merkle_root: str = ""
     tree_size: int = 0
     stream_id: str = ""
@@ -262,7 +261,7 @@ def verify_checkpoint(
         CheckpointVerificationResult — never raises, errors captured in result.
     """
     from cryptography.exceptions import InvalidSignature
-    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 
     result = CheckpointVerificationResult()
@@ -287,7 +286,7 @@ def verify_checkpoint(
 
     # Decode protected headers
     try:
-        phdr = cbor2.loads(phdr_bytes)
+        _phdr = cbor2.loads(phdr_bytes)
     except Exception as exc:
         result.errors.append(f"Protected header decode failed: {exc}")
         return result

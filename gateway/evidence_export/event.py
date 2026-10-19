@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -68,11 +68,11 @@ class EvidenceEvent(BaseModel):
     detector_states: dict[str, str]
     upstream_contacted: bool
     all_detectors_clean: bool
-    failure_class: Optional[str] = None
-    upstream_status: Optional[int] = None
+    failure_class: str | None = None
+    upstream_status: int | None = None
     receipt_id: str
     receipt_digest: str
-    prev_receipt_digest: Optional[str] = None
+    prev_receipt_digest: str | None = None
     gateway_sequence: int
     signature_algorithm: str
     cose_sign1_hex: str

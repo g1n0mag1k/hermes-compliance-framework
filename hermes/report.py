@@ -3,11 +3,12 @@ hermes/report.py - Client-Facing PDF Evidence Report Generator
 """
 import io
 from dataclasses import asdict
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, Spacer, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 CFR = {
     "HIPAA_PHI_PERSON":      "45 CFR 164.514(b)(2)(i)(A)",

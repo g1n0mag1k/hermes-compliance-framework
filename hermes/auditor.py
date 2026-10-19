@@ -15,8 +15,7 @@ import os
 import sqlite3
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 
 from hermes.attestation import ATTESTATION_CHAIN, ComplianceReceipt
 from hermes.classifier import (
@@ -31,7 +30,7 @@ DEFAULT_CANARY_DB_PATH = os.environ.get("HERMES_CANARY_DB_PATH", "hermes_canary.
 
 # Synthetic PHI tokens — one representative per covered Safe Harbor category.
 # Realistic format, not real PHI. Driven by DECLARED_SCOPE covered entries.
-CANARY_CORPUS: List[Dict[str, str]] = [
+CANARY_CORPUS: list[dict[str, str]] = [
     {
         "category": "45 CFR §164.514(b)(2)(i)(A)",
         "flag": "HIPAA_PHI_PERSON",
@@ -127,7 +126,7 @@ assert all(
 )
 
 
-def _flags_to_counts(flags: Dict[str, FlagEntry]) -> Dict[str, int]:
+def _flags_to_counts(flags: dict[str, FlagEntry]) -> dict[str, int]:
     """Map audit-log flag entries to per-flag counts for attestation issuance."""
     return {
         k: v.count if isinstance(v, FlagEntry) else v["count"]
@@ -139,14 +138,14 @@ def _flags_to_counts(flags: Dict[str, FlagEntry]) -> Dict[str, int]:
 class CanaryRunResult:
     run_id: str
     run_at: str  # ISO UTC
-    flags_expected: List[str]
-    flags_detected: List[str]
-    flags_missed: List[str]
-    flags_unexpected: List[str]
+    flags_expected: list[str]
+    flags_detected: list[str]
+    flags_missed: list[str]
+    flags_unexpected: list[str]
     drift_detected: bool
-    prior_run_id: Optional[str]
+    prior_run_id: str | None
     receipt: ComplianceReceipt
-    report_bytes: Optional[bytes]  # signed PDF, if engagement_meta provided
+    report_bytes: bytes | None  # signed PDF, if engagement_meta provided
 
 
 def _init_canary_db(conn: sqlite3.Connection) -> None:
@@ -206,7 +205,7 @@ def save_result(result: CanaryRunResult, db_path: str = DEFAULT_CANARY_DB_PATH) 
 
 def load_prior_result(
     db_path: str = DEFAULT_CANARY_DB_PATH,
-) -> Optional[CanaryRunResult]:
+) -> CanaryRunResult | None:
     """Load the most recent canary run from the canary SQLite database."""
     if not os.path.exists(db_path):
         return None
@@ -243,12 +242,12 @@ def load_prior_result(
 
 
 def run_canary(
-    engagement_meta: Optional[dict] = None,
-    prior_result: Optional[CanaryRunResult] = None,
+    engagement_meta: dict | None = None,
+    prior_result: CanaryRunResult | None = None,
 ) -> CanaryRunResult:
     """Fire the canary corpus through scrub_payload once and check for drift."""
     run_id = f"canary_{uuid.uuid4().hex[:12]}"
-    run_at = datetime.now(timezone.utc).isoformat()
+    run_at = datetime.now(UTC).isoformat()
     transaction_id = f"txn_{run_id}"
 
     # Assemble all canary values into a single payload — one scrub_payload call.
@@ -265,7 +264,7 @@ def run_canary(
     flags_missed = sorted(expected_set - detected_set)
     flags_unexpected = sorted(detected_set - expected_set)
 
-    prior_run_id: Optional[str] = None
+    prior_run_id: str | None = None
     if prior_result is not None:
         prior_run_id = prior_result.run_id
         drift_detected = detected_set != set(prior_result.flags_detected)
@@ -285,7 +284,7 @@ def run_canary(
         detectors_executed=scrub_result.detectors_executed,
     )
 
-    report_bytes: Optional[bytes] = None
+    report_bytes: bytes | None = None
     if engagement_meta is not None:
         report_bytes = generate_evidence_report(receipt, engagement_meta)
 

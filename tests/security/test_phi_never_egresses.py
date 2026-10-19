@@ -24,7 +24,6 @@ from gateway.policy import Policy, clear_workspace_policy, set_workspace_policy
 from hermes.classifier import DetectorFailureError
 from hermes.workspaces import create_workspace
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

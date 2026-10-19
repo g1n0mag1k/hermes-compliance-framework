@@ -12,14 +12,13 @@ Regulatory alignment:
 - PCI-DSS v4.0 Req 3.5.1 — protection of stored account data
 """
 import hashlib
-import sqlite3
 import hmac
 import os
+import sqlite3
 import threading
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Dict, Optional
+from datetime import UTC, datetime
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -85,7 +84,7 @@ def _generate_token(pii_type: str, original_value: str) -> str:
     """HMAC-SHA256 derived token. Deterministic per (key, pii_type, value)."""
     mac = hmac.new(
         VAULT_KEY,
-        f"{pii_type}:{original_value}".encode("utf-8"),
+        f"{pii_type}:{original_value}".encode(),
         hashlib.sha256,
     ).hexdigest()[:16]
     return f"[REDACTED_{pii_type}_{mac}]"
@@ -99,7 +98,7 @@ class VaultEntry:
     transaction_id: str
     workspace_id: str = "default"
     created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
 
@@ -132,7 +131,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _load_all_entries(conn: sqlite3.Connection) -> Dict[str, VaultEntry]:
+def _load_all_entries(conn: sqlite3.Connection) -> dict[str, VaultEntry]:
     rows = conn.execute(
         "SELECT token, pii_type, encrypted_value, transaction_id, "
         "created_at, workspace_id "
@@ -152,13 +151,13 @@ def _load_all_entries(conn: sqlite3.Connection) -> Dict[str, VaultEntry]:
 
 
 class TokenVault:
-    def __init__(self, db_path: Optional[str] = None) -> None:
+    def __init__(self, db_path: str | None = None) -> None:
         self._db_path = db_path or _get_db_path()
         self._lock = threading.Lock()
 
         conn = sqlite3.connect(self._db_path)
         _init_db(conn)
-        self._store: Dict[str, VaultEntry] = _load_all_entries(conn)
+        self._store: dict[str, VaultEntry] = _load_all_entries(conn)
         conn.close()
 
     def store(
@@ -200,7 +199,7 @@ class TokenVault:
         finally:
             conn.close()
 
-    def retrieve(self, token: str, workspace_id: str = "default") -> Optional[str]:
+    def retrieve(self, token: str, workspace_id: str = "default") -> str | None:
         """Decrypt and return original value. Raises InvalidTag if tampered."""
         with self._lock:
             conn = sqlite3.connect(self._db_path)
@@ -218,7 +217,7 @@ class TokenVault:
 
     def retrieve_entry(
         self, token: str, workspace_id: str = "default"
-    ) -> Optional[VaultEntry]:
+    ) -> VaultEntry | None:
         with self._lock:
             conn = sqlite3.connect(self._db_path)
             try:

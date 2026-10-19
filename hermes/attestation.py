@@ -14,9 +14,10 @@ import os
 import sqlite3
 import threading
 import warnings
-from dataclasses import dataclass, asdict, field
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Union
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from typing import ClassVar
+
 from hermes.classifier import COVERED_CFRS, NOT_COVERED_CFRS
 
 REVIEW_DECISIONS = ("accepted", "overridden", "escalated")
@@ -67,27 +68,27 @@ class ComplianceReceipt:
     transaction_id: str
     issued_at: str
     issuer: str
-    compliance_frameworks: List[str]
-    pii_classes_detected: List[str]
-    pii_classes_redacted: List[str]
-    count_detected: Dict[str, int]
-    count_redacted: Dict[str, int]
+    compliance_frameworks: list[str]
+    pii_classes_detected: list[str]
+    pii_classes_redacted: list[str]
+    count_detected: dict[str, int]
+    count_redacted: dict[str, int]
     payload_char_count_in: int
     payload_char_count_out: int
     chars_removed: int
     zero_pii_egress_confirmed: bool
     zero_pii_egress_scope_note: str
-    downstream_target: Optional[str]
+    downstream_target: str | None
     previous_receipt_hash: str
     receipt_hash: str
     chain_position: int
-    declared_scope: List[str]
-    evidence_incomplete_categories: List[str]
-    detectors_executed: Dict[str, str]
+    declared_scope: list[str]
+    evidence_incomplete_categories: list[str]
+    detectors_executed: dict[str, str]
     # Post-scan occurrence gaps: CFR → surviving PHI count in clean_text
     # for categories that flags_triggered declared. Signed into receipt_hash
     # so incompleteness is tamper-evident. Empty dict = no gaps found.
-    occurrence_gaps: Dict[str, int] = field(default_factory=dict)
+    occurrence_gaps: dict[str, int] = field(default_factory=dict)
     # Receipt schema version — identifies the V1 compliance receipt format.
     schema_version: str = RECEIPT_SCHEMA_VERSION
     # --- Mutable chain metadata (outside signature envelope) ---
@@ -97,7 +98,7 @@ class ComplianceReceipt:
     # is_chain_head: True only for the current tail of the chain.
     # These fields are stored in a separate SQLite column so mutations
     # do not invalidate the historical HMAC signature.
-    superseded_by: Optional[str] = None
+    superseded_by: str | None = None
     is_chain_head: bool = True
 
 
@@ -114,17 +115,17 @@ class HumanReviewReceipt:
     reviewed_by: str
     issued_at: str
     decision: str  # "accepted" | "overridden" | "escalated"
-    override_reason: Optional[str]
+    override_reason: str | None
     original_receipt_hash: str
     previous_receipt_hash: str
     review_receipt_hash: str
     chain_position: int
     # --- Mutable chain metadata (outside signature envelope) ---
-    superseded_by: Optional[str] = None
+    superseded_by: str | None = None
     is_chain_head: bool = True
 
 
-ChainItem = Union[ComplianceReceipt, HumanReviewReceipt]
+ChainItem = ComplianceReceipt | HumanReviewReceipt
 
 # Fields excluded from the HMAC content dict before signing.
 # Must match _MUTABLE_FIELDS plus the hash field itself (which is the
@@ -135,10 +136,10 @@ _REVIEW_SIGN_EXCLUDE = _MUTABLE_FIELDS | {"review_receipt_hash"}
 
 class AttestationChain:
     ISSUER = "Hermes Relay v1.0.0 — hermesrelay.dev"
-    COMPLIANCE_FRAMEWORKS = ["HIPAA", "PCI-DSS"]
+    COMPLIANCE_FRAMEWORKS: ClassVar[list[str]] = ["HIPAA", "PCI-DSS"]
 
-    def __init__(self, db_path: Optional[str] = None) -> None:
-        self._chain: List[ChainItem] = []
+    def __init__(self, db_path: str | None = None) -> None:
+        self._chain: list[ChainItem] = []
         self._lock = threading.Lock()
         self._genesis_hash = hashlib.sha256(b"hermes-genesis-block").hexdigest()
         self._db_path = db_path or os.environ.get("HERMES_DB_PATH", DEFAULT_DB_PATH)
@@ -238,7 +239,7 @@ class AttestationChain:
                 ),
             )
 
-    def _sign_receipt(self, content: Dict) -> str:
+    def _sign_receipt(self, content: dict) -> str:
         """HMAC-SHA256 sign a content dict. Mutable fields must already be
         excluded from content before this is called."""
         canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
@@ -248,7 +249,7 @@ class AttestationChain:
             hashlib.sha256,
         ).hexdigest()
 
-    def _build_sign_content(self, item: ChainItem) -> Dict:
+    def _build_sign_content(self, item: ChainItem) -> dict:
         """Return the signable content dict for an item — all fields except
         the mutable applicability fields and the hash field itself."""
         full = asdict(item)
@@ -283,13 +284,13 @@ class AttestationChain:
     def issue(
         self,
         transaction_id: str,
-        flags_triggered: Dict[str, int],
-        flags_redacted: Dict[str, int],
+        flags_triggered: dict[str, int],
+        flags_redacted: dict[str, int],
         char_count_in: int,
         char_count_out: int,
-        downstream_target: Optional[str] = None,
-        detectors_executed: Optional[Dict[str, str]] = None,
-        occurrence_gaps: Optional[Dict[str, int]] = None,
+        downstream_target: str | None = None,
+        detectors_executed: dict[str, str] | None = None,
+        occurrence_gaps: dict[str, int] | None = None,
     ) -> ComplianceReceipt:
         evidence_incomplete = list(NOT_COVERED_CFRS)
         detectors_executed = detectors_executed or {}
@@ -305,7 +306,7 @@ class AttestationChain:
             position = len(self._chain)
             prev_hash = self._previous_hash()
             receipt_id = f"rcpt_{transaction_id}_{position:06d}"
-            issued_at = datetime.now(timezone.utc).isoformat()
+            issued_at = datetime.now(UTC).isoformat()
 
             # Build the immutable signed content — no mutable fields
             sign_content = {
@@ -355,7 +356,7 @@ class AttestationChain:
         transaction_id: str,
         reviewed_by: str,
         decision: str,
-        override_reason: Optional[str] = None,
+        override_reason: str | None = None,
     ) -> HumanReviewReceipt:
         if decision not in REVIEW_DECISIONS:
             raise ValueError(
@@ -363,7 +364,7 @@ class AttestationChain:
             )
 
         with self._lock:
-            original: Optional[ComplianceReceipt] = None
+            original: ComplianceReceipt | None = None
             for item in reversed(self._chain):
                 if (
                     isinstance(item, ComplianceReceipt)
@@ -379,7 +380,7 @@ class AttestationChain:
             position = len(self._chain)
             prev_hash = self._previous_hash()
             review_id = f"review_{transaction_id}_{position:06d}"
-            issued_at = datetime.now(timezone.utc).isoformat()
+            issued_at = datetime.now(UTC).isoformat()
 
             sign_content = {
                 "review_id": review_id,
@@ -459,7 +460,7 @@ class AttestationChain:
 
         return True
 
-    def get_receipt(self, transaction_id: str) -> Optional[ChainItem]:
+    def get_receipt(self, transaction_id: str) -> ChainItem | None:
         """Most recent chain item matching transaction_id."""
         with self._lock:
             for r in reversed(self._chain):
@@ -469,7 +470,7 @@ class AttestationChain:
 
     def get_compliance_receipt(
         self, transaction_id: str
-    ) -> Optional[ComplianceReceipt]:
+    ) -> ComplianceReceipt | None:
         """Most recent ComplianceReceipt (never a review) for transaction_id."""
         with self._lock:
             for r in reversed(self._chain):
@@ -480,7 +481,7 @@ class AttestationChain:
                     return r
         return None
 
-    def get_current_head(self) -> Optional[ChainItem]:
+    def get_current_head(self) -> ChainItem | None:
         """Return the current authoritative chain head — the only item a
         verifier may treat as standalone evidence without traversal.
         Returns None on an empty chain."""
@@ -504,7 +505,7 @@ class AttestationChain:
             return hmac.compare_digest(tail_hash, receipt_hash)
 
 
-    def issue_checkpoint(self) -> Dict:
+    def issue_checkpoint(self) -> dict:
         """Issue a signed current-head checkpoint — a standalone artifact
         that identifies the authoritative chain head at a point in time.
         Includes a monotonic epoch (chain_length) so freshness and
@@ -526,7 +527,7 @@ class AttestationChain:
                 else tail.receipt_hash
             )
             epoch = len(self._chain)  # monotonic — never decreases
-            issued_at = datetime.now(timezone.utc).isoformat()
+            issued_at = datetime.now(UTC).isoformat()
 
             content = {
                 "checkpoint_type": "current_head",
@@ -545,7 +546,7 @@ class AttestationChain:
             content["checkpoint_signature"] = signature
             return content
 
-    def verify_checkpoint(self, checkpoint: Dict, min_epoch: int = 0) -> bool:
+    def verify_checkpoint(self, checkpoint: dict, min_epoch: int = 0) -> bool:
         """Verify a checkpoint signature and freshness.
 
         Returns True only if:
@@ -597,7 +598,7 @@ class AttestationChain:
         A fork must never be silently resolved; callers must halt and
         alert on True."""
         with self._lock:
-            positions: Dict[int, list] = {}
+            positions: dict[int, list] = {}
             for item in self._chain:
                 h = (item.review_receipt_hash
                      if isinstance(item, HumanReviewReceipt)
@@ -626,13 +627,11 @@ class AttestationChain:
                      else item.receipt_hash) == receipt_hash_b),
                 None,
             )
-            if pos_a is not None and pos_b is not None and pos_a == pos_b:
-                return True
-            return False
+            return pos_a is not None and pos_b is not None and pos_a == pos_b
 
     def verify_receipt_applicability(
-        self, receipt_hash: str, checkpoint: Dict, min_epoch: int = 0
-    ) -> Dict:
+        self, receipt_hash: str, checkpoint: dict, min_epoch: int = 0
+    ) -> dict:
         """Full applicability verification for a receipt presented in isolation.
 
         Returns a structured verdict so callers can distinguish:
@@ -693,7 +692,7 @@ class AttestationChain:
 
         return result
 
-    def export_chain(self) -> List[Dict]:
+    def export_chain(self) -> list[dict]:
         with self._lock:
             return [asdict(r) for r in self._chain]
 
@@ -701,7 +700,7 @@ class AttestationChain:
         with self._lock:
             return len(self._chain)
 
-    def get_chain_head(self) -> Dict:
+    def get_chain_head(self) -> dict:
         """
         Return the V1 chain head as a dict for use in the V2 migration bridge.
 

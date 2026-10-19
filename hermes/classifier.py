@@ -1,12 +1,13 @@
-import re
 import base64
+import re
+import threading
 import unicodedata
 import urllib.parse
+from collections.abc import Callable
+
 import spacy
-import threading
-from pydantic import BaseModel, Field
-from typing import Callable, Dict, List, Optional, Set, Tuple
 from presidio_analyzer import AnalyzerEngine
+from pydantic import BaseModel, Field
 
 from hermes.vault import VAULT
 
@@ -370,18 +371,18 @@ SPACY_FLAG_MAP = {
 # -------------------------------------------------------------------------
 class FlagEntry(BaseModel):
     count: int
-    cfr_citation: Optional[str] = None
+    cfr_citation: str | None = None
 
 
 class RedactionAuditLog(BaseModel):
     transaction_id: str = Field(..., description="Unique thread-safe transaction ID")
     original_char_count: int
     redacted_char_count: int
-    flags_triggered: Dict[str, FlagEntry] = Field(
+    flags_triggered: dict[str, FlagEntry] = Field(
         default_factory=dict,
         description="Per-flag detection counts with regulatory citations",
     )
-    flags_redacted: Dict[str, FlagEntry] = Field(
+    flags_redacted: dict[str, FlagEntry] = Field(
         default_factory=dict,
         description="Per-flag redaction counts — must equal flags_triggered for zero-egress confirmation",
     )
@@ -409,7 +410,7 @@ class DetectorFailureError(Exception):
 class ScrubberResult(BaseModel):
     clean_text: str
     audit_log: RedactionAuditLog
-    detectors_executed: Dict[str, str] = Field(
+    detectors_executed: dict[str, str] = Field(
         default_factory=dict,
         description=(
             "Per-CFR-category tri-state execution status for this run: "
@@ -418,7 +419,7 @@ class ScrubberResult(BaseModel):
             "silent failure must be distinguishable from a clean scan."
         ),
     )
-    occurrence_gaps: Dict[str, int] = Field(
+    occurrence_gaps: dict[str, int] = Field(
         default_factory=dict,
         description=(
             "Post-scan occurrence verification: CFR citation → count of "
@@ -453,7 +454,7 @@ def validate_luhn_checksum(pan_candidate: str) -> bool:
 # PRESIDIO DETECTION
 # -------------------------------------------------------------------------
 class _PresidioAnalyzerCache:
-    engine: Optional[AnalyzerEngine] = None
+    engine: AnalyzerEngine | None = None
 
 
 _PIPELINE_LOCK = threading.Lock()
@@ -468,7 +469,7 @@ def _get_presidio_analyzer() -> AnalyzerEngine:
     return _PresidioAnalyzerCache.engine
 
 
-def detect_with_presidio(text: str) -> List[Dict]:
+def detect_with_presidio(text: str) -> list[dict]:
     """Run Presidio AnalyzerEngine and return detected entities for configured categories."""
     with _PIPELINE_LOCK:
         analyzer = _get_presidio_analyzer()
@@ -478,7 +479,7 @@ def detect_with_presidio(text: str) -> List[Dict]:
             entities=PRESIDIO_ENTITY_TYPES,
         )
 
-    entities: List[Dict] = []
+    entities: list[dict] = []
     for result in results:
         mapping = PRESIDIO_FLAG_MAP.get(result.entity_type)
         if mapping is None:
@@ -503,7 +504,7 @@ def detect_with_presidio(text: str) -> List[Dict]:
 # -------------------------------------------------------------------------
 # SPAN OVERLAP RESOLUTION
 # -------------------------------------------------------------------------
-def _increment_flag(flags: Dict[str, FlagEntry], flag_name: str) -> None:
+def _increment_flag(flags: dict[str, FlagEntry], flag_name: str) -> None:
     if flag_name in flags:
         flags[flag_name].count += 1
     else:
@@ -548,11 +549,11 @@ def _span_fully_contains(
 def _merge_flag_sets(
     prev_start: int,
     prev_end: int,
-    prev_flags: Set[str],
+    prev_flags: set[str],
     start: int,
     end: int,
-    flag_names: Set[str],
-) -> Set[str]:
+    flag_names: set[str],
+) -> set[str]:
     """Union overlapping span flags, suppressing URL hits inside email spans."""
     merged_flags = prev_flags | flag_names
     if "HIPAA_PHI_EMAIL" not in merged_flags or "HIPAA_PHI_URL" not in merged_flags:
@@ -562,9 +563,7 @@ def _merge_flag_sets(
         "HIPAA_PHI_EMAIL" in prev_flags
         and "HIPAA_PHI_URL" in flag_names
         and _span_fully_contains(prev_start, prev_end, start, end)
-    ):
-        merged_flags.discard("HIPAA_PHI_URL")
-    elif (
+    ) or (
         "HIPAA_PHI_EMAIL" in flag_names
         and "HIPAA_PHI_URL" in prev_flags
         and _span_fully_contains(start, end, prev_start, prev_end)
@@ -575,14 +574,14 @@ def _merge_flag_sets(
 
 
 def _merge_overlapping_spans(
-    spans: List[Tuple[int, int, Set[str], str]],
-) -> List[Tuple[int, int, Set[str], str]]:
+    spans: list[tuple[int, int, set[str], str]],
+) -> list[tuple[int, int, set[str], str]]:
     """Merge overlapping character spans so each region is redacted exactly once."""
     if not spans:
         return []
 
     sorted_spans = sorted(spans, key=lambda item: (item[0], -(item[1] - item[0])))
-    merged: List[Tuple[int, int, Set[str], str]] = []
+    merged: list[tuple[int, int, set[str], str]] = []
 
     for start, end, flag_names, placeholder in sorted_spans:
         if merged and _spans_overlap(merged[-1][0], merged[-1][1], start, end):
@@ -599,11 +598,11 @@ def _merge_overlapping_spans(
     return merged
 
 
-def _collect_spacy_spans(text: str) -> List[Tuple[int, int, Set[str], str]]:
+def _collect_spacy_spans(text: str) -> list[tuple[int, int, set[str], str]]:
     with _PIPELINE_LOCK:
         doc = nlp(text)
 
-    spans: List[Tuple[int, int, Set[str], str]] = []
+    spans: list[tuple[int, int, set[str], str]] = []
     for ent in doc.ents:
         mapping = SPACY_FLAG_MAP.get(ent.label_)
         if mapping is None or "REDACTED" in ent.text:
@@ -613,8 +612,8 @@ def _collect_spacy_spans(text: str) -> List[Tuple[int, int, Set[str], str]]:
     return spans
 
 
-def _collect_presidio_spans(text: str) -> List[Tuple[int, int, Set[str], str]]:
-    spans: List[Tuple[int, int, Set[str], str]] = []
+def _collect_presidio_spans(text: str) -> list[tuple[int, int, set[str], str]]:
+    spans: list[tuple[int, int, set[str], str]] = []
     for entity in detect_with_presidio(text):
         spans.append(
             (
@@ -631,7 +630,7 @@ def _static_redaction_token(placeholder: str) -> str:
     return f"[REDACTED_{placeholder}]"
 
 
-def _primary_flag_for_span(flag_names: Set[str], placeholder: str) -> str:
+def _primary_flag_for_span(flag_names: set[str], placeholder: str) -> str:
     """Pick one flag for vault storage when a span maps to multiple flags."""
     placeholder_to_flag = {
         "PHONE": "HIPAA_PHI_PHONE",
@@ -647,15 +646,15 @@ def _primary_flag_for_span(flag_names: Set[str], placeholder: str) -> str:
     preferred = placeholder_to_flag.get(placeholder)
     if preferred and preferred in flag_names:
         return preferred
-    return sorted(flag_names)[0]
+    return min(flag_names)
 
 
 def _apply_span_redactions(
     text: str,
-    spans: List[Tuple[int, int, Set[str], str]],
-    flags: Dict[str, FlagEntry],
-    redacted_flags: Dict[str, FlagEntry],
-    token_for_match: Optional[Callable[[str, str, str], str]] = None,
+    spans: list[tuple[int, int, set[str], str]],
+    flags: dict[str, FlagEntry],
+    redacted_flags: dict[str, FlagEntry],
+    token_for_match: Callable[[str, str, str], str] | None = None,
 ) -> str:
     merged_spans = _merge_overlapping_spans(spans)
     merged_spans.sort(key=lambda item: item[0], reverse=True)
@@ -677,7 +676,7 @@ def _apply_span_redactions(
     return clean_text
 
 
-def _run_regex_stage(pattern: "re.Pattern", replacer, text: str) -> Tuple[str, str]:
+def _run_regex_stage(pattern: "re.Pattern", replacer, text: str) -> tuple[str, str]:
     """Run one regex substitution stage and report tri-state status.
 
     A detector that raises must not take down the whole scan (that would be
@@ -692,7 +691,7 @@ def _run_regex_stage(pattern: "re.Pattern", replacer, text: str) -> Tuple[str, s
         return text, DETECTOR_RAN_ERROR
 
 
-def _run_stage(fn, *args) -> Tuple[str, str]:
+def _run_stage(fn, *args) -> tuple[str, str]:
     """Run one non-regex text-transform stage (callable(*args) -> str) with
     the same fail-soft/tri-state contract as _run_regex_stage."""
     try:
@@ -736,7 +735,7 @@ _OCCURRENCE_MRN_RE = re.compile(
 )
 
 # Flag → (CFR citation, list of occurrence patterns to check in clean_text)
-_OCCURRENCE_CHECKS: Dict[str, Tuple[str, List[re.Pattern]]] = {
+_OCCURRENCE_CHECKS: dict[str, tuple[str, list[re.Pattern]]] = {
     "HIPAA_PHI_DATE": (CFR_CITATION_MAP["HIPAA_PHI_DATE"], _OCCURRENCE_DATE_PATTERNS),
     "HIPAA_SSN": (CFR_CITATION_MAP["HIPAA_SSN"], [_OCCURRENCE_SSN_RE]),
     "HIPAA_PHI_EMAIL": (CFR_CITATION_MAP["HIPAA_PHI_EMAIL"], [_OCCURRENCE_EMAIL_RE]),
@@ -747,8 +746,8 @@ _OCCURRENCE_CHECKS: Dict[str, Tuple[str, List[re.Pattern]]] = {
 
 def _verify_occurrence_completeness(
     clean_text: str,
-    flags: Dict[str, FlagEntry],
-) -> Dict[str, int]:
+    flags: dict[str, FlagEntry],
+) -> dict[str, int]:
     """Post-scan check: for each triggered flag category, count surviving
     PHI-like patterns still present in clean_text.
 
@@ -758,7 +757,7 @@ def _verify_occurrence_completeness(
     are stripped before matching so they never inflate occurrence_gaps.
     """
     probe_text = _REDACTED_TOKEN_RE.sub(" ", clean_text)
-    occurrence_gaps: Dict[str, int] = {}
+    occurrence_gaps: dict[str, int] = {}
 
     for flag_name, (cfr_citation, patterns) in _OCCURRENCE_CHECKS.items():
         _ = flag_name  # scan all categories, not just triggered ones
@@ -808,10 +807,10 @@ def _scrub_payload_impl(
     for _dash in _UNICODE_DASHES:
         text = text.replace(_dash, '-')
     original_char_count = len(text)
-    flags: Dict[str, FlagEntry] = {}
-    redacted_flags: Dict[str, FlagEntry] = {}
+    flags: dict[str, FlagEntry] = {}
+    redacted_flags: dict[str, FlagEntry] = {}
     clean_text = text
-    detectors_executed: Dict[str, str] = {}
+    detectors_executed: dict[str, str] = {}
 
     # 0a. URL PATH EXPANSION — extract path segments and query values
     # from URLs so regex detectors can find PHI embedded in URL paths.

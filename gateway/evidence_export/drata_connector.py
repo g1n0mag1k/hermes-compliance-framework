@@ -18,7 +18,6 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 from gateway.evidence_export import exporters as _transport
 from gateway.evidence_export.event import EvidenceEvent
@@ -76,7 +75,7 @@ class ConnectionResult:
 
     state: str
     success: bool
-    reason: Optional[str] = None
+    reason: str | None = None
     live_validated: bool = False
 
 

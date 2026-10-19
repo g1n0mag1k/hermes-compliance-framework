@@ -18,7 +18,6 @@ These are re-exported from canonical.py for consistency.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 
 from hermes.receipts.v2.canonical import merkle_leaf, merkle_node
@@ -109,7 +108,7 @@ class MerkleTree:
     # Inclusion proof
     # ------------------------------------------------------------------
 
-    def inclusion_proof(self, leaf_index: int) -> "InclusionProof":
+    def inclusion_proof(self, leaf_index: int) -> InclusionProof:
         """
         Generate an inclusion proof for the leaf at `leaf_index`.
 
@@ -148,7 +147,7 @@ class MerkleTree:
     # Consistency proof
     # ------------------------------------------------------------------
 
-    def consistency_proof(self, old_size: int) -> "ConsistencyProof":
+    def consistency_proof(self, old_size: int) -> ConsistencyProof:
         """
         Generate a consistency proof that tree[old_size] is a prefix of tree[self.size].
 
