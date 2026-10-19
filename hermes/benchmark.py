@@ -176,8 +176,8 @@ def generate_report(results: list[BenchmarkResult]) -> str:
         )
 
     for tool, data in COMPETITOR_BASELINES.items():
-        ssn = data.get("HIPAA_SSN", {})  # type: ignore[attr-defined]
-        pan = data.get("PCI_PAN", {})  # type: ignore[attr-defined]
+        ssn: dict = data.get("HIPAA_SSN", {})  # type: ignore[attr-defined, assignment]
+        pan: dict = data.get("PCI_PAN", {})  # type: ignore[attr-defined, assignment]
         rev = "✅" if data.get("reversible_redaction") else "❌"  # type: ignore[attr-defined]
         att = "✅" if data.get("compliance_receipts") else "❌"  # type: ignore[attr-defined]
         egress = "❌" if any(x in data.get("note", "").lower() for x in ["egress", "cloud", "network"]) else "✅"  # type: ignore[attr-defined]

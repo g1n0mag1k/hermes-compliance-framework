@@ -338,8 +338,8 @@ class AttestationChain:
 
             signature = self._sign_receipt(sign_content)
 
-            receipt = ComplianceReceipt(  # type: ignore[arg-type]
-                **sign_content,
+            receipt = ComplianceReceipt(
+                **sign_content,  # type: ignore[arg-type]
                 receipt_hash=signature,
                 superseded_by=None,
                 is_chain_head=True,
@@ -396,8 +396,8 @@ class AttestationChain:
 
             signature = self._sign_receipt(sign_content)
 
-            review = HumanReviewReceipt(  # type: ignore[arg-type]
-                **sign_content,
+            review = HumanReviewReceipt(
+                **sign_content,  # type: ignore[arg-type]
                 review_receipt_hash=signature,
                 superseded_by=None,
                 is_chain_head=True,
