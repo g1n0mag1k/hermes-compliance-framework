@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import sqlite3
 import threading
@@ -459,8 +460,6 @@ def get_vault_for_workspace(workspace: Workspace):
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
-
-import re
 
 _WORKSPACE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]$')
 

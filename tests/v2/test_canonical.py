@@ -157,15 +157,15 @@ class TestMerkle:
         assert merkle_leaf(d) == merkle_leaf(d)
 
     def test_node_deterministic(self):
-        l = b"a" * 32
+        left = b"a" * 32
         r = b"b" * 32
-        assert merkle_node(l, r) == merkle_node(l, r)
+        assert merkle_node(left, r) == merkle_node(left, r)
 
     def test_node_not_commutative(self):
         """Left-right order must matter."""
-        l = b"a" * 32
+        left = b"a" * 32
         r = b"b" * 32
-        assert merkle_node(l, r) != merkle_node(r, l)
+        assert merkle_node(left, r) != merkle_node(r, left)
 
     def test_leaf_format(self):
         data = b"x" * 32
@@ -173,10 +173,10 @@ class TestMerkle:
         assert merkle_leaf(data) == expected
 
     def test_node_format(self):
-        l = b"a" * 32
+        left = b"a" * 32
         r = b"b" * 32
-        expected = hashlib.sha256(b"\x01" + l + r).digest()
-        assert merkle_node(l, r) == expected
+        expected = hashlib.sha256(b"\x01" + left + r).digest()
+        assert merkle_node(left, r) == expected
 
     def test_build_root_single(self):
         d = b"a" * 32

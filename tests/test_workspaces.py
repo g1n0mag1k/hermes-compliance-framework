@@ -4,24 +4,7 @@ tests/test_workspaces.py — Multi-tenant workspace model tests.
 
 import pytest
 
-
-# Point workspace system at a temp directory for all tests
-@pytest.fixture(autouse=True)
-def isolated_workspace_env(tmp_path, monkeypatch):
-    monkeypatch.setenv("HERMES_DATA_DIR", str(tmp_path / "workspaces"))
-    monkeypatch.setenv(
-        "HERMES_REGISTRY_DB", str(tmp_path / "workspaces" / "registry.db")
-    )
-    # Clear module-level caches between tests
-    import hermes.workspaces as ws_mod
-    ws_mod._chain_cache.clear()
-    ws_mod._vault_cache.clear()
-    # Reload _DEFAULT_DATA_DIR and _DEFAULT_REGISTRY_DB from env
-    ws_mod._DEFAULT_DATA_DIR = str(tmp_path / "workspaces")
-    ws_mod._DEFAULT_REGISTRY_DB = str(tmp_path / "workspaces" / "registry.db")
-    yield
-
-
+import hermes.workspaces as _ws_mod
 from hermes.workspaces import (
     create_workspace,
     get_chain_for_workspace,
@@ -32,6 +15,22 @@ from hermes.workspaces import (
     rotate_api_key,
     update_plan,
 )
+
+
+# Point workspace system at a temp directory for all tests
+@pytest.fixture(autouse=True)
+def isolated_workspace_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_DATA_DIR", str(tmp_path / "workspaces"))
+    monkeypatch.setenv(
+        "HERMES_REGISTRY_DB", str(tmp_path / "workspaces" / "registry.db")
+    )
+    # Clear module-level caches between tests
+    _ws_mod._chain_cache.clear()
+    _ws_mod._vault_cache.clear()
+    # Reload _DEFAULT_DATA_DIR and _DEFAULT_REGISTRY_DB from env
+    _ws_mod._DEFAULT_DATA_DIR = str(tmp_path / "workspaces")
+    _ws_mod._DEFAULT_REGISTRY_DB = str(tmp_path / "workspaces" / "registry.db")
+    yield
 
 
 class TestCreateWorkspace:
