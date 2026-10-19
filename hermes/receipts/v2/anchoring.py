@@ -32,15 +32,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import struct
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from hermes.receipts.v2.checkpoint import CheckpointRecord
-
 
 # ------------------------------------------------------------------
 # 1. WORM Storage
@@ -106,7 +103,7 @@ class WORMStore:
             f"{checkpoint.sequence:08d}/"
             f"{checkpoint.checkpoint_id}.checkpoint.json"
         )
-        written_at = datetime.now(timezone.utc).isoformat()
+        written_at = datetime.now(UTC).isoformat()
         object_version_id = self._write_bundle(object_key, bundle_bytes)
 
         record = WORMRecord(
@@ -248,7 +245,7 @@ def timestamp_checkpoint(
 
 def _mock_timestamp(checkpoint: CheckpointRecord, tsa_url: str) -> TimestampToken:
     """Issue a mock RFC 3161-shaped timestamp for development and testing."""
-    gen_time = datetime.now(timezone.utc).isoformat()
+    gen_time = datetime.now(UTC).isoformat()
     serial = int(time.time() * 1000) & 0xFFFFFFFF
 
     mock_tst = json.dumps({
@@ -296,7 +293,7 @@ def _real_timestamp(checkpoint: CheckpointRecord, tsa_url: str) -> TimestampToke
             hash_algorithm="sha256",
         )
         gen_time = datetime.fromtimestamp(
-            tst.tst_info["gen_time"].native, tz=timezone.utc
+            tst.tst_info["gen_time"].native, tz=UTC
         ).isoformat()
         serial = int(tst.tst_info["serial_number"].native)
 
@@ -372,7 +369,7 @@ def register_with_scitt(checkpoint: CheckpointRecord) -> SCITTReceipt:
         return _stub_scitt_receipt(checkpoint)
 
     try:
-        import httpx
+        import httpx  # noqa: F401  # runtime availability probe
         return _real_scitt_registration(checkpoint, _SCITT_URL)
     except ImportError:
         import warnings
@@ -396,7 +393,7 @@ def _stub_scitt_receipt(checkpoint: CheckpointRecord) -> SCITTReceipt:
         checkpoint_id=checkpoint.checkpoint_id,
         merkle_root=checkpoint.merkle_root,
         scitt_url="stub://not-configured",
-        registered_at=datetime.now(timezone.utc).isoformat(),
+        registered_at=datetime.now(UTC).isoformat(),
         log_entry_id=f"stub-{checkpoint.checkpoint_id[:8]}",
         inclusion_receipt_cose=stub_payload,
         consistency_proof_handle=f"stub-handle-{checkpoint.checkpoint_id[:8]}",
@@ -428,7 +425,7 @@ def _real_scitt_registration(checkpoint: CheckpointRecord, scitt_url: str) -> SC
         checkpoint_id=checkpoint.checkpoint_id,
         merkle_root=checkpoint.merkle_root,
         scitt_url=scitt_url,
-        registered_at=datetime.now(timezone.utc).isoformat(),
+        registered_at=datetime.now(UTC).isoformat(),
         log_entry_id=log_entry_id,
         inclusion_receipt_cose=inclusion_receipt_cose,
         consistency_proof_handle=log_entry_id,

@@ -23,10 +23,9 @@ and is tracked as follow-up work, not claimed as shipped.
 import json
 import logging
 import os
-import urllib.request
 import urllib.error
+import urllib.request
 import warnings
-from typing import Optional
 
 from hermes.attestation import ComplianceReceipt
 
@@ -202,7 +201,11 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         HERMES_VANTA_CLIENT_SECRET
         HERMES_VANTA_RESOURCE_ID
     """
-    import json, urllib.request, urllib.error, os, logging
+    import json
+    import logging
+    import os
+    import urllib.error
+    import urllib.request
     logger = logging.getLogger("hermes.webhooks")
 
     client_id = os.environ.get("HERMES_VANTA_CLIENT_ID")
@@ -291,7 +294,11 @@ def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> 
         HERMES_SPRINTO_GRAPHQL_URL  (default: https://app.sprinto.com/dev-api/graphql)
         HERMES_SPRINTO_MUTATION     (confirm with Sprinto before setting)
     """
-    import json, urllib.request, urllib.error, os, logging
+    import json
+    import logging
+    import os
+    import urllib.error
+    import urllib.request
     logger = logging.getLogger("hermes.webhooks")
 
     api_key = os.environ.get("HERMES_SPRINTO_API_KEY")

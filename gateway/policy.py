@@ -1,8 +1,8 @@
-from dataclasses import dataclass
-from typing import Literal
 import hashlib
 import json
 import os
+from dataclasses import dataclass
+from typing import Literal
 
 PolicyDecision = Literal["ALLOW", "REDACT", "BLOCK"]
 

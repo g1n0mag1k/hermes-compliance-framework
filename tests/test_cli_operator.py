@@ -39,7 +39,7 @@ def keystore_env(tmp_path, monkeypatch):
 def _decision(decision: str) -> EnforcementDecision:
     policy = HIPAA_PRODUCTION_BLOCK
     return EnforcementDecision(
-        decision=decision,
+        decision=decision,  # type: ignore[arg-type]
         reasons=["test"],
         policy_id=policy.policy_id,
         policy_version=policy.policy_version,

@@ -53,7 +53,7 @@ def test_verify_chain_false_when_payload_mutated_after_signing() -> None:
     assert chain.verify_chain() is True
 
     chain._chain[1].transaction_id = "tampered_txn"
-    chain._chain[1].chars_removed = 999
+    chain._chain[1].chars_removed = 999  # type: ignore[union-attr]
 
     assert chain.verify_chain() is False
 
@@ -84,7 +84,7 @@ def test_verify_chain_false_when_chain_positions_renumbered() -> None:
     assert chain.verify_chain() is True
 
     chain._chain[1].chain_position = 99
-    _resign(chain, chain._chain[1])  # keep signature valid; isolate invariant 3
+    _resign(chain, chain._chain[1])  # type: ignore[arg-type]  # keep signature valid; isolate invariant 3
 
     assert chain.verify_chain() is False
 
@@ -101,7 +101,7 @@ def test_verify_chain_false_when_middle_receipt_deleted_and_rest_resigned() -> N
 
     del chain._chain[1]
     for receipt in chain._chain:
-        _resign(chain, receipt)
+        _resign(chain, receipt)  # type: ignore[arg-type]
 
     assert chain.chain_length() == 3
     assert chain.verify_chain() is False
@@ -148,7 +148,7 @@ def test_chain_reload_preserves_order(tmp_path) -> None:
 
     assert [r.chain_position for r in reloaded._chain] == [0, 1, 2, 3, 4]
     assert [r.transaction_id for r in reloaded._chain] == [r.transaction_id for r in issued]
-    assert [r.receipt_hash for r in reloaded._chain] == [r.receipt_hash for r in issued]
+    assert [r.receipt_hash for r in reloaded._chain] == [r.receipt_hash for r in issued]  # type: ignore[union-attr]
     assert [r.previous_receipt_hash for r in reloaded._chain] == [
         r.previous_receipt_hash for r in issued
     ]
@@ -191,7 +191,7 @@ def test_override_receipt_is_tamper_evident() -> None:
     assert chain.verify_chain() is True
 
     # Tamper with the review's claim about which original it reviewed.
-    chain._chain[1].original_receipt_hash = "0" * 64
+    chain._chain[1].original_receipt_hash = "0" * 64  # type: ignore[union-attr]
     assert chain.verify_chain() is False
 
 

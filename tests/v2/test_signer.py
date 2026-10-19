@@ -2,10 +2,11 @@
 tests/v2/test_signer.py — Signer protocol and software key implementation tests.
 """
 
+from datetime import UTC
+
 import pytest
-from cryptography.hazmat.primitives.asymmetric import ed25519, ec
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from hermes.receipts.v2.signer import (
     COSE_ALG_EDDSA,
@@ -13,9 +14,9 @@ from hermes.receipts.v2.signer import (
     Signer,
 )
 from hermes.receipts.v2.software_signer import (
+    SoftwareSigner,
     SoftwareSignerEd25519,
     SoftwareSignerES256,
-    SoftwareSigner,
 )
 
 
@@ -134,8 +135,9 @@ class TestSoftwareSignerES256:
         sig2 = s.sign_cose_sig_structure(msg)
         # They may be different (probabilistic)
         # Both must verify against the public key
+        from cryptography.hazmat.primitives import hashes as _h
+        from cryptography.hazmat.primitives import serialization as _s
         from cryptography.hazmat.primitives.asymmetric import ec as _ec
-        from cryptography.hazmat.primitives import hashes as _h, serialization as _s
         pub_pem = s.public_key_manifest()["public_key_pem"].encode("ascii")
         pub_key = _s.load_pem_public_key(pub_pem)
         pub_key.verify(sig1, msg, _ec.ECDSA(_h.SHA256()))
@@ -190,8 +192,8 @@ class TestSoftwareSignerExtended:
             s.verify(msg, bytes(sig))
 
     def test_valid_from_param(self):
-        from datetime import datetime, timezone
-        ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        from datetime import datetime
+        ts = datetime(2025, 1, 1, tzinfo=UTC)
         s = SoftwareSignerEd25519(
             __import__('cryptography.hazmat.primitives.asymmetric.ed25519', fromlist=['Ed25519PrivateKey']).Ed25519PrivateKey.generate(),
             valid_from=ts,
@@ -199,8 +201,8 @@ class TestSoftwareSignerExtended:
         assert "2025-01-01" in s.public_key_manifest()["valid_from"]
 
     def test_valid_until_param(self):
-        from datetime import datetime, timezone
-        ts = datetime(2030, 12, 31, tzinfo=timezone.utc)
+        from datetime import datetime
+        ts = datetime(2030, 12, 31, tzinfo=UTC)
         s = SoftwareSignerEd25519(
             __import__('cryptography.hazmat.primitives.asymmetric.ed25519', fromlist=['Ed25519PrivateKey']).Ed25519PrivateKey.generate(),
             valid_until=ts,
@@ -213,8 +215,8 @@ class TestSoftwareSignerExtended:
         assert s.public_key_manifest()["status"] == "rotated"
 
     def test_load_from_pem_rejects_rsa(self):
-        from cryptography.hazmat.primitives.asymmetric import rsa
         from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
         rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         pem = rsa_key.private_bytes(
             encoding=serialization.Encoding.PEM,
@@ -225,5 +227,5 @@ class TestSoftwareSignerExtended:
             SoftwareSignerEd25519.load_from_pem(pem)
 
     def test_cose_alg_eddsa_alias(self):
-        from hermes.receipts.v2.signer import COSE_ALG_EdDSA, COSE_ALG_EDDSA
+        from hermes.receipts.v2.signer import COSE_ALG_EDDSA, COSE_ALG_EdDSA
         assert COSE_ALG_EdDSA == COSE_ALG_EDDSA == -8

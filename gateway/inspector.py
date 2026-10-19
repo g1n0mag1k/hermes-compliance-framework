@@ -60,7 +60,7 @@ def inspect_string_value(text: str, transaction_id: str) -> tuple[str, dict, dic
     clean_text, flags_triggered, flags_redacted, detectors_executed = _extract_scrub_result(result)
 
     stripped = text.strip()
-    if stripped.startswith("{") or stripped.startswith("["):
+    if stripped.startswith(("{", "[")):
         try:
             parsed = json.loads(stripped)
             parsed_clean, p_trig, p_red, p_det = inspect_json_recursive(parsed, transaction_id)

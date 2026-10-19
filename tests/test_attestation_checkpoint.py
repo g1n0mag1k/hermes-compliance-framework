@@ -20,13 +20,12 @@ import hashlib
 import hmac
 import json
 import os
-import tempfile
+
 import pytest
 
 os.environ.setdefault("HERMES_ENV", "development")
 
-from hermes.attestation import AttestationChain, SIGNING_KEY
-
+from hermes.attestation import SIGNING_KEY, AttestationChain
 
 # ---------------------------------------------------------------------------
 # Fixtures

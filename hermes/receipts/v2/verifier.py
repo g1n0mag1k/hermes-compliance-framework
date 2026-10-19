@@ -17,15 +17,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Optional
 
 import cbor2
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519
-from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
-from hermes.receipts.v2.canonical import canonicalize, receipt_digest_hex
+from hermes.receipts.v2.canonical import receipt_digest_hex
 from hermes.receipts.v2.signer import COSE_ALG_EDDSA, COSE_ALG_ES256
 
 # COSE header labels (RFC 8152)
@@ -60,7 +58,7 @@ class VerificationResult:
     receipt_digest_valid: bool = False
 
     # Chain linkage (None when no prev_receipt_digest was present)
-    chain_link_valid: Optional[bool] = None
+    chain_link_valid: bool | None = None
 
     # Metadata
     issued_at: str = ""
@@ -279,7 +277,7 @@ class ChainVerificationResult:
 def verify_receipt_chain(
     cose_bytes_list: list[bytes],
     public_key_pem: str,
-    expected_workspace_id: Optional[str] = None,
+    expected_workspace_id: str | None = None,
 ) -> ChainVerificationResult:
     """
     Verify an ordered sequence of V2 gateway receipts forms a valid chain.
@@ -291,7 +289,7 @@ def verify_receipt_chain(
     if not cose_bytes_list:
         return ChainVerificationResult(valid=False, errors=["empty receipt chain"])
 
-    prev_digest: Optional[str] = None
+    prev_digest: str | None = None
     for index, cose_bytes in enumerate(cose_bytes_list):
         result = verify_receipt(cose_bytes, public_key_pem)
         if not result.fully_valid:

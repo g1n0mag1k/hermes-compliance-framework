@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from hermes.receipts.v2.builder import ReceiptV2
 
@@ -22,4 +21,4 @@ class UpstreamTransportFailure:
 
     kind: str
     message: str
-    upstream_status: Optional[int] = None
+    upstream_status: int | None = None

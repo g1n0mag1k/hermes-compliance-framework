@@ -210,11 +210,12 @@ def test_vault_aesgcm_roundtrip() -> None:
 
 def test_vault_tamper_detection() -> None:
     """Flipping a byte in encrypted_value must raise on decrypt — not silently return garbage."""
-    from hermes.vault import VAULT, _aesgcm_decrypt, VAULT_KEY
     from cryptography.exceptions import InvalidTag
+
+    from hermes.vault import VAULT, VAULT_KEY, _aesgcm_decrypt
     token = VAULT.store("SSN", "372-18-5421", "txn_tamper_test")
     entry = VAULT.retrieve_entry(token)
-    ct_bytes = bytearray(bytes.fromhex(entry.encrypted_value))
+    ct_bytes = bytearray(bytes.fromhex(entry.encrypted_value))  # type: ignore[union-attr]
     ct_bytes[20] ^= 0xFF
     tampered_hex = bytes(ct_bytes).hex()
     try:
@@ -226,7 +227,7 @@ def test_vault_tamper_detection() -> None:
 
 def test_vault_nonce_uniqueness() -> None:
     """Same plaintext encrypted twice must produce different ciphertexts."""
-    from hermes.vault import _aesgcm_encrypt, VAULT_KEY
+    from hermes.vault import VAULT_KEY, _aesgcm_encrypt
     ct1 = _aesgcm_encrypt("372-18-5421", VAULT_KEY)
     ct2 = _aesgcm_encrypt("372-18-5421", VAULT_KEY)
     assert ct1 != ct2, "Nonce reuse detected — encryption is deterministic"

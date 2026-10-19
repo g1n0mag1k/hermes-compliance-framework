@@ -11,11 +11,10 @@ import gateway.evidence as gateway_evidence
 import gateway.policy as gateway_policy
 from gateway.app import app
 from gateway.pipeline import GatewayPipeline
-from gateway.policy import Policy, set_workspace_policy, clear_workspace_policy
+from gateway.policy import Policy, clear_workspace_policy, set_workspace_policy
 from hermes.classifier import DetectorFailureError
 from hermes.receipts.v2.verifier import verify_receipt
 from hermes.workspaces import create_workspace
-
 
 BLOCK_POLICY = Policy(
     policy_id="BLOCK_ALL",

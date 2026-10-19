@@ -23,13 +23,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import sqlite3
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -70,7 +70,7 @@ class Workspace:
     api_key_hash: str              # SHA-256 of the raw API key — never store raw
     created_at: str
     plan: str                      # "trial" | "production" | "enterprise"
-    parent_workspace_id: Optional[str]  # set when this workspace belongs to an MSP
+    parent_workspace_id: str | None  # set when this workspace belongs to an MSP
     role: str = DEFAULT_ROLE       # "msp_admin" | "msp_tech" | "client_readonly"
 
     @property
@@ -170,7 +170,7 @@ def create_workspace(
     name: str,
     owner_email: str,
     plan: str = "trial",
-    parent_workspace_id: Optional[str] = None,
+    parent_workspace_id: str | None = None,
     role: str = DEFAULT_ROLE,
 ) -> tuple[Workspace, str]:
     """
@@ -190,7 +190,7 @@ def create_workspace(
 
     raw_key = _generate_api_key()
     key_hash = _hash_api_key(raw_key)
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
 
     workspace = Workspace(
         workspace_id=workspace_id,
@@ -239,7 +239,7 @@ def create_workspace(
     return workspace, raw_key
 
 
-def get_workspace_by_api_key(raw_api_key: str) -> Optional[Workspace]:
+def get_workspace_by_api_key(raw_api_key: str) -> Workspace | None:
     """
     Look up a workspace by its raw API key.
     Returns None if no matching workspace exists.
@@ -273,12 +273,10 @@ def can_access_workspace(caller: Workspace, target: Workspace) -> bool:
     """
     if caller.workspace_id == target.workspace_id:
         return True
-    if target.parent_workspace_id == caller.workspace_id:
-        return True
-    return False
+    return target.parent_workspace_id == caller.workspace_id
 
 
-def get_workspace(workspace_id: str) -> Optional[Workspace]:
+def get_workspace(workspace_id: str) -> Workspace | None:
     """Look up a workspace by its ID."""
     with _registry_lock:
         conn = _get_registry_conn()
@@ -299,7 +297,7 @@ def get_workspace(workspace_id: str) -> Optional[Workspace]:
     return _row_to_workspace(row)
 
 
-def list_workspaces(parent_workspace_id: Optional[str] = None) -> list[Workspace]:
+def list_workspaces(parent_workspace_id: str | None = None) -> list[Workspace]:
     """
     List all workspaces, optionally filtered to children of a parent.
     MSPs use this to list their client workspaces.
@@ -373,7 +371,7 @@ TRIAL_SCAN_LIMIT = 5
 TRIAL_WINDOW_DAYS = 14
 
 
-def get_trial_quota(workspace_id: str) -> tuple[int, Optional[str], int]:
+def get_trial_quota(workspace_id: str) -> tuple[int, str | None, int]:
     """Return (scans_used, first_scan_at, extended_by) for a workspace."""
     with _registry_lock:
         conn = _get_registry_conn()
@@ -392,7 +390,7 @@ def get_trial_quota(workspace_id: str) -> tuple[int, Optional[str], int]:
 
 def increment_trial_quota(workspace_id: str) -> tuple[int, str]:
     """Increment scans_used after a successful trial scan."""
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     with _registry_lock:
         conn = _get_registry_conn()
         try:
@@ -463,7 +461,6 @@ def get_vault_for_workspace(workspace: Workspace):
 # Validation
 # ---------------------------------------------------------------------------
 
-import re
 _WORKSPACE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]$')
 
 

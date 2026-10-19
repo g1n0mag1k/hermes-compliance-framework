@@ -3,12 +3,17 @@ tests/v2/test_key_ceremony.py — Three-tier key ceremony tests.
 """
 
 import json
+
 import pytest
 
-from hermes.receipts.v2.key_ceremony import run_ceremony, rotate_operational_key, CeremonyResult
+from hermes.receipts.v2.builder import ReceiptV2Builder
+from hermes.receipts.v2.key_ceremony import (
+    CeremonyResult,
+    rotate_operational_key,
+    run_ceremony,
+)
 from hermes.receipts.v2.key_manifest import KeyManifestDocument
 from hermes.receipts.v2.key_store import KeyStore
-from hermes.receipts.v2.builder import ReceiptV2Builder
 
 ROOT_PW = b"root-passphrase-tier0"
 OP_PW = b"operational-passphrase-tier1"

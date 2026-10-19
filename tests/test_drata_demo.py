@@ -18,9 +18,9 @@ import json
 import re
 import socket
 import urllib.error
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any, Self
 
 import httpx
 import pytest
@@ -31,6 +31,7 @@ import gateway.evidence as gateway_evidence
 import gateway.evidence_export.dispatch as dispatch_module
 import gateway.policy as gateway_policy
 from gateway.app import app
+from gateway.evidence_export import outbox
 from gateway.evidence_export.drata_connector import DrataConnector
 from gateway.evidence_export.event import _FORBIDDEN_FIELD_NAMES, EvidenceEvent
 from gateway.evidence_export.exporters import (
@@ -40,7 +41,6 @@ from gateway.evidence_export.exporters import (
     WEBHOOK_AUTH_VALUE_ENV,
     WEBHOOK_URL_ENV,
 )
-from gateway.evidence_export import outbox
 from gateway.evidence_export.outbox import (
     DuplicateEventError,
     OutboxStatus,
@@ -53,7 +53,6 @@ from gateway.pipeline import GatewayPipeline, GatewayRequest, GatewayResponse
 from gateway.policy import Policy, clear_workspace_policy, set_workspace_policy
 from hermes.receipts.v2.verifier import verify_receipt
 from hermes.workspaces import create_workspace
-
 
 DEMO_PROMPT = "Patient John Smith, SSN 123-45-6789"
 PHI_VALUES = ("John Smith", "123-45-6789", "John", "Smith", "Patient John Smith")
@@ -81,11 +80,11 @@ class _MockDrataResponse:
     def __init__(self, status: int) -> None:
         self.status = status
 
-    def __enter__(self) -> "_MockDrataResponse":
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *exc: object) -> bool:
-        return False
+    def __exit__(self, *exc: object) -> None:
+        return None
 
 
 class MockDrataServer:
@@ -100,7 +99,7 @@ class MockDrataServer:
         self.status = status
         self.requests: list[dict[str, Any]] = []
 
-    def __call__(self, req, timeout: Optional[float] = None):
+    def __call__(self, req, timeout: float | None = None):
         headers = {name.lower(): value for name, value in req.header_items()}
         authorization_present = headers.pop("authorization", None) is not None
         raw_body = req.data.decode("utf-8")
@@ -115,7 +114,7 @@ class MockDrataServer:
         )
         if 200 <= self.status < 300:
             return _MockDrataResponse(self.status)
-        raise urllib.error.HTTPError(req.full_url, self.status, "mock drata error", {}, None)
+        raise urllib.error.HTTPError(req.full_url, self.status, "mock drata error", {}, None)  # type: ignore[arg-type]
 
     @property
     def idempotency_keys(self) -> list[str]:
@@ -248,12 +247,12 @@ def _assert_no_credentials(text: str) -> None:
         assert value not in text, f"credential material {value!r} leaked"
 
 
-def _row(ctx, index: int) -> dict:
+def _row(ctx, index: int) -> dict:  # type: ignore[return-value]
     return get_outbox_row(ctx.events[index].event_id)
 
 
 def _later(days: int = 1) -> datetime:
-    return datetime.now(timezone.utc) + timedelta(days=days)
+    return datetime.now(UTC) + timedelta(days=days)
 
 
 # -------------------------------------------------------------------------
@@ -382,7 +381,7 @@ def step6_drata_failure_enforcement_unaffected(ctx) -> None:
     assert _row(ctx, 1)["attempt_count"] == 0
 
     ctx.mock.status = 503
-    flushed_at = datetime.now(timezone.utc)
+    flushed_at = datetime.now(UTC)
     counts = flush_outbox(ctx.ws.workspace_id, now=flushed_at)
 
     assert counts == {"exported": 0, "retry_scheduled": 1, "dead_lettered": 0}
@@ -398,8 +397,8 @@ def step6_drata_failure_enforcement_unaffected(ctx) -> None:
     for original in ctx.results:
         assert original.decision.decision == "BLOCK"
         stored = gateway_evidence.get_gateway_receipt(ctx.ws, original.receipt.receipt_digest)
-        assert stored["payload"]["decision"] == "BLOCK"
-        assert stored["payload"]["forwarded"] is False
+        assert stored["payload"]["decision"] == "BLOCK"  # type: ignore[index]
+        assert stored["payload"]["forwarded"] is False  # type: ignore[index]
     assert _row(ctx, 0)["status"] == OutboxStatus.EXPORTED.value
     assert ctx.upstream == []
 

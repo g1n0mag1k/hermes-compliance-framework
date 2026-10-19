@@ -22,12 +22,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 from hermes.receipts.v2.canonical import canonicalize
-
 
 KeyTier = Literal["offline_root", "operational", "checkpoint"]
 KeyStatus = Literal["active", "rotated", "revoked"]
@@ -84,7 +82,7 @@ class KeyManifestDocument:
     # Signing
     # ------------------------------------------------------------------
 
-    def sign(self, root_signer: object) -> "KeyManifestDocument":
+    def sign(self, root_signer: object) -> KeyManifestDocument:
         """
         Sign the manifest with the Tier 0 root signer.
 
@@ -103,15 +101,15 @@ class KeyManifestDocument:
         })
         digest = hashlib.sha256(b"HERMES-KEY-MANIFEST-V1\x00" + canonical).digest()
         self.manifest_digest = digest.hex()
-        self.root_signature = root_signer.sign_cose_sig_structure(digest).hex()
-        self.root_key_id = root_signer.key_id.hex()
+        self.root_signature = root_signer.sign_cose_sig_structure(digest).hex()  # type: ignore[attr-defined]
+        self.root_key_id = root_signer.key_id.hex()  # type: ignore[attr-defined]
         return self
 
     # ------------------------------------------------------------------
     # Verification
     # ------------------------------------------------------------------
 
-    def verify(self, root_public_key_pem: str) -> "ManifestVerificationResult":
+    def verify(self, root_public_key_pem: str) -> ManifestVerificationResult:
         """
         Verify the manifest signature using the root public key PEM.
 
@@ -147,9 +145,8 @@ class KeyManifestDocument:
 
         # Verify signature
         try:
-            from cryptography.hazmat.primitives import serialization
-            from cryptography.hazmat.primitives.asymmetric import ed25519, ec
-            from cryptography.hazmat.primitives import hashes
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 
             pub_key = serialization.load_pem_public_key(
                 root_public_key_pem.encode("ascii")
@@ -222,7 +219,7 @@ class KeyManifestDocument:
         return json.dumps(self.to_dict(), indent=indent)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "KeyManifestDocument":
+    def from_dict(cls, data: dict) -> KeyManifestDocument:
         entries = [ManifestEntry(**e) for e in data.get("entries", [])]
         return cls(
             deployment_id=data["deployment_id"],
@@ -234,7 +231,7 @@ class KeyManifestDocument:
         )
 
     @classmethod
-    def from_json(cls, json_str: str) -> "KeyManifestDocument":
+    def from_json(cls, json_str: str) -> KeyManifestDocument:
         return cls.from_dict(json.loads(json_str))
 
 

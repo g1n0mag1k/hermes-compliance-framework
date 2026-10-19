@@ -15,7 +15,7 @@ sign_cose_sig_structure to AWS KMS / Azure Key Vault.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519
@@ -58,9 +58,9 @@ class SoftwareSignerEd25519:
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         ).decode("ascii")
-        self._created_at: str = (valid_from or datetime.now(timezone.utc)).isoformat()
+        self._created_at: str = (valid_from or datetime.now(UTC)).isoformat()
         self._valid_until: str | None = (
-            valid_until.astimezone(timezone.utc).isoformat() if valid_until else None
+            valid_until.astimezone(UTC).isoformat() if valid_until else None
         )
         self._status: str = status
 
@@ -102,12 +102,12 @@ class SoftwareSignerEd25519:
     # --- Constructors ---
 
     @classmethod
-    def generate(cls) -> "SoftwareSignerEd25519":
+    def generate(cls) -> SoftwareSignerEd25519:
         """Generate a new Ed25519 key pair."""
         return cls(ed25519.Ed25519PrivateKey.generate())
 
     @classmethod
-    def load_from_pem(cls, private_key_pem: bytes) -> "SoftwareSignerEd25519":
+    def load_from_pem(cls, private_key_pem: bytes) -> SoftwareSignerEd25519:
         """Load an Ed25519 private key from PEM bytes (no passphrase)."""
         key = serialization.load_pem_private_key(private_key_pem, password=None)
         if not isinstance(key, ed25519.Ed25519PrivateKey):
@@ -153,7 +153,7 @@ class SoftwareSignerES256:
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         ).decode("ascii")
-        self._created_at: str = datetime.now(timezone.utc).isoformat()
+        self._created_at: str = datetime.now(UTC).isoformat()
 
     # --- Signer protocol ---
 
@@ -189,12 +189,12 @@ class SoftwareSignerES256:
     # --- Constructors ---
 
     @classmethod
-    def generate(cls) -> "SoftwareSignerES256":
+    def generate(cls) -> SoftwareSignerES256:
         """Generate a new P-256 key pair."""
         return cls(ec.generate_private_key(ec.SECP256R1()))
 
     @classmethod
-    def load_from_pem(cls, private_key_pem: bytes) -> "SoftwareSignerES256":
+    def load_from_pem(cls, private_key_pem: bytes) -> SoftwareSignerES256:
         """Load a P-256 private key from PEM bytes (no passphrase)."""
         key = serialization.load_pem_private_key(private_key_pem, password=None)
         if not isinstance(key, ec.EllipticCurvePrivateKey):

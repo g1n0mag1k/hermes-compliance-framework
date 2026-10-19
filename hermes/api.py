@@ -6,34 +6,34 @@ import sqlite3
 import threading
 import uuid
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Literal
 
-from fastapi import FastAPI, Header, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from hermes.attestation import (
     ATTESTATION_CHAIN,
-    ComplianceReceipt,
-    REVIEW_DECISIONS,
     DEFAULT_DB_PATH,
+    REVIEW_DECISIONS,
+    ComplianceReceipt,
 )
-from hermes.webhooks import dispatch_webhook, dispatch_drata_cct
-from hermes.drata_state import (
-    DRATA_API_KEY_ENV_VAR,
-    DRATA_CCT_URL_ENV_VAR,
-    DrataConfigState,
-    get_drata_config_state,
-)
+from hermes.auditor import CANARY_CORPUS
 from hermes.classifier import (
     FlagEntry,
     RedactionAuditLog,
     ScrubberResult,
     scrub_payload,
 )
-from hermes.auditor import CANARY_CORPUS
+from hermes.drata_state import (
+    DRATA_API_KEY_ENV_VAR,
+    DRATA_CCT_URL_ENV_VAR,
+    DrataConfigState,
+    get_drata_config_state,  # noqa: F401 — re-exported for identity test
+)
+from hermes.webhooks import dispatch_drata_cct, dispatch_webhook
 
 # -------------------------------------------------------------------------
 # API APPLICATION & CONFIGURATION
@@ -63,24 +63,24 @@ class ComplianceReceiptOut(BaseModel):
     transaction_id: str
     issued_at: str
     issuer: str
-    compliance_frameworks: List[str]
-    pii_classes_detected: List[str]
-    pii_classes_redacted: List[str]
-    count_detected: Dict[str, int]
-    count_redacted: Dict[str, int]
+    compliance_frameworks: list[str]
+    pii_classes_detected: list[str]
+    pii_classes_redacted: list[str]
+    count_detected: dict[str, int]
+    count_redacted: dict[str, int]
     payload_char_count_in: int
     payload_char_count_out: int
     chars_removed: int
     zero_pii_egress_confirmed: bool
     zero_pii_egress_scope_note: str
-    downstream_target: Optional[str]
+    downstream_target: str | None
     previous_receipt_hash: str
     receipt_hash: str
     chain_position: int
-    declared_scope: List[str]
-    evidence_incomplete_categories: List[str]
-    detectors_executed: Dict[str, str]
-    occurrence_gaps: Dict[str, int] = Field(default_factory=dict)
+    declared_scope: list[str]
+    evidence_incomplete_categories: list[str]
+    detectors_executed: dict[str, str]
+    occurrence_gaps: dict[str, int] = Field(default_factory=dict)
 
 
 class ScrubResponse(BaseModel):
@@ -95,7 +95,7 @@ class HumanReviewReceiptOut(BaseModel):
     reviewed_by: str
     issued_at: str
     decision: str
-    override_reason: Optional[str]
+    override_reason: str | None
     original_receipt_hash: str
     previous_receipt_hash: str
     review_receipt_hash: str
@@ -106,7 +106,7 @@ class ReviewRequest(BaseModel):
     transaction_id: str = Field(..., min_length=1)
     reviewed_by: str = Field(..., min_length=1)
     decision: str = Field(..., description=f"One of {REVIEW_DECISIONS}")
-    override_reason: Optional[str] = None
+    override_reason: str | None = None
 
 
 class StatusResponse(BaseModel):
@@ -114,14 +114,14 @@ class StatusResponse(BaseModel):
     total_scans: int
     last_scan_at: str
     zero_phi_egress_confirmed: bool
-    phi_classes_detected_today: List[str]
+    phi_classes_detected_today: list[str]
     critical_findings_open: int
     evidence_current_as_of: str
     chain_integrity: str
     scans_used: int
     scans_remaining: int
     trial_active: bool
-    trial_expires_at: Optional[str] = None
+    trial_expires_at: str | None = None
 
 
 class ScanHistoryEntry(BaseModel):
@@ -132,10 +132,10 @@ class ScanHistoryEntry(BaseModel):
 class ScanHistoryResponse(BaseModel):
     workspace_id: str
     days: int
-    history: List[ScanHistoryEntry]
+    history: list[ScanHistoryEntry]
 
 
-def _flags_to_counts(flags_triggered: Dict[str, FlagEntry]) -> Dict[str, int]:
+def _flags_to_counts(flags_triggered: dict[str, FlagEntry]) -> dict[str, int]:
     """Map audit-log flag entries to per-flag counts for attestation issuance."""
     return {
         k: v.count if isinstance(v, FlagEntry) else v["count"]
@@ -183,7 +183,7 @@ def verify_api_key(x_api_key: str = Header(...)):
     legacy HERMES_API_KEY env var for backward-compatible single-tenant
     deployments. Raises 401 if no match is found.
     """
-    from hermes.workspaces import get_workspace_by_api_key, get_workspace
+    from hermes.workspaces import get_workspace, get_workspace_by_api_key
 
     # Try workspace registry first
     workspace = get_workspace_by_api_key(x_api_key)
@@ -259,7 +259,7 @@ def _ensure_trial_quota_table(conn: sqlite3.Connection) -> None:
 
 def _get_trial_quota(
     workspace_id: str = _DEFAULT_WORKSPACE_ID,
-) -> Tuple[int, Optional[str], int]:
+) -> tuple[int, str | None, int]:
     """Return (scans_used, first_scan_at, extended_by) for workspace."""
     with _trial_quota_lock:
         conn = sqlite3.connect(_trial_db_path(), check_same_thread=False)
@@ -280,9 +280,9 @@ def _get_trial_quota(
 
 def _increment_trial_quota(
     workspace_id: str = _DEFAULT_WORKSPACE_ID,
-) -> Tuple[int, str]:
+) -> tuple[int, str]:
     """Increment scans_used after a successful trial scan. Returns (scans_used, first_scan_at)."""
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     with _trial_quota_lock:
         conn = sqlite3.connect(_trial_db_path(), check_same_thread=False)
         try:
@@ -316,29 +316,27 @@ def _increment_trial_quota(
 def _parse_iso(ts: str) -> datetime:
     dt = datetime.fromisoformat(ts)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
-def _trial_expires_at(first_scan_at: Optional[str]) -> Optional[str]:
+def _trial_expires_at(first_scan_at: str | None) -> str | None:
     if not first_scan_at:
         return None
     return (_parse_iso(first_scan_at) + timedelta(days=TRIAL_WINDOW_DAYS)).isoformat()
 
 
-def _trial_window_expired(first_scan_at: Optional[str], now: Optional[datetime] = None) -> bool:
+def _trial_window_expired(first_scan_at: str | None, now: datetime | None = None) -> bool:
     if not first_scan_at:
         return False
-    current = now or datetime.now(timezone.utc)
+    current = now or datetime.now(UTC)
     return current >= _parse_iso(first_scan_at) + timedelta(days=TRIAL_WINDOW_DAYS)
 
 
-def _trial_active(scans_used: int, first_scan_at: Optional[str]) -> bool:
+def _trial_active(scans_used: int, first_scan_at: str | None) -> bool:
     if scans_used >= TRIAL_SCAN_LIMIT:
         return False
-    if _trial_window_expired(first_scan_at):
-        return False
-    return True
+    return not _trial_window_expired(first_scan_at)
 
 
 def _canary_payload() -> str:
@@ -479,7 +477,7 @@ def status_endpoint(workspace=Depends(verify_api_key)):
         )
 
     latest = chain[-1]
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cutoff_24h = now - timedelta(hours=24)
     cutoff_7d = now - timedelta(days=7)
 
@@ -532,11 +530,11 @@ def scan_history_endpoint(days: int = 7, workspace=Depends(verify_api_key)):
     chain_obj = _get_chain(workspace)
     db_path = chain_obj._db_path
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     date_range = [today - timedelta(days=offset) for offset in range(days - 1, -1, -1)]
-    start_cutoff = datetime.combine(date_range[0], datetime.min.time(), tzinfo=timezone.utc)
+    start_cutoff = datetime.combine(date_range[0], datetime.min.time(), tzinfo=UTC)
 
-    counts_by_date: Dict[str, int] = {d.isoformat(): 0 for d in date_range}
+    counts_by_date: dict[str, int] = {d.isoformat(): 0 for d in date_range}
 
     conn = sqlite3.connect(db_path, check_same_thread=False)
     try:
@@ -577,7 +575,8 @@ def scan_history_endpoint(days: int = 7, workspace=Depends(verify_api_key)):
 )
 def trial_scan_endpoint(background_tasks: BackgroundTasks, workspace=Depends(verify_api_key)):
     """Run a fixed canary PHI scan subject to persistent trial quota limits."""
-    from hermes.workspaces import get_trial_quota as _ws_trial_quota, increment_trial_quota as _ws_increment
+    from hermes.workspaces import get_trial_quota as _ws_trial_quota
+    from hermes.workspaces import increment_trial_quota as _ws_increment
     scans_used, first_scan_at, _extended = _ws_trial_quota(workspace.workspace_id)
     if scans_used >= TRIAL_SCAN_LIMIT or _trial_window_expired(first_scan_at):
         raise HTTPException(
@@ -612,7 +611,7 @@ class WorkspaceCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     owner_email: str = Field(..., min_length=3)
     plan: str = Field(default="trial")
-    parent_workspace_id: Optional[str] = None
+    parent_workspace_id: str | None = None
 
 
 class WorkspaceOut(BaseModel):
@@ -621,7 +620,7 @@ class WorkspaceOut(BaseModel):
     owner_email: str
     created_at: str
     plan: str
-    parent_workspace_id: Optional[str]
+    parent_workspace_id: str | None
     role: str = "msp_admin"
 
 
@@ -645,7 +644,7 @@ def _workspace_out(workspace) -> WorkspaceOut:
 @app.post("/v1/workspaces", response_model=WorkspaceCreateResponse, tags=["Workspaces"])
 def create_workspace_endpoint(
     request: WorkspaceCreateRequest,
-    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+    x_admin_token: str | None = Header(None, alias="X-Admin-Token"),
 ):
     """Create a new tenant workspace and return its one-time API key."""
     expected = os.environ.get("HERMES_ADMIN_TOKEN")
@@ -670,7 +669,7 @@ def create_workspace_endpoint(
     )
 
 
-@app.get("/v1/workspaces", response_model=List[WorkspaceOut], tags=["Workspaces"])
+@app.get("/v1/workspaces", response_model=list[WorkspaceOut], tags=["Workspaces"])
 def list_workspaces_endpoint(workspace=Depends(verify_api_key)):
     """List all workspaces. MSPs see their own client workspaces."""
     from hermes.workspaces import list_workspaces
@@ -728,11 +727,11 @@ class DrataIntegrationStatus(BaseModel):
     connection_state: Literal["NOT_CONFIGURED", "CONFIG_INVALID", "CONFIGURED"]
     live_validated: Literal[False] = False
     transport: Literal["CCT"] = "CCT"
-    events_pending: Optional[int]
-    events_exported: Optional[int]
-    events_dead_letter: Optional[int]
-    last_exported_at: Optional[str]
-    last_error: Optional[str]
+    events_pending: int | None
+    events_exported: int | None
+    events_dead_letter: int | None
+    last_exported_at: str | None
+    last_error: str | None
     partner_connection: Literal[False] = False
 
 
@@ -842,7 +841,7 @@ class TelemetryReceiptIngestResponse(BaseModel):
     repository: str
     commit_sha: str
     state_drift_detected: bool
-    prior_receipt_id: Optional[str] = None
+    prior_receipt_id: str | None = None
     ingested_at: str
     drata_cct: dict
 
@@ -855,7 +854,7 @@ class TelemetryReceiptIngestResponse(BaseModel):
 async def ingest_telemetry_receipt(
     request: Request,
     x_api_key: str = Header(..., alias="X-API-Key"),
-    x_hermes_signature_256: Optional[str] = Header(
+    x_hermes_signature_256: str | None = Header(
         None, alias="X-Hermes-Signature-256"
     ),
 ):

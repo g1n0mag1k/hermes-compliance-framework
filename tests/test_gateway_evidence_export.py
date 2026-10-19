@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import urllib.error
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -21,7 +21,11 @@ import gateway.app as gateway_app
 import gateway.evidence as gateway_evidence
 import gateway.policy as gateway_policy
 from gateway.app import app
-from gateway.evidence_export.dispatch import dispatch_evidence_export, try_export_evidence
+from gateway.evidence_export import outbox
+from gateway.evidence_export.dispatch import (
+    dispatch_evidence_export,
+    try_export_evidence,
+)
 from gateway.evidence_export.drata_connector import (
     INSECURE_URL_ERROR,
     INSECURE_URL_WARNING,
@@ -43,7 +47,6 @@ from gateway.evidence_export.exporters import (
     WebhookExporter,
     get_configured_exporters,
 )
-from gateway.evidence_export import outbox
 from gateway.evidence_export.outbox import (
     MAX_OUTBOX_ATTEMPTS,
     DuplicateEventError,
@@ -55,11 +58,10 @@ from gateway.evidence_export.outbox import (
     sanitize_error,
 )
 from gateway.pipeline import GatewayPipeline, GatewayRequest
-from gateway.policy import Policy, set_workspace_policy, clear_workspace_policy
+from gateway.policy import Policy, clear_workspace_policy, set_workspace_policy
 from hermes.receipts.v2.builder import ReceiptV2Builder
 from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
 from hermes.workspaces import create_workspace
-
 
 PHI_SSN = "123-45-6789"
 PHI_NAME = "Patient John Smith"
@@ -189,7 +191,7 @@ def _sample_event(**overrides: Any) -> EvidenceEvent:
         "cose_sign1_hex": "aabbcc",
     }
     defaults.update(overrides)
-    return EvidenceEvent(**defaults)
+    return EvidenceEvent(**defaults)  # type: ignore[arg-type]
 
 
 def _openai_chat(content: str) -> dict:
@@ -283,7 +285,6 @@ def test_block_generates_evidence_upstream_not_contacted(
     def _capture_export(receipt, workspace_id):
         event = build_evidence_event(receipt, workspace_id)
         exported.append(json.loads(event.serialize()))
-        return None
 
     monkeypatch.setattr(
         "gateway.evidence.try_export_evidence",
@@ -314,7 +315,6 @@ def test_redact_generates_evidence_and_forwards(
     def _capture_export(receipt, workspace_id):
         event = build_evidence_event(receipt, workspace_id)
         exported.append(json.loads(event.serialize()))
-        return None
 
     monkeypatch.setattr(
         "gateway.evidence.try_export_evidence",
@@ -344,7 +344,6 @@ def test_allow_generates_evidence_and_forwards(
     def _capture_export(receipt, workspace_id):
         event = build_evidence_event(receipt, workspace_id)
         exported.append(json.loads(event.serialize()))
-        return None
 
     monkeypatch.setattr(
         "gateway.evidence.try_export_evidence",
@@ -500,7 +499,7 @@ def test_drata_exporter_http_5xx_retries(monkeypatch):
     with patch(
         "gateway.evidence_export.exporters._post_json",
         return_value=(False, 3, "HTTP 503"),
-    ) as mock_post:
+    ):  # mock_post unused; we only check result
         result = DrataExporter().export(event)
 
     assert result.success is False
@@ -528,9 +527,8 @@ def test_drata_exporter_no_credentials_in_logs(monkeypatch, caplog):
     with patch(
         "gateway.evidence_export.exporters._post_json",
         return_value=(False, 1, "HTTP 401"),
-    ):
-        with caplog.at_level(logging.WARNING):
-            DrataExporter().export(event)
+    ), caplog.at_level(logging.WARNING):
+        DrataExporter().export(event)
 
     log_text = caplog.text
     assert "drata-secret-key-xyz" not in log_text
@@ -1102,7 +1100,7 @@ def _drata_urlopen(monkeypatch, behavior: str) -> list:
 
 
 def _future(days: int) -> datetime:
-    return datetime.now(timezone.utc) + timedelta(days=days)
+    return datetime.now(UTC) + timedelta(days=days)
 
 
 def test_outbox_enforcement_returns_response_when_drata_down(
@@ -1304,7 +1302,7 @@ def test_outbox_transient_failure_retries_up_to_max(drata_configured, transient_
 
 def test_outbox_transient_failure_schedules_backoff(drata_configured):
     enqueue_event(_sample_event(event_id="evt-backoff-0001"))
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
 
     with patch(
         "gateway.evidence_export.exporters._post_json",
@@ -1371,7 +1369,7 @@ def test_outbox_reclaims_expired_processing_lease(drata_configured):
     enqueue_event(_sample_event(event_id="evt-lease-0001"))
     conn = outbox._connect()
     try:
-        outbox._claim_due_rows(conn, None, datetime.now(timezone.utc), 10)
+        outbox._claim_due_rows(conn, None, datetime.now(UTC), 10)
     finally:
         conn.close()
     assert get_outbox_row("evt-lease-0001")["status"] == OutboxStatus.PROCESSING.value
@@ -1561,7 +1559,7 @@ def test_sanitize_error_strips_urls_hosts_and_credentials():
 
 def test_outbox_records_exported_at_only_on_success(drata_configured):
     enqueue_event(_sample_event(event_id="evt-exp-ok"))
-    flushed_at = datetime.now(timezone.utc)
+    flushed_at = datetime.now(UTC)
     with patch("gateway.evidence_export.exporters._post_json", return_value=(True, 1, None)):
         flush_outbox(now=flushed_at)
     enqueue_event(_sample_event(event_id="evt-exp-dead"))
@@ -1627,7 +1625,7 @@ def test_outbox_stats_counts_by_status_per_workspace(drata_configured):
 
     conn = outbox._connect()
     try:
-        outbox._claim_due_rows(conn, "ws-01", datetime.now(timezone.utc), 10)
+        outbox._claim_due_rows(conn, "ws-01", datetime.now(UTC), 10)
     finally:
         conn.close()
     assert get_outbox_row("evt-s-pending")["status"] == OutboxStatus.PROCESSING.value

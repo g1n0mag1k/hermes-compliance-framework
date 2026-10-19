@@ -34,7 +34,7 @@ Quick-start
 """
 
 # V1 — HMAC chain
-from hermes.attestation import ComplianceReceipt, HermesChain
+from hermes.attestation import AttestationChain as HermesChain, ComplianceReceipt
 
 # V2 — verifiable receipts
 from hermes.receipts.v2 import (
@@ -48,7 +48,7 @@ from hermes.receipts.v2 import (
     verify_receipt,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022  # grouped by version for readability
     # V1
     "ComplianceReceipt",
     "HermesChain",
