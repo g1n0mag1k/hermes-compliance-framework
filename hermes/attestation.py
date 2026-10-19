@@ -130,7 +130,10 @@ ChainItem = ComplianceReceipt | HumanReviewReceipt
 # Fields excluded from the HMAC content dict before signing.
 # Must match _MUTABLE_FIELDS plus the hash field itself (which is the
 # output of signing, not an input to it).
-_COMPLIANCE_SIGN_EXCLUDE = _MUTABLE_FIELDS | {"receipt_hash"}
+# schema_version is a dataclass-level default not included in the
+# manually-built sign_content dict at issuance time, so it must be
+# excluded here to keep verify == sign during chain verification.
+_COMPLIANCE_SIGN_EXCLUDE = _MUTABLE_FIELDS | {"receipt_hash", "schema_version"}
 _REVIEW_SIGN_EXCLUDE = _MUTABLE_FIELDS | {"review_receipt_hash"}
 
 
