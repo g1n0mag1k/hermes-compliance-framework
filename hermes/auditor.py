@@ -37,6 +37,11 @@ CANARY_CORPUS: list[dict[str, str]] = [
         "value": "John Testpatient",
     },
     {
+        "category": "45 CFR §164.514(b)(2)(i)(A)",
+        "flag": "HIPAA_PHI_ORG",
+        "value": "Acme Hospital",
+    },
+    {
         "category": "45 CFR §164.514(b)(2)(i)(B)",
         "flag": "HIPAA_PHI_ADDRESS",
         "value": "742 Evergreen Terrace, Springfield, Illinois",
@@ -49,12 +54,12 @@ CANARY_CORPUS: list[dict[str, str]] = [
     {
         "category": "45 CFR §164.514(b)(2)(i)(D)",
         "flag": "HIPAA_PHI_PHONE",
-        "value": "555-0100",
+        "value": "800-555-0100",
     },
     {
         "category": "45 CFR §164.514(b)(2)(i)(E)",
         "flag": "HIPAA_PHI_FAX",
-        "value": "fax: 555-0199",
+        "value": "fax: 800-555-0199",
     },
     {
         "category": "45 CFR §164.514(b)(2)(i)(F)",

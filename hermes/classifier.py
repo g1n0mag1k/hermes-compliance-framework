@@ -64,6 +64,7 @@ CFR_CITATION_MAP = {
 # -------------------------------------------------------------------------
 DECLARED_SCOPE: list[dict] = [
     {"cfr": "45 CFR §164.514(b)(2)(i)(A)", "category": "Names",                          "flag": "HIPAA_PHI_PERSON",  "status": "covered",     "method": "spaCy NER"},
+    {"cfr": "45 CFR §164.514(b)(2)(i)(A)", "category": "Organization names",             "flag": "HIPAA_PHI_ORG",     "status": "covered",     "method": "spaCy NER"},
     {"cfr": "45 CFR §164.514(b)(2)(i)(B)", "category": "Geographic subdivisions",        "flag": "HIPAA_PHI_ADDRESS", "status": "covered",     "method": "Presidio"},
     {"cfr": "45 CFR §164.514(b)(2)(i)(C)", "category": "Dates",                          "flag": "HIPAA_PHI_DATE",    "status": "covered",     "method": "spaCy NER"},
     {"cfr": "45 CFR §164.514(b)(2)(i)(D)", "category": "Telephone numbers",              "flag": "HIPAA_PHI_PHONE",   "status": "covered",     "method": "Presidio"},
