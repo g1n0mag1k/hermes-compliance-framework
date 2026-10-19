@@ -31,6 +31,7 @@ from hermes.drata_state import (
     DRATA_API_KEY_ENV_VAR,
     DRATA_CCT_URL_ENV_VAR,
     DrataConfigState,
+    get_drata_config_state,
 )
 from hermes.webhooks import dispatch_drata_cct, dispatch_webhook
 
