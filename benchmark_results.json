@@ -1,4 +1,5 @@
 {
+  "note": "competitor_baselines figures are uncited and were not measured by Hermes; they are retained for historical reference only.",
   "hermes_results": [
     {
       "tool": "Hermes Relay v1.0.0",
