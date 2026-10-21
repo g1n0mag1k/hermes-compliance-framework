@@ -10,6 +10,39 @@ hermesrelay.dev
 
 ---
 
+## Claims & Limits
+
+**Coverage.** The classifier detects 16 of 18 HIPAA Safe Harbor identifier
+categories in text. Biometric identifiers (P) and full-face photographs (Q)
+are reference-only: filenames and references are flagged, but binary content
+is not analyzed.
+
+**Sink scope.** The `/v1/scrub` response path makes no outbound network calls.
+Webhooks and Drata CCT dispatch run as background tasks **after** the response.
+The `/api/v1/sentry/config` endpoint stores DSN configuration but does not
+currently probe Sentry — treat it as reserved for a future release.
+`canary-action` validates canaries against a local scrub probe shaped like
+Sentry events; it does not transmit to Sentry.
+
+**Signing per receipt type.**
+- `/v1/scrub` V1 receipts: HMAC-SHA256 (shared signing key)
+- Gateway V2 enforcement receipts: Ed25519 / COSE_Sign1 (public-key verifiable)
+- `/v1/telemetry/receipt`: HMAC-SHA256
+- Canary audit JSON: HMAC-SHA256
+- PDF report: unsigned; displays the embedded `receipt_hash`
+
+**Time source.** All receipts use the host or CI runner clock
+(`datetime.now(UTC)`). RFC 3161 timestamp authority support exists in
+`hermes/receipts/v2/anchoring.py` but is not wired to the per-request
+receipt issue path on `main`.
+
+**What `zero_pii_egress_confirmed` means.** `true` when all triggered
+detector flags were redacted and no occurrence gaps remain in `clean_text`
+within the declared scope. It is a redaction-parity check — not a live
+egress observation of Sentry, webhooks, stdout, or any other sink.
+
+---
+
 ## The Problem
 
 When OCR investigates a business associate, they do not ask whether you had a scrubbing tool. They ask you to produce the evidence — exactly what was found, under which regulation, by which method, in an unbroken chain from scan to audit.
