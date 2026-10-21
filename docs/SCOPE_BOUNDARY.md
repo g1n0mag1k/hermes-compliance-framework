@@ -71,6 +71,8 @@ precisely to make this distinction machine-readable and auditor-verifiable.
 ## What Hermes Does Claim
 
 - Every payload is scanned against all 16 covered categories on every call.
+- Per-flag CFR citations reflect which detector fired; a detection may be
+  attributed to the wrong Safe Harbor category when multiple rules overlap.
 - Every redaction decision is recorded in a CFR-cited, SHA-256 hash-chained,
   cryptographically signed attestation receipt.
 - The receipt is tamper-evident -- verify_chain() checks signature integrity,

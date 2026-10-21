@@ -1,7 +1,9 @@
 """
 hermes/receipts/v2/anchoring.py — External anchoring for Hermes V2 checkpoints.
 
-Three anchoring mechanisms, in increasing strength:
+Three anchoring mechanisms, in increasing strength.
+This module currently ships a mock RFC 3161 TSA and a SCITT (RFC 9943) stub;
+set HERMES_TSA_URL and HERMES_SCITT_URL for production endpoints.
 
   1. WORM storage (local simulation + S3/Azure Blob production path)
      Write-once checkpoint bundles: the checkpoint COSE bytes + a manifest
@@ -10,8 +12,9 @@ Three anchoring mechanisms, in increasing strength:
 
   2. RFC 3161 trusted timestamps (TSA)
      A Timestamp Authority signs the checkpoint_digest, producing a TST
-     (TimeStampToken). This provides legally admissible proof of existence
-     before a point in time, independent of Hermes infrastructure.
+     (TimeStampToken). This provides independent, third-party timestamp
+     evidence of existence before a point in time, independent of Hermes
+     infrastructure.
      Production: use Sectigo, DigiCert, or Let's Encrypt TSA endpoints.
      This module ships a MOCK TSA for development; swap for a real endpoint
      via HERMES_TSA_URL environment variable.
