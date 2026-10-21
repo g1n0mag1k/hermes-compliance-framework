@@ -214,10 +214,10 @@ Hermes is positioned as the answer to a question MSPs are already asking, ahead 
 
 ## About Sui-Generis LLC
 
-- **Entity:** Sui-Generis LLC (HUBZone-certified)
+- **Entity:** Sui-Generis — not yet a registered LLC; the owner currently operates as a sole proprietor
 - **Location:** Rocky Top, Tennessee (Campbell County — rural Appalachian geography)
 - **SAM.gov UEI:** YK4VNG1STBA1
-- **HUBZone Status:** Designated — Campbell County, TN
+- **HUBZone Status:** Located in a HUBZone-designated area (Campbell County, TN); not certified
 - **SEDI Eligibility:** Confirmed — rural Appalachian geography qualifies under InvestTN/SSBCI SEDI priority routing
 - **Founder:** Solo technical founder; GMP manufacturing background (3M); systems engineering, cybersecurity, Python/SQL
 
