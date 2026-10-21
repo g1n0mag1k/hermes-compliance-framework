@@ -4,7 +4,7 @@
  * Combines what would otherwise be two separate sections (Solution +
  * Architecture) into one cohesive block, because the product *is* the
  * architecture. The three pillars line up 1:1 with the three claims in the
- * h2 ("Deterministic. Zero-egress. Audit-ready by design.") so the
+ * h2 ("Deterministic. Local-first. Audit-ready by design.") so the
  * eye can map headline → evidence at a glance.
  *
  * Layout:
@@ -26,7 +26,7 @@ type Pillar = {
 const PILLARS: readonly Pillar[] = [
   {
     label: "ARCHITECTURE",
-    headline: "Zero-egress",
+    headline: "Local-first",
     body:
       "Hermes runs entirely inside your environment. PHI never transits external infrastructure — making your attestations technically accurate, not just aspirational.",
   },
@@ -68,7 +68,7 @@ export function Solution() {
         </p>
 
         <h2 className="font-display text-h2 text-ink mt-8 max-w-[22ch]">
-          Deterministic. Zero-egress.
+          Deterministic. Local-first.
           <br />
           Audit-ready by design.
         </h2>

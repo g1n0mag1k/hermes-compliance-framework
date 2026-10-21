@@ -28,7 +28,7 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
   {
     index: "01",
     label: "Cryptographically Signed Attestation",
-    verdict: "We don't just redact PHI — we give you tamper-evident proof it happened.",
+    verdict: "We don't just redact PHI — we give you tamper-evident evidence of every redaction decision.",
     body:
       "Every scrubbing pass emits a signed receipt linked into a hash chain. verify_chain checks signature integrity, previous-hash links, and sequential positions — so an investigator can confirm the record was not forged or truncated after the fact.",
   },
@@ -42,9 +42,9 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
   {
     index: "03",
     label: "Built for MSPs and SMB Healthcare",
-    verdict: "The customers who need this most are the ones no competitor serves.",
+    verdict: "Built for small MSPs and regional clinics — not enterprise procurement cycles.",
     body:
-      "Nightfall costs $20,000-$60,000 per year and requires enterprise procurement, a security team, and a multi-month sales cycle. The 10-person billing company in Knoxville, the regional clinic, the MSP managing 15 HIPAA-covered clients -- none of them will ever see a Nightfall contract. Hermes is priced, packaged, and deployed for exactly those customers. Self-hostable. Operational in a week. No enterprise contract, no security team required.",
+      "The 10-person billing company in Knoxville, the regional clinic, the MSP managing a handful of HIPAA-covered clients — teams that need deterministic PHI scrubbing and tamper-evident evidence without a dedicated security org or six-figure DLP contracts. Hermes is self-hostable, priced for that footprint, and runs in environments you control. No enterprise contract or security team required.",
   },
   {
     index: "04",
@@ -116,7 +116,7 @@ export function Differentiators() {
             <span className="text-signal">{"->"}</span>{" "}
             No other tool in this space produces cryptographically signed,
             hash-chained records of every PHI redaction decision — tamper-evident
-            proof your AI pipeline handled patient data correctly.
+            evidence of what the detector found and what policy did with it.
           </p>
         </div>
 

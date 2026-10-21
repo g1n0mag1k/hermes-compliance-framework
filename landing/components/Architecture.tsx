@@ -6,7 +6,7 @@
 
 const SPECS: readonly { label: string; value: string }[] = [
   { label: "Deployment target", value: "Customer environment — Docker, bare metal, or VM" },
-  { label: "External network calls", value: "None during scrubbing. Zero-egress by design." },
+  { label: "External network calls", value: "None during scrubbing. Detection runs locally." },
   { label: "Detection method", value: "Regex + fixed-version spaCy NER + Microsoft Presidio" },
   { label: "PHI categories covered", value: "18 of 18 Safe Harbor categories — 16 direct text detection, 2 (biometric, full-face photo) via reference detection with disclosed binary content limitation" },
   { label: "Audit record format", value: "COSE_Sign1 asymmetric-signed, RFC 8785 canonical, Merkle-anchored receipts — independently verifiable" },
@@ -38,7 +38,7 @@ export function Architecture() {
           environment. No external classifier. No data in transit. The
           scrubbing pipeline is fully deterministic — the same input
           produces the same output, every run, with a cryptographic record
-          to prove it.
+          to show evidence of it.
         </p>
 
         <div className="mt-16 border-2 border-border">

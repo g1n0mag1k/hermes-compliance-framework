@@ -2,7 +2,7 @@
  * Integrations -- vendor-agnostic positioning section.
  *
  * The argument: Hermes is not a competitor to your existing DLP or SIEM.
- * It is the deterministic PHI layer none of them can provide internally.
+ * It is the deterministic PHI evidence layer that complements your existing stack.
  * It exports clean, hash-chained evidence into whatever the customer already
  * runs -- Splunk, Sentinel, Purview, Datadog, or any webhook-capable platform.
  *
@@ -90,9 +90,9 @@ export function Integrations() {
           your stack cannot provide.
         </h2>
         <p className="font-body text-body text-muted mt-6 max-w-[60ch]">
-          No DLP platform -- Purview, Netskope, Nightfall -- can produce a
-          zero-egress, deterministic, CFR-cited audit record on its own.
-          Hermes fills that gap and exports the evidence as a generic JSON
+          Hermes adds a local-first, deterministic, CFR-cited audit record
+          alongside the DLP and SIEM tools you already run — Purview,
+          Netskope, Nightfall, and others. It exports that evidence as a generic JSON
           webhook, ready for anything that accepts one today, with
           platform-specific connectors as ongoing work.
         </p>

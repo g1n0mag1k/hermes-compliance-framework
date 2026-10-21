@@ -63,9 +63,11 @@ export function Problem() {
         <h2 className="font-display text-h2 text-ink mt-8 max-w-[20ch]">
           Every tool detects PHI.
           <br />
-          None of them can prove
+          Most lack tamper-evident
           <br />
-          what they did with it.
+          evidence of what they
+          <br />
+          did with it.
         </h2>
 
         <p className="font-body text-body text-muted mt-8 max-w-[640px]">
