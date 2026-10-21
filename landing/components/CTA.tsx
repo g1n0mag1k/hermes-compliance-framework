@@ -3,8 +3,8 @@
 import { useState } from "react";
 
 const TRUST_SIGNALS: readonly string[] = [
-  "Zero-egress architecture",
-  "Data never leaves your environment",
+  "Local-first architecture",
+  "PHI is never sent to Sui-Generis infrastructure",
   "SHA-256 independently verifiable",
   "Safe Harbor-aligned — building toward 45 CFR §164.514(b)",
   "BAA available upon request",

@@ -20,7 +20,7 @@ export default function PrivacyPage() {
             </div>
             <div>
               <h2 className="font-display text-h3 text-ink mb-4">PHI and the Hermes product</h2>
-              <p>The Hermes Relay API operates on a zero-egress, zero-PHI-retention architecture. PHI processed through the API never transits or is stored on Sui-Generis LLC infrastructure. Customers deploy Hermes inside their own environment. Sui-Generis LLC does not receive, process, or retain any PHI from customer deployments. Business Associate Agreements are available upon request for HIPAA-covered deployments.</p>
+              <p>Customers deploy Hermes Relay in their own environment. Sui-Generis LLC does not receive, process, or retain PHI from customer deployments. After redaction, outbound payloads are forwarded only to the AI provider the customer configures. Business Associate Agreements are available upon request for HIPAA-covered deployments.</p>
             </div>
             <div>
               <h2 className="font-display text-h3 text-ink mb-4">Cookies</h2>

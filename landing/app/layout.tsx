@@ -27,7 +27,7 @@ const jetbrainsMono = JetBrains_Mono({
 const TITLE =
   "Hermes — PHI Compliance Infrastructure for Healthcare MSPs";
 const DESCRIPTION =
-  "Zero-egress, deterministic PHI scrubbing with SHA-256 hash-chained audit records. Built for MSPs serving HIPAA-covered entities.";
+  "Local-first, deterministic PHI scrubbing with SHA-256 hash-chained audit records. Built for MSPs serving HIPAA-covered entities.";
 const SITE_URL = "https://hermesrelay.dev";
 
 export const metadata: Metadata = {

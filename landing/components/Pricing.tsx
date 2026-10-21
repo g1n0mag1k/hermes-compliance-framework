@@ -21,7 +21,7 @@ const TIERS: readonly Tier[] = [
     period: "30 days",
     description: "Full production deployment in your environment. No shared infrastructure.",
     items: [
-      "Zero-egress deployment in your environment",
+      "Self-hosted deployment in your environment",
       "Hash-chained audit trail from day one",
       "SSN, PAN, name, date, phone detection",
       "API key + integration support",

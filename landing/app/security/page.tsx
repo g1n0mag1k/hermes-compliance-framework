@@ -13,7 +13,7 @@ export default function SecurityPage() {
             <div>
               <h2 className="font-display text-h3 text-ink mb-4">Architecture &amp; Data Handling</h2>
               <p>
-                Hermes Relay is a zero-egress, on-premise tool. Customer data never leaves the customer&apos;s environment. We have no servers that touch customer PHI. There is nothing for us to hold, store, or be audited on.
+                Hermes Relay is a self-hosted tool that runs in the customer&apos;s environment. Sui-Generis does not receive customer PHI on its infrastructure. After redaction, the gateway forwards traffic to the AI provider the customer configures. Attestation receipts and audit data remain in the customer&apos;s deployment.
               </p>
             </div>
             <div>
@@ -41,7 +41,7 @@ export default function SecurityPage() {
             <div>
               <h2 className="font-display text-h3 text-ink mb-4">SOC 2</h2>
               <p>
-                Not applicable. Because Hermes Relay is zero-egress and on-premise, we do not process, transmit, or store customer data on our infrastructure. SOC 2 is designed for cloud SaaS vendors who hold customer data — that is not our model.
+                Sui-Generis does not currently hold a SOC 2 report. Because Hermes is self-hosted, the product does not process customer PHI on Sui-Generis infrastructure.
               </p>
             </div>
             <div>
