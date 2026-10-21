@@ -3,10 +3,10 @@
 import { useState } from "react";
 
 const TRUST_SIGNALS: readonly string[] = [
-  "Zero-egress architecture",
-  "Data never leaves your environment",
-  "SHA-256 independently verifiable",
-  "Safe Harbor-aligned — building toward 45 CFR §164.514(b)",
+  "Local-first scrubbing — no PHI sent to Hermes infrastructure",
+  "HMAC-SHA256 hash-chained receipts",
+  "16+2 Safe Harbor category coverage in text",
+  "Tested egress: Sentry (before_send), Splunk HEC",
   "BAA available upon request",
 ];
 

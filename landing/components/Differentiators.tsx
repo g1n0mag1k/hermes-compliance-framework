@@ -28,9 +28,9 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
   {
     index: "01",
     label: "Cryptographically Signed Attestation",
-    verdict: "We don't just redact PHI — we give you tamper-evident proof it happened.",
+    verdict: "We don't just redact PHI — we give you tamper-evident receipts for what happened.",
     body:
-      "Every scrubbing pass emits a signed receipt linked into a hash chain. verify_chain checks signature integrity, previous-hash links, and sequential positions — so an investigator can confirm the record was not forged or truncated after the fact.",
+      "Every scrubbing pass emits a signed JSON receipt (HMAC-SHA256) linked into a hash chain. verify_chain checks that the receipt was not altered between the runner and whoever verifies it with the same signing key, plus previous-hash links and sequential positions.",
   },
   {
     index: "02",
@@ -114,9 +114,9 @@ export function Differentiators() {
         <div className="border-t-2 border-border pt-10 mt-2">
           <p className="font-mono text-mono text-muted max-w-[72ch]">
             <span className="text-signal">{"->"}</span>{" "}
-            No other tool in this space produces cryptographically signed,
+            No other tool in this space produces HMAC-SHA256–signed,
             hash-chained records of every PHI redaction decision — tamper-evident
-            proof your AI pipeline handled patient data correctly.
+            evidence of what your pipeline detected and redacted on tested paths.
           </p>
         </div>
 

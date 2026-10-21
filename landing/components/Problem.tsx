@@ -34,7 +34,7 @@ const COLUMNS: readonly Column[] = [
   {
     label: "What MSPs cannot produce",
     content:
-      "A per-token, CFR-cited, cryptographically signed record that documents Safe Harbor-aligned de-identification — with core identifier coverage today and full Safe Harbor coverage actively expanding.",
+      "A per-token, CFR-cited, HMAC-SHA256–signed record of what was detected and redacted — 16 of 18 Safe Harbor categories in text today, with biometric (P) and full-face photo (Q) reference-only.",
     source: "OCR Risk Analysis Initiative — 2026",
   },
 ];
