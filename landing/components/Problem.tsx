@@ -65,9 +65,7 @@ export function Problem() {
           <br />
           Most lack tamper-evident
           <br />
-          evidence of what they
-          <br />
-          did with it.
+          evidence of what they did with it.
         </h2>
 
         <p className="font-body text-body text-muted mt-8 max-w-[640px]">
