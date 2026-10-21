@@ -25,6 +25,7 @@ type AuditLine = {
 /* CFR letters limited to categories classifier.py actually detects:
  * (A) names, (B) address, (C) dates, (D) phone, (F) email, (G) SSN,
  * (N) URL, (O) IP. Device IDs (J), biometrics (P), photos (Q) omitted. */
+// PLACEHOLDER — replace with output from a real signed receipt (see docs/RECEIPT_VERIFICATION.md)
 const AUDIT_LINES: readonly AuditLine[] = [
   { ts: "14:32:01Z", event: "REDACT",     cfr: "45CFR§164.514(b)(2)(i)(A)", hash: "sha256:a3f8...c291" },
   { ts: "14:32:02Z", event: "VERIFY",     cfr: "45CFR§164.514(b)(2)(i)(B)", hash: "sha256:7b21...e4f0" },
@@ -125,6 +126,9 @@ export function Hero() {
          * Full-bleed on mobile (no horizontal padding so it spans the
          * viewport), constrained back into the column on desktop. */}
         <div className="flex flex-col">
+          <p className="font-mono text-caption text-muted mb-1 px-6 sm:px-8 lg:px-0">
+            Illustrative example — values are not from a live receipt
+          </p>
           <p className="font-mono text-caption text-muted mb-3 px-6 sm:px-8 lg:px-0">
             Illustrative output — sample audit stream (CFR citations limited to categories Hermes detects)
           </p>

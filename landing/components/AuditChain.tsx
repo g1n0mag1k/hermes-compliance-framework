@@ -21,6 +21,7 @@ const EVENT_COLOR: Record<AuditEvent, string> = {
   SEAL:       "text-ink",
 };
 
+// PLACEHOLDER — replace with output from a real signed receipt (see docs/RECEIPT_VERIFICATION.md)
 const CHAIN: readonly ChainEntry[] = [
   { block: "#000001", ts: "14:32:01Z", event: "REDACT",     field: "PATIENT_NAME", cfr: "45CFR§164.514(b)(2)(i)(A)", prev: "0000000000000000",         hash: "sha256:a3f8b291c7e402d1f95a6b3c8e1d4f72a0b5c9e3d6f8a2b4c7e0d3f6a9b2c5e8" },
   { block: "#000002", ts: "14:32:02Z", event: "REDACT",     field: "DATE_OF_BIRTH", cfr: "45CFR§164.514(b)(2)(i)(C)", prev: "sha256:a3f8b291c7e402d1", hash: "sha256:7b21e4f0d8c395a2b6f1e8d4c7a0b3e6f9c2d5a8b1e4f7a0c3d6e9b2c5f8a1d4" },
@@ -80,6 +81,9 @@ export function AuditChain() {
         </div>
 
         <div className="mt-10 flex flex-col">
+          <p className="font-mono text-caption text-muted mb-3">
+            Illustrative example — values are not from a live receipt
+          </p>
           <div className="bg-surface border-2 border-signal">
             <div className="flex items-center justify-between border-b-2 border-border px-4 py-3">
               <div className="flex items-center gap-3">
