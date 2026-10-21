@@ -50,8 +50,8 @@ def test_msp_admin_can_access_config_endpoint(client):
         "/api/v1/sentry/config",
         headers={"X-API-Key": api_key},
     )
-    assert response.status_code == 200
-    assert response.json() == {"status": "updated"}
+    assert response.status_code == 501
+    assert response.json()["detail"] == "sentry.config.not_implemented"
 
 
 def test_client_readonly_blocked_from_config_endpoint(client):

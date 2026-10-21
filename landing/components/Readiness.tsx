@@ -30,7 +30,7 @@ export function Readiness() {
 
         <ul className="mt-10 flex flex-col gap-3 max-w-[560px]">
           {[
-            "Gap analysis against 45 CFR §164.514(b) Safe Harbor — 16 of 18 identifier categories in direct text scope (P and Q reference-only, disclosed)",
+            "Gap analysis against 45 CFR §164.514(b) Safe Harbor — 18 identifier categories (16 detected in text, 2 reference-only)",
             "Remediation priorities ranked by enforcement exposure, not theoretical risk",
             "Attestation readiness score formatted for cyber insurers and OCR auditors",
             "Written report delivered within five business days of intake",

@@ -91,14 +91,17 @@ export function Hero() {
           </p>
 
           <h1 className="font-display text-hero text-ink mt-6 sm:mt-8">
-            We don&apos;t just redact PHI — we give you a tamper-evident attestation it happened.
+            We don&apos;t just redact PHI — we give you tamper-evident receipts for what happened.
           </h1>
 
           <p className="font-body text-body text-muted mt-6 sm:mt-8 max-w-[55ch]">
             Hermes redacts PHI in-flight and never stores it — not even
-            encrypted — then seals a cryptographically signed, hash-chained
-            attestation of what was detected and redacted. Built for MSPs
-            serving HIPAA-covered entities.
+            encrypted — then seals a hash-chained attestation of what was
+            detected and redacted. Egress we have tested: Sentry (via
+            before_send) and Splunk HEC webhook. 16 of 18 HIPAA Safe Harbor
+            categories detected in text; 2 reference-only (biometric
+            identifiers, full-face photos). Built for MSPs serving
+            HIPAA-covered entities.
           </p>
 
           <div className="mt-8 sm:mt-10 flex flex-wrap items-center gap-4">
@@ -117,7 +120,7 @@ export function Hero() {
           </div>
 
           <p className="font-mono text-caption text-muted mt-8">
-            Zero-retention · In-flight redaction · Hash-chained attestation receipts
+            Zero-retention · In-flight redaction · Hash-chained attestation receipts · Tested sinks: Sentry, Splunk HEC
           </p>
         </div>
 
