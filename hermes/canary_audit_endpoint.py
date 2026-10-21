@@ -22,17 +22,17 @@ Deliverable tier: $299 Signed Audit Report
 from __future__ import annotations
 
 import base64
-import hashlib
-import json
+import hmac as _hmac_module
 import logging
 import os
+import os as _os
 import time
 import uuid
 from dataclasses import asdict
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from hermes.canary_audit import (
@@ -62,9 +62,6 @@ MAX_PAYLOAD_BYTES = int(os.environ.get("HERMES_MAX_PAYLOAD_BYTES", str(1 * 1024 
 # ─────────────────────────────────────────────────────────────────────────────
 # Auth dependency — mirrors verify_api_key in api.py exactly
 # ─────────────────────────────────────────────────────────────────────────────
-
-import hmac as _hmac_module
-import os as _os
 
 _API_KEY_ENV_VAR = "HERMES_API_KEY"
 
@@ -352,7 +349,7 @@ def _chain_to_attestation(
     Returns the receipt_hash or None on failure.
     """
     try:
-        from hermes.attestation import ATTESTATION_CHAIN, AttestationChain  # type: ignore[import]
+        from hermes.attestation import ATTESTATION_CHAIN  # type: ignore[import]
 
         # Attempt workspace-scoped chain first
         chain = None
@@ -364,14 +361,14 @@ def _chain_to_attestation(
 
         receipt = chain.issue(
             transaction_id=report_dict["transaction_id"],
-            flags_triggered=[
-                f"HIPAA_CANARY_{c.upper()}"
+            flags_triggered={
+                f"HIPAA_CANARY_{c.upper()}": 1
                 for c in report_dict.get("payload_phi_categories", [])
-            ],
-            flags_redacted=[
-                f"HIPAA_CANARY_{c.upper()}"
+            },
+            flags_redacted={
+                f"HIPAA_CANARY_{c.upper()}": 1
                 for c in report_dict.get("categories_passed", [])
-            ],
+            },
             char_count_in=report_dict["payload_char_count_in"],
             char_count_out=report_dict["payload_char_count_out"],
         )
