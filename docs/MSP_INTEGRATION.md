@@ -16,11 +16,12 @@ configured, it sends metadata-only PHI detection evidence from each scan to
 the client's Drata account via the Custom Connections and Tests (CCT) API.
 Exporter failures do not block scan results.
 
-Every scan generates a signed, hash-chained compliance receipt documenting:
+Every `/v1/scrub` scan generates a signed, hash-chained V1 compliance receipt
+(HMAC-SHA256; verification requires the shared signing key) documenting:
 - Which PHI identifiers were found (16 of 18 HIPAA Safe Harbor categories)
 - Which CFR citation applies to each finding
 - What action was taken (redaction to typed placeholders)
-- Cryptographic proof of chain integrity via HMAC-SHA256
+- Chain linkage via HMAC-SHA256 over prior receipts in SQLite
 
 ---
 
@@ -31,7 +32,8 @@ Hermes now includes a transparent AI enforcement gateway. Instead of requiring a
 Every request is inspected before it reaches the model:
 - PHI detected → redacted or blocked according to policy (default dev: REDACT; design partner: BLOCK via `HERMES_GATEWAY_POLICY=HIPAA_PRODUCTION_BLOCK`)
 - Clean request → forwarded to AI provider
-- Every decision → V2 cryptographic gateway receipt issued (local SQLite chain)
+- Every decision → V2 gateway receipt (Ed25519 / COSE_Sign1, public-key
+  verifiable via `hermes-verify`; local SQLite chain)
 - `/v1/scrub` evidence → may push to Drata CCT when configured (`HERMES_DRATA_CCT_URL`)
 - Gateway evidence → V2 receipts stored locally **and** optionally exported via webhook/Drata when configured (see `docs/GATEWAY_EVIDENCE_EXPORT.md`)
 - Fail-closed for defined failure classes (detector/parse/binary/policy) — upstream transport failures are documented separately

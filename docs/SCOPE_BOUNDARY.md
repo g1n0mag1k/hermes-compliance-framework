@@ -71,12 +71,19 @@ precisely to make this distinction machine-readable and auditor-verifiable.
 ## What Hermes Does Claim
 
 - Every payload is scanned against all 16 covered categories on every call.
-- Every redaction decision is recorded in a CFR-cited, SHA-256 hash-chained,
-  cryptographically signed attestation receipt.
-- The receipt is tamper-evident -- verify_chain() checks signature integrity,
-  previous-hash links, and sequential chain positions.
+- Every redaction decision is recorded in a CFR-cited attestation receipt.
+  Signing depends on path: `/v1/scrub` V1 receipts use HMAC-SHA256
+  (shared signing key); gateway enforcement receipts use Ed25519 /
+  COSE_Sign1 (public-key verifiable with `hermes-verify`).
+- V1 chain integrity is checked with `verify_chain()` (HMAC signatures,
+  previous-hash links, sequential positions). Gateway V2 receipts are
+  verified offline against the published gateway public key.
 - declared_scope and evidence_incomplete_categories are included in the
-  signed receipt content, so the boundary of evidence is itself tamper-evident.
+  signed receipt content for each receipt type.
+- Per-request receipt timestamps use the host or CI runner clock
+  (`datetime.now(UTC)`). RFC 3161 TSA support in
+  `hermes/receipts/v2/anchoring.py` is configurable but not wired to the
+  per-request issue path on `main` (roadmap / checkpoint anchoring only).
 
 ---
 
@@ -128,8 +135,10 @@ A de-identified note may satisfy all 18 Safe Harbor categories while still
 being uniquely re-identifiable from context — rare diagnoses, unusual
 occupations, narrative events, family relationships, or combinations of
 quasi-identifiers. Hermes makes no claim about indirect identifiers.
-The receipt field zero_pii_egress_confirmed: true means no direct identifiers
-in declared scope were detected — not that re-identification is impossible.
+The receipt field `zero_pii_egress_confirmed: true` means all triggered
+detector flags were redacted and no occurrence gaps remain in `clean_text`
+within declared scope — a redaction-parity check, not a live egress
+observation and not proof that re-identification is impossible.
 
 ### 4. Age over 89 (added in v1.1.0)
 
