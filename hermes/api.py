@@ -685,8 +685,14 @@ def current_workspace_endpoint(workspace=Depends(verify_api_key)):
 
 @app.post("/api/v1/sentry/config", tags=["Integrations"])
 def sentry_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech"]))):
-    """Update Sentry DSN configuration for this workspace (RBAC-gated stub)."""
-    return {"status": "updated"}
+    """Reserved — returns 501 Not Implemented until a real DSN probe path exists."""
+    return JSONResponse(
+        status_code=501,
+        content={
+            "detail": "sentry.config.not_implemented",
+            "message": "Sentry DSN probing is not wired in this release. See docs/CURRENT_LIMITATIONS.md.",
+        },
+    )
 
 
 @app.post("/api/v1/drata/config", tags=["Integrations"])
