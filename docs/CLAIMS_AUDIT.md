@@ -190,3 +190,18 @@ For a exhaustive **`only`** inventory, run:
 1. **`/v2/receipts` naming:** Confirm whether this meant gateway **COSE** files (CLI export) vs **`POST /v1/telemetry/receipt`** (HMAC JSON).
 2. **Landing inconsistency:** Same site uses both **"16 of 18"** and **"18 of 18"** (Architecture/FAQ vs AuditChain/Solution).
 3. **Canary-action marketplace** uses **"zero PHI egress"** and **"guarantee"** in THREAT-MODEL — align with compliance-framework banned-phrase policy?
+
+---
+
+## Resolved (claims cleanup)
+
+| File | Old text | New text | Session |
+|------|----------|----------|---------|
+| `landing/components/Architecture.tsx` | PHI categories covered: **18 of 18 Safe Harbor categories** … | **16 of 18 HIPAA Safe Harbor identifier categories** … (aligned with `Solution.tsx` / `AuditChain.tsx`) | 5 |
+| `landing/components/Architecture.tsx` | Audit record format: **COSE_Sign1 asymmetric-signed** … (relay table) | **HMAC-SHA256-signed, SHA-256 hash-chained JSON compliance receipts** (/v1/scrub, /v1/review); gateway COSE V2 called out separately | 5 |
+| `landing/components/Architecture.tsx` | Signing: **Ed25519 / ES256 asymmetric signatures** (relay table) | **HMAC-SHA256 relay attestation chain**; gateway Ed25519 / ES256 noted separately | 5 |
+| `landing/components/FAQ.tsx` | detects **18 of 18** … **tamper-evident proof** … cryptographically signed | **16 of 18** … **HMAC-SHA256-signed** … **tamper-evident attestation** | 5 |
+| `landing/components/FAQ.tsx` | emits a signed receipt … **tamper-evident proof** that redaction happened | **HMAC-SHA256-signed** receipt … **tamper-evident attestation** | 5 |
+| `landing/components/Readiness.tsx` | **all 18 identifier categories** | **16 of 18 identifier categories in direct text scope (P and Q reference-only, disclosed)** | 5 |
+| `landing/components/Hero.tsx` | **tamper-evident proof** it happened | **tamper-evident attestation** it happened | 5 |
+| `landing/components/Differentiators.tsx` | **tamper-evident proof** it happened | **tamper-evident attestation** it happened | 5 |
