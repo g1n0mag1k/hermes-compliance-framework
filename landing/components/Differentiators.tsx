@@ -28,7 +28,7 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
   {
     index: "01",
     label: "Cryptographically Signed Attestation",
-    verdict: "We don't just redact PHI — we give you tamper-evident proof it happened.",
+    verdict: "We don't just redact PHI — we give you a tamper-evident attestation it happened.",
     body:
       "Every scrubbing pass emits a signed receipt linked into a hash chain. verify_chain checks signature integrity, previous-hash links, and sequential positions — so an investigator can confirm the record was not forged or truncated after the fact.",
   },

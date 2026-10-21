@@ -91,7 +91,7 @@ export function Hero() {
           </p>
 
           <h1 className="font-display text-hero text-ink mt-6 sm:mt-8">
-            We don&apos;t just redact PHI — we give you tamper-evident proof it happened.
+            We don&apos;t just redact PHI — we give you a tamper-evident attestation it happened.
           </h1>
 
           <p className="font-body text-body text-muted mt-6 sm:mt-8 max-w-[55ch]">
