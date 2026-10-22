@@ -16,14 +16,14 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   lint:
     name: Lint / Type-check / SAST
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@0acd0664bd7a1e3a0e4f81d615e34c7a3ffcfd0c  # v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
           cache: "pip"
@@ -48,15 +48,15 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ lint ]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@0acd0664bd7a1e3a0e4f81d615e34c7a3ffcfd0c  # v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
           cache: "pip"
@@ -82,14 +82,14 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   audit:
     name: Dependency Audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@0acd0664bd7a1e3a0e4f81d615e34c7a3ffcfd0c  # v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.12"
           cache: "pip"
@@ -121,7 +121,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   build-and-push:
     name: Build & Push Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ test, audit ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
@@ -131,7 +131,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
 
       - name: Log in to GHCR
         uses: docker/login-action@v3

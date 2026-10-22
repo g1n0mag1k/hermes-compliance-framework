@@ -1,5 +1,4 @@
 import json
-import os
 import urllib.error
 from unittest.mock import MagicMock, patch
 
@@ -11,10 +10,10 @@ from hermes.webhooks import (
     WEBHOOK_AUTH_VALUE_ENV_VAR,
     WEBHOOK_URL_ENV_VAR,
     build_event_payload,
-    dispatch_webhook,
     dispatch_drata_cct,
-    dispatch_vanta_custom_resource,
     dispatch_sprinto_custom_evidence,
+    dispatch_vanta_custom_resource,
+    dispatch_webhook,
 )
 
 

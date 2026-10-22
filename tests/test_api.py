@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+from datetime import UTC
 
 from fastapi.testclient import TestClient
 
@@ -365,9 +366,9 @@ def test_trial_scan_then_status_reflects_scan():
 
 def test_trial_scan_returns_429_when_quota_exhausted(tmp_path, monkeypatch):
     """After 5 successful trial scans, the 6th returns 429 and does not increment."""
-    from hermes.attestation import AttestationChain
-    from hermes import api as api_mod
     import hermes.workspaces as ws_mod
+    from hermes import api as api_mod
+    from hermes.attestation import AttestationChain
 
     db_path = str(tmp_path / "quota_exhaust_hermes_chain.db")
     monkeypatch.setenv("HERMES_DB_PATH", db_path)
@@ -400,9 +401,9 @@ def test_trial_scan_returns_429_when_quota_exhausted(tmp_path, monkeypatch):
 
 def test_trial_quota_persists_after_simulated_restart(tmp_path, monkeypatch):
     """Quota survives a new AttestationChain on the same path."""
-    from hermes.attestation import AttestationChain
-    from hermes import api as api_mod
     import hermes.workspaces as ws_mod
+    from hermes import api as api_mod
+    from hermes.attestation import AttestationChain
     from hermes.workspaces import get_trial_quota
 
     db_path = str(tmp_path / "restart_hermes_chain.db")
@@ -441,7 +442,7 @@ def test_trial_quota_persists_after_simulated_restart(tmp_path, monkeypatch):
 def test_scrub_respects_trial_quota_when_in_trial(tmp_path, monkeypatch):
     """Workspace in trial mode with scans_used=5 gets 429 on POST /v1/scrub."""
     import sqlite3
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     import hermes.workspaces as ws_mod
     from hermes.workspaces import create_workspace
@@ -457,7 +458,7 @@ def test_scrub_respects_trial_quota_when_in_trial(tmp_path, monkeypatch):
         "trial-ws-quota", "Trial WS", "t@test.com", plan="trial"
     )
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     conn = sqlite3.connect(str(tmp_path / "workspaces" / "registry.db"))
     conn.execute(
         "INSERT INTO trial_quota (workspace_id, scans_used, first_scan_at, extended_by) "
@@ -479,7 +480,7 @@ def test_scrub_respects_trial_quota_when_in_trial(tmp_path, monkeypatch):
 def test_scrub_ignores_quota_for_production_workspace(tmp_path, monkeypatch):
     """Production workspace with no trial_quota row succeeds on POST /v1/scrub."""
     import sqlite3
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     import hermes.workspaces as ws_mod
     from hermes.workspaces import create_workspace
@@ -496,7 +497,7 @@ def test_scrub_ignores_quota_for_production_workspace(tmp_path, monkeypatch):
     )
 
     # Exhausted quota on another workspace must not block production scrub.
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     conn = sqlite3.connect(str(tmp_path / "workspaces" / "registry.db"))
     conn.execute(
         "INSERT INTO trial_quota (workspace_id, scans_used, first_scan_at, extended_by) "

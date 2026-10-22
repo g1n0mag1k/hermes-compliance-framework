@@ -3,13 +3,13 @@ tests/v2/test_key_manifest.py — KeyManifestDocument tests.
 """
 
 import json
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from hermes.receipts.v2.key_manifest import (
     KeyManifestDocument,
     ManifestEntry,
-    ManifestVerificationResult,
 )
 from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
 
@@ -49,7 +49,7 @@ def sample_entries(root_signer, op_signer):
 def signed_doc(root_signer, sample_entries):
     doc = KeyManifestDocument(
         deployment_id="test-deployment-001",
-        issued_at=datetime.now(timezone.utc).isoformat(),
+        issued_at=datetime.now(UTC).isoformat(),
         entries=sample_entries,
     )
     doc.sign(root_signer)

@@ -3,10 +3,14 @@ tests/v2/test_key_store.py — Encrypted KeyStore tests.
 """
 
 import os
+
 import pytest
 
 from hermes.receipts.v2.key_store import KeyStore
-from hermes.receipts.v2.software_signer import SoftwareSignerEd25519, SoftwareSignerES256
+from hermes.receipts.v2.software_signer import (
+    SoftwareSignerEd25519,
+    SoftwareSignerES256,
+)
 
 PASSPHRASE = b"test-passphrase-not-for-production"
 WRONG_PASSPHRASE = b"definitely-wrong"
@@ -109,8 +113,9 @@ class TestKeyStoreLoadSigner:
         # Load without caching passphrase
         import json
         data = json.loads(store_path.read_text())
-        from hermes.receipts.v2.key_store import KeyStore as KS
         import base64
+
+        from hermes.receipts.v2.key_store import KeyStore as KS
         store = KS(
             _path=store_path,
             _algorithm=data["algorithm"],
@@ -126,7 +131,9 @@ class TestKeyStoreLoadSigner:
 
     def test_load_signer_no_passphrase_raises(self, store_path):
         KeyStore.create(store_path, PASSPHRASE)
-        import json, base64, threading
+        import base64
+        import json
+        import threading
         data = json.loads(store_path.read_text())
         store = KeyStore(
             _path=store_path,

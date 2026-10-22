@@ -14,7 +14,6 @@ from gateway.pipeline import GatewayPipeline
 from hermes.receipts.v2.key_store import KeyStore
 from hermes.workspaces import create_workspace
 
-
 PASSPHRASE = b"gateway-keystore-passphrase"
 
 
@@ -197,9 +196,8 @@ def test_production_app_startup_fails_when_keystore_file_missing(tmp_path, monke
     monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PASSPHRASE", PASSPHRASE.decode())
     monkeypatch.setattr(gateway_evidence, "_GATEWAY_SIGNER", None)
 
-    with pytest.raises(FileNotFoundError, match="Key store not found"):
-        with TestClient(app):
-            pass
+    with pytest.raises(FileNotFoundError, match="Key store not found"), TestClient(app):
+        pass
 
 
 def test_production_app_startup_fails_with_wrong_passphrase(tmp_path, monkeypatch):
@@ -210,9 +208,8 @@ def test_production_app_startup_fails_with_wrong_passphrase(tmp_path, monkeypatc
     monkeypatch.setenv("HERMES_GATEWAY_KEYSTORE_PASSPHRASE", "wrong-passphrase")
     monkeypatch.setattr(gateway_evidence, "_GATEWAY_SIGNER", None)
 
-    with pytest.raises(ValueError, match="wrong passphrase"):
-        with TestClient(app):
-            pass
+    with pytest.raises(ValueError, match="wrong passphrase"), TestClient(app):
+        pass
 
 
 def test_production_app_startup_loads_keystore_signer(tmp_path, monkeypatch):

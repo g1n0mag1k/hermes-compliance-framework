@@ -4,19 +4,18 @@ import json
 import os
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
-
-from hermes.receipts.v2.builder import ReceiptV2, ReceiptV2Builder
-from hermes.receipts.v2.key_store import KeyStore
-from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
-from hermes.workspaces import Workspace, get_chain_for_workspace
+from typing import Any
 
 from gateway import __version__
 from gateway.evidence_export.dispatch import try_export_evidence
 from gateway.exceptions import ReceiptPersistenceError
 from gateway.policy import EnforcementDecision, PolicyDecision
+from hermes.receipts.v2.builder import ReceiptV2, ReceiptV2Builder
+from hermes.receipts.v2.key_store import KeyStore
+from hermes.receipts.v2.software_signer import SoftwareSignerEd25519, SoftwareSignerES256
+from hermes.workspaces import Workspace, get_chain_for_workspace
 
 _GATEWAY_RECEIPTS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS gateway_receipts (
@@ -32,7 +31,7 @@ CREATE TABLE IF NOT EXISTS gateway_receipts (
 );
 """
 
-_v2_chain_heads: dict[str, Optional[str]] = {}
+_v2_chain_heads: dict[str, str | None] = {}
 _chain_lock = threading.Lock()
 
 
@@ -54,7 +53,7 @@ def validate_gateway_signing_config() -> None:
         )
 
 
-def _load_signer_from_env() -> SoftwareSignerEd25519:
+def _load_signer_from_env() -> SoftwareSignerEd25519 | SoftwareSignerES256:
     validate_gateway_signing_config()
     keystore_path = os.environ.get("HERMES_GATEWAY_KEYSTORE_PATH")
     keystore_passphrase = os.environ.get("HERMES_GATEWAY_KEYSTORE_PASSPHRASE")
@@ -69,10 +68,10 @@ def _load_signer_from_env() -> SoftwareSignerEd25519:
     return SoftwareSignerEd25519.generate()
 
 
-_GATEWAY_SIGNER: SoftwareSignerEd25519 | None = None
+_GATEWAY_SIGNER: SoftwareSignerEd25519 | SoftwareSignerES256 | None = None
 
 
-def _get_gateway_signer() -> SoftwareSignerEd25519:
+def _get_gateway_signer() -> SoftwareSignerEd25519 | SoftwareSignerES256:
     global _GATEWAY_SIGNER
     if _GATEWAY_SIGNER is None:
         _GATEWAY_SIGNER = _load_signer_from_env()
@@ -110,7 +109,7 @@ def _get_chain_db_conn(workspace: Workspace) -> sqlite3.Connection:
     return conn
 
 
-def _get_last_persisted_digest(workspace: Workspace) -> Optional[str]:
+def _get_last_persisted_digest(workspace: Workspace) -> str | None:
     conn = _get_chain_db_conn(workspace)
     try:
         row = conn.execute(
@@ -162,7 +161,7 @@ def _persist_gateway_receipt(
     gateway_sequence: int,
     transaction_id: str,
 ) -> None:
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     conn = _get_chain_db_conn(workspace)
     try:
         with conn:
@@ -205,8 +204,8 @@ def issue_gateway_receipt(
     detectors_executed: dict[str, str],
     *,
     forwarded: bool = False,
-    upstream_status: Optional[int] = None,
-    failure_class: Optional[str] = None,
+    upstream_status: int | None = None,
+    failure_class: str | None = None,
 ) -> ReceiptV2:
     """Issue a V2 COSE_Sign1 receipt linked to the workspace receipt chain."""
     get_chain_for_workspace(workspace)
@@ -290,7 +289,7 @@ def list_gateway_receipts(workspace: Workspace) -> list[dict[str, Any]]:
 def get_gateway_receipt(
     workspace: Workspace,
     receipt_digest: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     conn = _get_chain_db_conn(workspace)
     try:
         row = conn.execute(
@@ -309,7 +308,7 @@ def get_gateway_receipt(
         conn.close()
 
 
-def get_v2_chain_head(workspace_id: str) -> Optional[str]:
+def get_v2_chain_head(workspace_id: str) -> str | None:
     with _chain_lock:
         return _v2_chain_heads.get(workspace_id)
 

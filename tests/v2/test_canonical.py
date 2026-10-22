@@ -3,17 +3,17 @@ tests/v2/test_canonical.py — RFC 8785 canonicalization tests with golden vecto
 """
 
 import hashlib
+
 import pytest
 
 from hermes.receipts.v2.canonical import (
+    build_merkle_root,
     canonicalize,
-    receipt_digest,
-    receipt_digest_hex,
     merkle_leaf,
     merkle_node,
-    build_merkle_root,
+    receipt_digest,
+    receipt_digest_hex,
 )
-
 
 # ---------------------------------------------------------------------------
 # Canonicalize golden vectors
@@ -37,7 +37,7 @@ class TestCanonicalize:
     def test_unicode_strings(self):
         # RFC 8785 requires Unicode characters to be preserved, not escaped
         result = canonicalize({"key": "café"})
-        assert "café".encode("utf-8") in result
+        assert "café".encode() in result
 
     def test_nested_object_sorted(self):
         result = canonicalize({"outer": {"z": 1, "a": 2}})
@@ -157,15 +157,15 @@ class TestMerkle:
         assert merkle_leaf(d) == merkle_leaf(d)
 
     def test_node_deterministic(self):
-        l = b"a" * 32
+        left = b"a" * 32
         r = b"b" * 32
-        assert merkle_node(l, r) == merkle_node(l, r)
+        assert merkle_node(left, r) == merkle_node(left, r)
 
     def test_node_not_commutative(self):
         """Left-right order must matter."""
-        l = b"a" * 32
+        left = b"a" * 32
         r = b"b" * 32
-        assert merkle_node(l, r) != merkle_node(r, l)
+        assert merkle_node(left, r) != merkle_node(r, left)
 
     def test_leaf_format(self):
         data = b"x" * 32
@@ -173,10 +173,10 @@ class TestMerkle:
         assert merkle_leaf(data) == expected
 
     def test_node_format(self):
-        l = b"a" * 32
+        left = b"a" * 32
         r = b"b" * 32
-        expected = hashlib.sha256(b"\x01" + l + r).digest()
-        assert merkle_node(l, r) == expected
+        expected = hashlib.sha256(b"\x01" + left + r).digest()
+        assert merkle_node(left, r) == expected
 
     def test_build_root_single(self):
         d = b"a" * 32

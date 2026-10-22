@@ -36,13 +36,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         if self.path == "/__requests":
             self._send_json(200, RECORDED)
         else:
             self._send_json(404, {"error": "not found"})
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         length = int(self.headers.get("content-length") or 0)
         body = self.rfile.read(length).decode("utf-8", errors="replace")
         RECORDED.append(

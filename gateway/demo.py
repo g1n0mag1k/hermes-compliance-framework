@@ -19,7 +19,6 @@ Run against a live gateway (requires mock upstream or provider credentials):
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 import tempfile
@@ -45,7 +44,6 @@ from gateway.policy import (
 )
 from hermes.classifier import DetectorFailureError
 from hermes.workspaces import create_workspace
-
 
 BLOCK_POLICY = Policy(
     policy_id="HIPAA_PRODUCTION_BLOCK",

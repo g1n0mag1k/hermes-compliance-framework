@@ -13,7 +13,6 @@ from hermes.receipts.v2.key_store import KeyStore
 from hermes.receipts.v2.verifier import verify_receipt_chain
 from hermes.workspaces import create_workspace
 
-
 PASSPHRASE = b"gateway-keystore-passphrase"
 
 

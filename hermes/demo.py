@@ -11,17 +11,15 @@ Run:
     export HERMES_API_KEY=demo-key-123
     python3 hermes/demo.py
 """
-import json
 import os
-import sys
 import time
 
 # Set demo API key if not already set
 if not os.environ.get("HERMES_API_KEY"):
     os.environ["HERMES_API_KEY"] = "demo-key-123"
 
-from hermes.classifier import scrub_payload
 from hermes.attestation import ATTESTATION_CHAIN
+from hermes.classifier import scrub_payload
 
 DEMO_PAYLOAD = (
     "Patient: John Smith | SSN: 372-18-5421 | "

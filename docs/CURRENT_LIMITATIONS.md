@@ -26,6 +26,8 @@ Customer-facing quality control for Hermes Relay as of 2026-09-18.
 ## Evidence and storage
 
 - **SQLite storage** — mutable filesystem storage; not WORM/immutable.
+- **HMAC-SHA256 receipts** (`/v1/scrub`, `/v1/telemetry/receipt`, canary audit) require the signing key for verification; they are not third-party non-repudiable without that key.
+- **Receipt timestamps** come from the host or CI runner clock. External RFC 3161 timestamping is not enabled on the per-request issue path.
 - **External anchoring not connected** (RFC 3161 TSA, SCITT, S3 Object Lock paths exist as stubs only).
 - **Persistent gateway signing key required in production** (`HERMES_GATEWAY_KEYSTORE_PATH` + passphrase).
 - **Receipt persistence failure:** If persistence fails after upstream forward, client receives HTTP 503; upstream may have already received data.
@@ -37,6 +39,8 @@ Customer-facing quality control for Hermes Relay as of 2026-09-18.
 
 ## Integrations
 
+- **Canary passes** demonstrate that the scrubber caught the synthetic test vectors used; they do not measure recall on unstructured real-world free text.
+- **`canary-action`** does not transmit canaries to Sentry today; it runs them through a local scrub probe shaped like Sentry events.
 - **Gateway evidence export** — optional webhook and Drata CCT exporters via `gateway/evidence_export/` (see `GATEWAY_EVIDENCE_EXPORT.md`). Best-effort post-decision export; exporter outage does not affect enforcement.
 - **Live Drata gateway integration** — Drata adapter implemented and contract-tested; live tenant validation pending. Hermes sends metadata-only records wrapped in `{"data": {...}}`; never raw PHI.
 - **Canonical Drata connector** — `DrataConnector` in `gateway/evidence_export/drata_connector.py`. `send_test_evidence()` returns `UNSUPPORTED` without any network call. `test_connection()` is an offline structural check only (URL set, `https://`, API key present → `CONFIGURED`; otherwise `NOT_CONFIGURED` or `CONFIG_INVALID`); `live_validated` is always `false` and live connection validation is `UNSUPPORTED`. `send_evidence()` refuses non-`https://` CCT URLs.

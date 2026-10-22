@@ -6,7 +6,6 @@ derive state from the same definition.
 """
 import os
 from enum import Enum
-from typing import Optional, Tuple
 from urllib.parse import urlsplit
 
 DRATA_CCT_URL_ENV_VAR = "HERMES_DRATA_CCT_URL"
@@ -68,13 +67,13 @@ def _is_well_formed_url(url: str) -> bool:
         return False
     try:
         parts = urlsplit(url)
-        parts.port  # raises ValueError on a non-numeric or out-of-range port
+        _ = parts.port  # raises ValueError on a non-numeric or out-of-range port
     except ValueError:
         return False
     return bool(parts.scheme) and bool(parts.hostname)
 
 
-def check_drata_config() -> Tuple[DrataConnectionState, str]:
+def check_drata_config() -> tuple[DrataConnectionState, str]:
     """
     Structural, offline check of the Drata CCT configuration.
 
@@ -93,7 +92,7 @@ def check_drata_config() -> Tuple[DrataConnectionState, str]:
     return DrataConnectionState.CONFIGURED, CONFIGURED_REASON
 
 
-def get_drata_config_state(connection_test_passed: Optional[bool] = None) -> DrataConfigState:
+def get_drata_config_state(connection_test_passed: bool | None = None) -> DrataConfigState:
     """
     Derive the Drata configuration state from the environment.
 

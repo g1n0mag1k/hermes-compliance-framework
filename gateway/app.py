@@ -4,13 +4,17 @@ import hmac
 import os
 import time
 from collections import defaultdict
-from typing import Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+)
 from fastapi.responses import JSONResponse
-
-from hermes.classifier import DetectorFailureError, scrub_payload
-from hermes.workspaces import Workspace, get_workspace_by_api_key
 
 from gateway import __version__
 from gateway.evidence import (
@@ -22,6 +26,8 @@ from gateway.evidence_export.outbox import flush_outbox
 from gateway.pipeline import GatewayPipeline, GatewayRequest
 from gateway.policy import PolicyEngine, reload_policy
 from gateway.providers import PROVIDER_REGISTRY, resolve_provider, validate_path
+from hermes.classifier import DetectorFailureError, scrub_payload
+from hermes.workspaces import Workspace, get_workspace_by_api_key
 
 app = FastAPI(
     title="Hermes Relay Gateway",
@@ -53,7 +59,7 @@ async def _validate_production_gateway_config() -> None:
     preload_gateway_signer()
 
 
-def _authenticate(x_api_key: Optional[str] = Header(None, alias="X-API-Key")) -> Workspace:
+def _authenticate(x_api_key: str | None = Header(None, alias="X-API-Key")) -> Workspace:
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing X-API-Key header")
     workspace = get_workspace_by_api_key(x_api_key)
@@ -84,7 +90,7 @@ def _record_stats(
 
 @app.post("/gateway/policy/reload")
 async def gateway_policy_reload(
-    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+    x_admin_token: str | None = Header(None, alias="X-Admin-Token"),
 ) -> dict:
     expected = os.environ.get("HERMES_ADMIN_TOKEN")
     if not expected or not hmac.compare_digest(x_admin_token or "", expected):

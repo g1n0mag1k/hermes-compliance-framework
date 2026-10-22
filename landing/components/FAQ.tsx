@@ -13,12 +13,17 @@ const FAQS: readonly FAQItem[] = [
   {
     question: "What happens if Hermes misses a PHI identifier -- a false negative?",
     answer:
-      "No automated PHI redaction system achieves perfect recall, and Hermes does not claim certified Safe Harbor de-identification or blanket HIPAA compliance. Hermes currently detects 18 of 18 HIPAA Safe Harbor identifier categories — 16 via direct detection in text, and 2 (biometric identifiers and full-face photographs) via reference and metadata detection with a disclosed limitation: actual biometric templates and image pixel content cannot be inspected by a text-only pipeline: person names, dates, organizations, phone numbers, fax numbers, email addresses, URLs, IP addresses, physical addresses/locations, Social Security numbers, medical record numbers, health plan beneficiary numbers, account numbers, vehicle identifiers (VINs), and payment card numbers (Luhn-validated). Treat Hermes as a strong first layer for PHI reduction, not a substitute for your risk assessment or human review on high-stakes payloads. The cryptographically signed attestation receipt records exactly which categories were flagged and redacted for a given transaction — tamper-evident proof of what happened, not a vague compliance claim.",
+      "No automated PHI redaction system achieves perfect recall, and Hermes does not claim certified Safe Harbor de-identification or blanket HIPAA compliance. Hermes detects 16 of 18 HIPAA Safe Harbor categories in text; biometric identifiers (P) and full-face photos (Q) are reference-only (binary content is not inspected by a text pipeline). Covered text categories include person names, dates, organizations, phone numbers, fax numbers, email addresses, URLs, IP addresses, physical addresses/locations, Social Security numbers, medical record numbers, health plan beneficiary numbers, account numbers, vehicle identifiers (VINs), and payment card numbers (Luhn-validated). Treat Hermes as a strong first layer for PHI reduction, not a substitute for your risk assessment or human review on high-stakes payloads. Each run emits an HMAC-SHA256–signed attestation receipt recording which categories were flagged and redacted — tamper-evident evidence of what happened, not a vague compliance claim.",
   },
   {
     question: "What is a hash-chained attestation receipt and why does it matter?",
     answer:
-      "Every time Hermes processes a payload, it emits a signed receipt recording which PHI categories were detected and redacted, a timestamp, and a hash of the previous receipt. These receipts are linked into a chain — so an auditor, OCR investigator, or your client can verify that the record was not altered, forged, or truncated after the fact. It is tamper-evident proof that redaction happened, not a log you wrote yourself after the fact.",
+      "Every time Hermes processes a payload, it emits an HMAC-SHA256–signed receipt recording which PHI categories were detected and redacted, a timestamp from the host or CI runner clock, and a hash of the previous receipt. These receipts link into a chain — anyone with the same signing key can verify the record was not altered or truncated after the fact. It is tamper-evident evidence that redaction happened on that run, not a log you wrote yourself after the fact.",
+  },
+  {
+    question: "Can a third-party auditor verify these receipts without my signing key?",
+    answer:
+      "Not today. Receipts are HMAC-SHA256 — the verifier needs the same signing key you used. We're planning Ed25519 / COSE_Sign1 signatures so auditors can verify with a public key alone; that is roadmap, not shipping. For now, store the signing key alongside the receipts (or in a GRC platform like Drata) so an auditor you grant access to can run the verifier.",
   },
   {
     question: "Why not just use an enterprise LLM contract with a BAA already in place?",
@@ -38,7 +43,7 @@ const FAQS: readonly FAQItem[] = [
   {
     question: "Is Hermes a replacement for our compliance officer or MSP's judgment?",
     answer:
-      "No. Hermes produces evidence -- a cryptographically verifiable record of what PHI was detected, under which regulation, and what happened to it. It does not replace the judgment calls a compliance officer or MSP makes about risk tolerance, client communication, or regulatory strategy. Think of it as the evidence layer underneath those decisions, not a substitute for making them.",
+      "No. Hermes produces evidence — an HMAC-SHA256–signed record of what PHI was detected, under which regulation, and what happened to it on tested paths (verifiable with the same signing key). It does not replace the judgment calls a compliance officer or MSP makes about risk tolerance, client communication, or regulatory strategy. Think of it as the evidence layer underneath those decisions, not a substitute for making them.",
   },
   {
     question: "What happens to data if we stop using Hermes?",

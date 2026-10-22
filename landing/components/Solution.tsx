@@ -34,13 +34,13 @@ const PILLARS: readonly Pillar[] = [
     label: "METHOD",
     headline: "Deterministic",
     body:
-      "Regex and a fixed-version spaCy model detect 16 of 18 HIPAA Safe Harbor identifier categories — 16 via direct text detection, and 2 (biometric identifiers and full-face photographs) via text reference detection only, with a disclosed limitation that binary content cannot be inspected by a text pipeline — SSN, MRN, fax, payment cards, names, dates, addresses, phone, email, IP, URL, account numbers, health plan beneficiary numbers, and VINs — cited to 45 CFR §164.514(b)(2)(i). Never a hosted LLM: the same input produces the same output, every run.",
+      "Regex and a fixed-version spaCy model cover 16 of 18 HIPAA Safe Harbor categories in text; biometric identifiers (P) and full-face photos (Q) are reference-only — SSN, MRN, fax, payment cards, names, dates, addresses, phone, email, IP, URL, account numbers, health plan beneficiary numbers, and VINs — cited to 45 CFR §164.514(b)(2)(i). Never a hosted LLM: the same input produces the same output, every run.",
   },
   {
     label: "EVIDENCE",
     headline: "Audit-ready",
     body:
-      "Each decision is recorded as a per-token, CFR-cited event and sealed into a SHA-256 hash chain. The result is an unbroken, tamper-evident record an OCR investigator can verify byte by byte.",
+      "Each decision is recorded as a per-token, CFR-cited event and sealed into a SHA-256 hash chain with HMAC-SHA256–signed receipts. The result is a tamper-evident chain anyone holding your signing key can replay and verify.",
   },
 ];
 

@@ -11,7 +11,7 @@ V1 records are NEVER modified, deleted, or rewritten.
 
 from __future__ import annotations
 
-from hermes.receipts.v2.builder import ReceiptV2Builder, ReceiptV2
+from hermes.receipts.v2.builder import ReceiptV2, ReceiptV2Builder
 from hermes.receipts.v2.signer import Signer
 
 

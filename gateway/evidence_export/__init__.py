@@ -16,7 +16,10 @@ be maintained: always import ``exporters`` before ``drata_connector``.
 Do NOT add imports from this __init__ into ``exporters`` or ``event``.
 """
 
-from gateway.evidence_export.dispatch import dispatch_evidence_export, try_export_evidence
+from gateway.evidence_export.dispatch import (
+    dispatch_evidence_export,
+    try_export_evidence,
+)
 from gateway.evidence_export.drata_connector import ConnectionResult, DrataConnector
 from gateway.evidence_export.event import EvidenceEvent, build_evidence_event
 from gateway.evidence_export.exporters import (

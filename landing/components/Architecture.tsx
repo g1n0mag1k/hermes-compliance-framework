@@ -6,13 +6,46 @@
 
 const SPECS: readonly { label: string; value: string }[] = [
   { label: "Deployment target", value: "Customer environment — Docker, bare metal, or VM" },
-  { label: "External network calls", value: "None during scrubbing. Zero-egress by design." },
+  {
+    label: "External network calls",
+    value: "None on the /v1/scrub return path. Splunk HEC and other webhooks only when you configure them.",
+  },
   { label: "Detection method", value: "Regex + fixed-version spaCy NER + Microsoft Presidio" },
-  { label: "PHI categories covered", value: "18 of 18 Safe Harbor categories — 16 direct text detection, 2 (biometric, full-face photo) via reference detection with disclosed binary content limitation" },
-  { label: "Audit record format", value: "COSE_Sign1 asymmetric-signed, RFC 8785 canonical, Merkle-anchored receipts — independently verifiable" },
+  {
+    label: "Coverage",
+    value:
+      "16 of 18 HIPAA Safe Harbor categories detected in text; biometric identifiers (P) and full-face photos (Q) are reference-only.",
+  },
+  {
+    label: "What a receipt proves",
+    value:
+      "The receipt body wasn't altered between the runner and whoever verifies it with the same HMAC-SHA256 key.",
+  },
+  {
+    label: "What a receipt does NOT prove",
+    value:
+      "PHI didn't leave by an untested path (stdout, log agents, trace attributes, dead-letter queues).",
+  },
+  {
+    label: "Egress sinks tested",
+    value:
+      "Sentry DSN (via before_send) and Splunk HEC webhook when configured. Other sinks not tested unless explicitly configured.",
+  },
+  {
+    label: "Signing",
+    value:
+      "HMAC-SHA256 over canonical receipt body. Shared signing key — verifier and signer hold the same secret.",
+  },
+  {
+    label: "Time source",
+    value: "Host or CI runner clock. Not independently timestamped.",
+  },
+  {
+    label: "Chain integrity",
+    value: "Each receipt links the previous receipt's hash; verifier replays the chain.",
+  },
   { label: "CFR citation per token", value: "Yes — 45 CFR §164.514(b)(2)(i) subcategory attached" },
   { label: "LLM dependency", value: "None. Deterministic pipeline only." },
-  { label: "Signing", value: "Ed25519 / ES256 asymmetric signatures — customer-controlled keys, three-tier key hierarchy" },
   { label: "API surface", value: "REST — /v1/scrub, /v1/review, /v1/status, /v1/workspaces" },
   { label: "Language / runtime", value: "Python 3.12 — uvicorn ASGI" },
 ];
@@ -37,8 +70,8 @@ export function Architecture() {
           Hermes deploys as a single Python service inside the customer
           environment. No external classifier. No data in transit. The
           scrubbing pipeline is fully deterministic — the same input
-          produces the same output, every run, with a cryptographic record
-          to prove it.
+          produces the same output, every run, with hash-chained
+          HMAC-SHA256 receipts for each run.
         </p>
 
         <div className="mt-16 border-2 border-border">

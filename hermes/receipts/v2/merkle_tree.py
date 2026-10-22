@@ -18,7 +18,6 @@ These are re-exported from canonical.py for consistency.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 
 from hermes.receipts.v2.canonical import merkle_leaf, merkle_node
@@ -109,7 +108,7 @@ class MerkleTree:
     # Inclusion proof
     # ------------------------------------------------------------------
 
-    def inclusion_proof(self, leaf_index: int) -> "InclusionProof":
+    def inclusion_proof(self, leaf_index: int) -> InclusionProof:
         """
         Generate an inclusion proof for the leaf at `leaf_index`.
 
@@ -148,7 +147,7 @@ class MerkleTree:
     # Consistency proof
     # ------------------------------------------------------------------
 
-    def consistency_proof(self, old_size: int) -> "ConsistencyProof":
+    def consistency_proof(self, old_size: int) -> ConsistencyProof:
         """
         Generate a consistency proof that tree[old_size] is a prefix of tree[self.size].
 
@@ -336,54 +335,73 @@ def _recompute_root_from_inclusion(
     """
     Recompute the Merkle root from an RFC 9162 §2.1.3 inclusion proof.
 
-    Mirrors the recursive split used by _inclusion_path: at each level we
-    know which subtree contains the leaf (left if index < k, right otherwise),
-    so we know whether the path sibling goes on the right or left.
+    Uses a recursive approach that mirrors _inclusion_path exactly.
+    The path is innermost-first (leaf to root), so path[-1] is the sibling
+    at the outermost split and must be processed last.
     """
-    node = leaf_hash
-    n = tree_size
-    idx = index
-    for sibling in path:
+    def _recurse(node: bytes, idx: int, n: int, path_items: list[bytes]) -> bytes:
+        if n == 1:
+            return node
         # Largest power of two strictly less than n
         k = 1
         while k < n:
             k <<= 1
         k >>= 1
+        # path_items[-1] is the sibling at THIS (outermost) level;
+        # path_items[:-1] are the deeper siblings for the recursive subproblem.
+        sibling = path_items[-1]
+        rest = path_items[:-1]
         if idx < k:
-            # Leaf is in left subtree; sibling is right subtree root
-            node = merkle_node(node, sibling)
-            n = k
+            # Leaf is in left subtree; combine left result with right sibling
+            sub = _recurse(node, idx, k, rest)
+            return merkle_node(sub, sibling)
         else:
             # Leaf is in right subtree; sibling is left subtree root
-            node = merkle_node(sibling, node)
-            idx -= k
-            n = n - k
-    return node
+            sub = _recurse(node, idx - k, n - k, rest)
+            return merkle_node(sibling, sub)
+
+    return _recurse(leaf_hash, index, tree_size, path)
 
 
 def _consistency_path(
     leaf_hashes: list[bytes], old_size: int, new_size: int
 ) -> list[bytes]:
     """
-    RFC 9162 §2.1.4 — compute consistency proof path (PROOF(m, n)).
-    """
-    if old_size == new_size:
-        return []
-    k = 1
-    while k < new_size:
-        k <<= 1
-    k >>= 1  # largest power of 2 strictly less than new_size
+    RFC 9162 §2.1.4 — compute consistency proof path PROOF(m, D[n]).
 
-    if old_size <= k:
-        sub = _consistency_path(leaf_hashes[:k], old_size, k)
-        right_root = _compute_root(leaf_hashes[k:new_size])
-        return sub + [right_root]
+    Implemented as SUBPROOF(m, D[n], b=True) per RFC 9162 §2.1.4:
+      SUBPROOF(m, D[n], b):
+        if m == n and b:     return {}
+        if m == n and !b:    return {MTH(D[n])}
+        k = largest_pow2_lt(n)
+        if m <= k:  return SUBPROOF(m, D[0:k], b) + {MTH(D[k:n])}
+        else:       return SUBPROOF(m-k, D[k:n], false) + {MTH(D[0:k])}
+
+    The initial b=True call means the old_root is implicitly known to the
+    verifier when old_size is a power of two (no extra leaf needed).
+    For non-power-of-two old_size, the recursion terminates with b=False
+    and includes the deepest subtree hash, which the RFC verifier uses as
+    the starting fr=sr node.
+    """
+    return _subproof(old_size, leaf_hashes[:new_size], True)
+
+
+def _subproof(m: int, leaf_hashes: list[bytes], b: bool) -> list[bytes]:
+    """RFC 9162 §2.1.4 SUBPROOF helper."""
+    n = len(leaf_hashes)
+    if m == n:
+        if b:
+            return []
+        return [_compute_root(leaf_hashes)]
+    # Largest power of two strictly less than n
+    k = 1
+    while k < n:
+        k <<= 1
+    k >>= 1
+    if m <= k:
+        return _subproof(m, leaf_hashes[:k], b) + [_compute_root(leaf_hashes[k:])]
     else:
-        sub = _consistency_path(
-            leaf_hashes[k:new_size], old_size - k, new_size - k
-        )
-        left_root = _compute_root(leaf_hashes[:k])
-        return [left_root] + sub
+        return _subproof(m - k, leaf_hashes[k:], False) + [_compute_root(leaf_hashes[:k])]
 
 
 def _verify_consistency(

@@ -3,12 +3,8 @@ Zero-egress regression test for /v1/scrub endpoint.
 Proves no external TCP connections are made during scrubbing.
 """
 import socket
-import pytest
+
 from fastapi.testclient import TestClient
-
-
-import socket
-import threading
 
 
 def test_scrub_makes_zero_external_network_calls(tmp_path, monkeypatch):
@@ -19,9 +15,6 @@ def test_scrub_makes_zero_external_network_calls(tmp_path, monkeypatch):
     Patches socket.socket to intercept any real TCP connection attempt
     and fail the test immediately if one is made.
     """
-    import os, json
-    import pytest
-    from fastapi.testclient import TestClient
     from hermes.api import app
 
     monkeypatch.setenv("HERMES_DB_PATH", str(tmp_path / "chain.db"))
@@ -36,7 +29,6 @@ def test_scrub_makes_zero_external_network_calls(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_VANTA_RESOURCE_ID", "fake-resource-id")
 
     connection_attempts = []
-    original_connect = socket.socket.connect
 
     def intercept_connect(self, address):
         connection_attempts.append(address)

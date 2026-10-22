@@ -32,21 +32,16 @@ separately from the operational and checkpoint passphrases.
 from __future__ import annotations
 
 import json
-import secrets
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 
 from hermes.receipts.v2.key_manifest import (
     KeyManifestDocument,
     ManifestEntry,
 )
 from hermes.receipts.v2.key_store import KeyStore
-from hermes.receipts.v2.signer import derive_key_id, spki_sha256
-from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
-
-from cryptography.hazmat.primitives import serialization
 
 
 @dataclass
@@ -59,7 +54,7 @@ class CeremonyPaths:
     transcript: Path
 
     @classmethod
-    def under(cls, base_dir: str | Path, deployment_id: str) -> "CeremonyPaths":
+    def under(cls, base_dir: str | Path, deployment_id: str) -> CeremonyPaths:
         base = Path(base_dir) / deployment_id
         base.mkdir(parents=True, exist_ok=True)
         return cls(
@@ -134,7 +129,7 @@ def run_ceremony(
     def _record(step: str, detail: dict | None = None) -> None:
         entry = {
             "step": step,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         if detail:
             entry.update(detail)
@@ -169,7 +164,7 @@ def run_ceremony(
     # Build manifest entries from the three signers' public manifests
     # ------------------------------------------------------------------
     _record("building_key_manifest")
-    issued_at = datetime.now(timezone.utc).isoformat()
+    issued_at = datetime.now(UTC).isoformat()
     root_signer = root_store.load_signer(root_passphrase)
     op_signer = op_store.load_signer(operational_passphrase)
     ck_signer = ck_store.load_signer(checkpoint_passphrase)
@@ -178,7 +173,7 @@ def run_ceremony(
         m = signer.public_key_manifest()
         return ManifestEntry(
             key_id=m["key_id"],
-            tier=tier,
+            tier=tier,  # type: ignore[arg-type]
             algorithm=m["algorithm"],
             public_key_pem=m["public_key_pem"],
             public_key_spki_sha256=m["public_key_spki_sha256"],
@@ -264,7 +259,7 @@ def rotate_operational_key(
     transcript: list[dict] = []
 
     def _record(step: str, detail: dict | None = None) -> None:
-        entry = {"step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
+        entry = {"step": step, "timestamp": datetime.now(UTC).isoformat()}
         if detail:
             entry.update(detail)
         transcript.append(entry)
@@ -284,7 +279,7 @@ def rotate_operational_key(
     _record("old_operational_key_verified", {"key_id": old_op_store.key_id})
 
     # Mark old operational key as rotated in manifest
-    rotated_at = datetime.now(timezone.utc).isoformat()
+    rotated_at = datetime.now(UTC).isoformat()
     for entry in doc.entries:
         if entry.key_id == old_op_store.key_id and entry.tier == "operational":
             entry.status = "rotated"
@@ -318,7 +313,7 @@ def rotate_operational_key(
         valid_until=new_manifest_entry["valid_until"],
         status="active",
     ))
-    doc.issued_at = datetime.now(timezone.utc).isoformat()
+    doc.issued_at = datetime.now(UTC).isoformat()
 
     # Re-sign manifest with root key
     root_store = KeyStore.open(paths.root_store, root_passphrase)

@@ -4,19 +4,19 @@ tests/v2/test_checkpoint.py — Signed checkpoint and anchoring tests.
 
 import pytest
 
+from hermes.receipts.v2.anchoring import (
+    SCITTReceipt,
+    TimestampToken,
+    WORMRecord,
+    WORMStore,
+    register_with_scitt,
+    timestamp_checkpoint,
+)
 from hermes.receipts.v2.builder import ReceiptV2Builder
 from hermes.receipts.v2.checkpoint import (
     CheckpointEngine,
     CheckpointRecord,
     verify_checkpoint,
-)
-from hermes.receipts.v2.anchoring import (
-    WORMStore,
-    WORMRecord,
-    TimestampToken,
-    SCITTReceipt,
-    timestamp_checkpoint,
-    register_with_scitt,
 )
 from hermes.receipts.v2.software_signer import SoftwareSignerEd25519
 

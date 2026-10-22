@@ -7,7 +7,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Protocol
 
 from gateway.evidence_export.event import EvidenceEvent
 
@@ -29,8 +29,8 @@ class ExportResult:
     exporter: str
     success: bool
     attempts: int = 1
-    error: Optional[str] = None
-    reason: Optional[str] = None
+    error: str | None = None
+    reason: str | None = None
 
 
 class EvidenceExporter(Protocol):
@@ -47,8 +47,8 @@ def _post_json(
     headers: dict[str, str],
     *,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
-    idempotency_key: Optional[str] = None,
-) -> tuple[bool, int, Optional[str]]:
+    idempotency_key: str | None = None,
+) -> tuple[bool, int, str | None]:
     """POST JSON with bounded retries on 5xx and transient network errors."""
     data = json.dumps(payload, sort_keys=True).encode("utf-8")
     request_headers = {
@@ -58,7 +58,7 @@ def _post_json(
     if idempotency_key:
         request_headers["X-Idempotency-Key"] = idempotency_key
 
-    last_error: Optional[str] = None
+    last_error: str | None = None
     attempts = 0
 
     for attempt in range(MAX_RETRIES + 1):

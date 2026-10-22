@@ -40,7 +40,10 @@ from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from hermes.receipts.v2.software_signer import SoftwareSignerEd25519, SoftwareSignerES256
+from hermes.receipts.v2.software_signer import (
+    SoftwareSignerEd25519,
+    SoftwareSignerES256,
+)
 
 _FORMAT_VERSION = 1
 _PBKDF2_ITERATIONS = 600_000
@@ -87,7 +90,7 @@ class KeyStore:
         passphrase: bytes,
         algorithm: str = "EdDSA",
         iterations: int = _PBKDF2_ITERATIONS,
-    ) -> "KeyStore":
+    ) -> KeyStore:
         """
         Generate a new signing key and save it encrypted to `path`.
 
@@ -115,7 +118,7 @@ class KeyStore:
         if algorithm == "EdDSA":
             private_key = ed25519.Ed25519PrivateKey.generate()
         elif algorithm == "ES256":
-            private_key = ec.generate_private_key(ec.SECP256R1())
+            private_key = ec.generate_private_key(ec.SECP256R1())  # type: ignore[assignment]
         else:
             raise ValueError(f"Unsupported algorithm {algorithm!r}. Use 'EdDSA' or 'ES256'.")
 
@@ -155,7 +158,7 @@ class KeyStore:
         return store
 
     @classmethod
-    def open(cls, path: str | Path, passphrase: bytes) -> "KeyStore":
+    def open(cls, path: str | Path, passphrase: bytes) -> KeyStore:
         """
         Load an existing encrypted key store from `path`.
 
@@ -202,7 +205,7 @@ class KeyStore:
 
         # Eagerly verify passphrase — better to fail fast here than on first sign
         store._decrypt(passphrase)  # raises on wrong passphrase
-        store._passphrase = passphrase  # cache for load_signer()
+        store._passphrase = passphrase  # type: ignore[attr-defined]  # cache for load_signer()
         return store
 
     # ------------------------------------------------------------------

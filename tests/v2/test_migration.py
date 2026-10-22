@@ -3,6 +3,7 @@ tests/v2/test_migration.py — V1 → V2 bridge record tests.
 """
 
 import hashlib
+
 import pytest
 
 from hermes.attestation import AttestationChain

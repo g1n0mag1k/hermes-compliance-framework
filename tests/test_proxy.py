@@ -9,8 +9,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from hermes.proxy import ProxyRelay
 from hermes.attestation import ATTESTATION_CHAIN
+from hermes.proxy import ProxyRelay
 
 
 class _CaptureHandler(BaseHTTPRequestHandler):

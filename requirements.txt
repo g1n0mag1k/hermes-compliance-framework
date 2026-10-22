@@ -21,6 +21,6 @@ cbor2==6.1.5
 # pycose uses it as a legacy fallback; Hermes signing uses cryptography directly
 ecdsa==0.19.2
 # Security: pin vulnerable transitives
-anyio>=4.14.2
-requests>=2.33.0
+anyio>=4.15.1
+requests>=2.34.2
 urllib3>=2.8.0

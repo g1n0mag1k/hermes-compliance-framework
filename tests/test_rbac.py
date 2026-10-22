@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from hermes.api import DrataConfigState, app, get_drata_config_state
+from hermes.api import DrataConfigState, app
+from hermes.drata_state import get_drata_config_state
 from hermes.workspaces import create_workspace
 
 
@@ -49,8 +50,8 @@ def test_msp_admin_can_access_config_endpoint(client):
         "/api/v1/sentry/config",
         headers={"X-API-Key": api_key},
     )
-    assert response.status_code == 200
-    assert response.json() == {"status": "updated"}
+    assert response.status_code == 501
+    assert response.json()["detail"] == "sentry.config.not_implemented"
 
 
 def test_client_readonly_blocked_from_config_endpoint(client):
@@ -418,7 +419,7 @@ def test_drata_status_outbox_counts_match_outbox_state(client, drata_env):
     assert body["last_error"] == "HTTP 503"
     exported_at = datetime.fromisoformat(body["last_exported_at"])
     assert exported_at.tzinfo is not None
-    assert abs(datetime.now(timezone.utc) - exported_at) < timedelta(minutes=5)
+    assert abs(datetime.now(UTC) - exported_at) < timedelta(minutes=5)
 
 
 def test_drata_status_outbox_counts_scoped_to_caller_workspace(client, drata_env):
@@ -456,7 +457,7 @@ def test_drata_status_last_error_cleared_after_successful_retry(client, drata_en
     _enqueue_and_flush("evt-retry-ok", ws_id, (False, 3, "HTTP 503"))
     assert _get_status(client, api_key)["last_error"] == "HTTP 503"
 
-    later = datetime.now(timezone.utc) + timedelta(days=1)
+    later = datetime.now(UTC) + timedelta(days=1)
     with patch("gateway.evidence_export.exporters._post_json", return_value=(True, 1, None)):
         flush_outbox(ws_id, now=later)
 

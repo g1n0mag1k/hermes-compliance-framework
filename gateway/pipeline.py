@@ -2,14 +2,10 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 import httpx
-
-from hermes.classifier import DetectorFailureError
-from hermes.receipts.v2.builder import ReceiptV2
-from hermes.workspaces import Workspace
 
 from gateway.credentials import inject_provider_credentials, strip_client_auth_headers
 from gateway.evidence import issue_gateway_receipt
@@ -21,8 +17,11 @@ from gateway.inspector import (
     is_binary_content_type,
 )
 from gateway.policy import EnforcementDecision, PolicyEngine
-from gateway.providers import PROVIDER_REGISTRY, resolve_provider, validate_path
+from gateway.providers import resolve_provider, validate_path
 from gateway.response_headers import filter_response_headers
+from hermes.classifier import DetectorFailureError
+from hermes.receipts.v2.builder import ReceiptV2
+from hermes.workspaces import Workspace
 
 
 @dataclass
@@ -40,13 +39,13 @@ class GatewayRequest:
 @dataclass
 class GatewayResponse:
     decision: EnforcementDecision
-    sanitized_body: Optional[bytes]
-    upstream_response: Optional[httpx.Response]
+    sanitized_body: bytes | None
+    upstream_response: httpx.Response | None
     receipt: ReceiptV2
     transaction_id: str
     gateway_request_id: str
     detector_error: bool = False
-    upstream_failure: Optional[UpstreamTransportFailure] = None
+    upstream_failure: UpstreamTransportFailure | None = None
     receipt_persistence_failed: bool = False
 
 
@@ -54,7 +53,7 @@ class GatewayPipeline:
     def __init__(
         self,
         timeout: float = 30.0,
-        client_factory: Optional[Callable[[], httpx.Client]] = None,
+        client_factory: Callable[[], httpx.Client] | None = None,
     ) -> None:
         self._timeout = timeout
         self._client_factory = client_factory or (lambda: httpx.Client(timeout=timeout))
@@ -278,7 +277,7 @@ class GatewayPipeline:
                 detectors_executed,
             )
 
-        parsed_body: Optional[object] = None
+        parsed_body: object | None = None
         parse_error = False
 
         # 3. Parse JSON body — if parse fails apply on_parse_error immediately

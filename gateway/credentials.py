@@ -2,7 +2,6 @@ import os
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Optional
 
 from gateway.providers import Provider
 
@@ -39,7 +38,7 @@ def inject_provider_credentials(headers: dict[str, str], provider: Provider) -> 
 class CredentialManager:
     """Store and retrieve per-tenant PSA configuration in SQLite."""
 
-    def __init__(self, db_path: Optional[str] = None) -> None:
+    def __init__(self, db_path: str | None = None) -> None:
         self._db_path = db_path or DEFAULT_PSA_DB_PATH
         self._lock = threading.Lock()
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)

@@ -19,13 +19,13 @@ export default function SecurityPage() {
             <div>
               <h2 className="font-display text-h3 text-ink mb-4">Encryption</h2>
               <p>
-                All attestation receipts are signed with Ed25519 keys. The vault uses AES-256-GCM encryption. TLS 1.2+ in transit.
+                Attestation receipts are signed with HMAC-SHA256 (shared signing key in your environment). The vault uses AES-256-GCM encryption. TLS 1.2+ in transit where applicable.
               </p>
             </div>
             <div>
               <h2 className="font-display text-h3 text-ink mb-4">Signing Key Integrity</h2>
               <p>
-                Each deployment generates its own Ed25519 signing key pair. Keys are non-exportable from the deployment environment by design. Receipt signatures are verifiable without trusting our infrastructure.
+                You configure HERMES_SIGNING_KEY per deployment. Verifiers need that same secret to confirm a receipt was not altered — we do not hold your signing key. Ed25519 / public-key verification is on the roadmap, not shipping on main today.
               </p>
             </div>
             <div>

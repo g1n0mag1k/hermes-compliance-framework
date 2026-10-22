@@ -2,7 +2,6 @@
 
 import re
 from pathlib import Path
-from typing import Union
 
 import pandas as pd
 
@@ -48,7 +47,7 @@ def _normalize_column_name(name: str) -> str:
 
 
 class HealthSherpaIngester:
-    def __init__(self, path: Union[str, Path]) -> None:
+    def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
 
     def load(self) -> pd.DataFrame:
