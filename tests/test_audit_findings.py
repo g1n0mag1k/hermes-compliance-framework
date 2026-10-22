@@ -38,7 +38,6 @@ def test_single_leaf_inclusion_proof_has_empty_path():
     assert proof.verify()
 
 
-@_bug("_recompute_root_from_inclusion applies top-down splits to a bottom-up path")
 def test_inclusion_proof_verifies_every_leaf_of_three_leaf_tree():
     from hermes.receipts.v2.merkle_tree import MerkleTree
 
