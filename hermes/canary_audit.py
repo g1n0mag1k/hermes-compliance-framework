@@ -35,9 +35,10 @@ import os
 import re
 import secrets
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, date, timedelta
-from typing import Any, Callable
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants

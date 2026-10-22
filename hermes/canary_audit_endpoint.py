@@ -275,7 +275,7 @@ class CanaryAuditReportResponse(BaseModel):
     report_signature: str
 
     @classmethod
-    def from_audit_report(cls, report: AuditReport) -> "CanaryAuditReportResponse":
+    def from_audit_report(cls, report: AuditReport) -> CanaryAuditReportResponse:
         return cls(**asdict(report))
 
 
@@ -359,16 +359,19 @@ def _chain_to_attestation(
         except (ImportError, Exception):
             chain = ATTESTATION_CHAIN
 
+        flags_triggered = {
+            f"HIPAA_CANARY_{c.upper()}": 1
+            for c in report_dict.get("payload_phi_categories", [])
+        }
+        flags_redacted = {
+            f"HIPAA_CANARY_{c.upper()}": 1
+            for c in report_dict.get("categories_passed", [])
+        }
+
         receipt = chain.issue(
             transaction_id=report_dict["transaction_id"],
-            flags_triggered={
-                f"HIPAA_CANARY_{c.upper()}": 1
-                for c in report_dict.get("payload_phi_categories", [])
-            },
-            flags_redacted={
-                f"HIPAA_CANARY_{c.upper()}": 1
-                for c in report_dict.get("categories_passed", [])
-            },
+            flags_triggered=flags_triggered,
+            flags_redacted=flags_redacted,
             char_count_in=report_dict["payload_char_count_in"],
             char_count_out=report_dict["payload_char_count_out"],
         )
@@ -448,7 +451,7 @@ async def canary_audit_endpoint(
             source_label=body.source_label,
         )
     except Exception as exc:
-        log.exception("canary_audit engine failure txn=%s: %s", txn_id, exc)
+        log.exception("canary_audit engine failure txn=%s", txn_id)
         raise HTTPException(
             status_code=500,
             detail=f"Canary audit engine error: {exc}",

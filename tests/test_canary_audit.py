@@ -183,7 +183,7 @@ class TestHealthSherpaDetection:
     def test_phi_column_names_detected(self):
         from hermes.canary_audit import _detect_healthsherpa_phi_columns
         cols = _detect_healthsherpa_phi_columns(HS_CSV_HEADER)
-        col_set = set(c.lower() for c in cols)
+        col_set = {c.lower() for c in cols}
         assert "ssn" in col_set or "first_name" in col_set or "dob" in col_set
 
     def test_no_false_positives_on_clean_header(self):
@@ -235,15 +235,17 @@ def client():
         if mod_name not in sys.modules:
             sys.modules[mod_name] = types.ModuleType(mod_name)
 
-    with patch("hermes.canary_audit_endpoint._chain_to_attestation", return_value="deadbeef"):
-        with patch("hermes.canary_audit_endpoint._dispatch_webhook"):
-            with patch("hermes.canary_audit_endpoint._export_to_drata_cct"):
-                try:
-                    from hermes.api import app
-                except Exception as exc:
-                    pytest.skip(f"hermes.api import failed (missing deps): {exc}")
-                with TestClient(app, raise_server_exceptions=True) as c:
-                    yield c
+    with (
+        patch("hermes.canary_audit_endpoint._chain_to_attestation", return_value="deadbeef"),
+        patch("hermes.canary_audit_endpoint._dispatch_webhook"),
+        patch("hermes.canary_audit_endpoint._export_to_drata_cct"),
+    ):
+        try:
+            from hermes.api import app
+        except Exception as exc:
+            pytest.skip(f"hermes.api import failed (missing deps): {exc}")
+        with TestClient(app, raise_server_exceptions=True) as c:
+            yield c
 
 
 API_KEY = os.environ["HERMES_API_KEY"]
