@@ -35,7 +35,7 @@ import os
 import re
 import secrets
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, date, timedelta
 from typing import Any, Callable
 
@@ -305,7 +305,7 @@ def _build_canary_vectors() -> list[CanaryVector]:
     photo_b64 = base64.b64encode(secrets.token_bytes(48)).decode("ascii")
     photo_needle = f"data:image/jpeg;base64,{photo_b64}"
 
-    raw: list[tuple[str, str, str, str]] = [
+    raw: list[tuple[str, str, str]] = [
         ("names",           names_sample,                              names_needle),
         ("dates",           dates_sample,                              dates_needle),
         ("phone_numbers",   f"Callback at {phone} after discharge.",   phone),
@@ -513,7 +513,6 @@ def run_canary_audit(
     categories_failed: list[str] = []
 
     # Scrub the real payload once per category to detect real PHI
-    clean_payload = payload
     payload_phi_categories: list[str] = []
 
     for vec in vectors:

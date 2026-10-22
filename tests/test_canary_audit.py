@@ -25,13 +25,10 @@ Coverage targets
 from __future__ import annotations
 
 import base64
-import hashlib
-import hmac
-import json
 import os
 import uuid
 from dataclasses import asdict
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -151,7 +148,7 @@ class TestCanaryAuditEngine:
 
     def test_each_scrubber_catches_its_needle(self):
         """Per-category canary invariant: every scrubber must catch its own token."""
-        from hermes.canary_audit import _build_canary_vectors, _SCRUBBERS
+        from hermes.canary_audit import _build_canary_vectors
         vectors = _build_canary_vectors()
         for vec in vectors:
             test_text = f"prefix {vec.sample} suffix"
