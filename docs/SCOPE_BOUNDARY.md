@@ -169,7 +169,7 @@ detected.
 spaCy en_core_web_sm is trained predominantly on English news text with
 Western names. Names like "Nguyen Van An", "Mohammed Al-Rashid", or
 "Priya Krishnamurthy" have significantly lower recall than "John Smith".
-For MSPs serving diverse patient populations this is a real coverage gap.
+For deployments serving diverse patient populations this is a real coverage gap.
 The upgrade path is a multilingual NER model or scispaCy.
 
 ### 8. Single-threaded pipeline under concurrent load (Gap 16)

@@ -4,7 +4,7 @@
 
 Hermes Relay is a runtime AI gateway that inspects AI requests for PHI before they reach supported AI providers (OpenAI, Azure OpenAI, Anthropic), applies deterministic **redaction or blocking** policies, and generates cryptographically verifiable enforcement receipts.
 
-Built for MSPs serving HIPAA-covered entities.
+Built for HIPAA-covered entities, their business associates, and the MSPs that serve them.
 
 hermesrelay.dev
 
@@ -78,7 +78,7 @@ This record is what your OCR investigator reads.
 
 **Reversible (roadmap).** A token vault module exists (AES-256-GCM) for typed placeholders with key-controlled restoration. Integration with the scrub pipeline is in active development — current redactions use static placeholders (`[REDACTED_SSN]`, `[REDACTED_PAN]`, etc.).
 
-**Single-tenant today.** One deployment per customer environment. Multi-tenant RBAC and per-tenant audit isolation are on the roadmap.
+**Multi-tenant.** One deployment serves a parent organization and its child workspaces — an MSP and its clients, a health system and its facilities, a vendor and its customers — as isolated workspaces: each has its own API key, its own attestation chain signed with its own derived key, its own vault key, its own gateway policy and its own AI provider credentials (encrypted at rest). Role-based access (`org_admin`, `operator`, `viewer`) and a parent→child management boundary are enforced on every endpoint. Gateway V2 receipts still share one deployment signing key and Drata export is still global — see [docs/MULTI_TENANCY.md](docs/MULTI_TENANCY.md) for exactly what is and is not isolated.
 
 ---
 
@@ -206,4 +206,4 @@ hermesrelay.dev
 Built and maintained by Sui-Generis LLC  
 Rocky Top, Tennessee  
 
-This software is intended for deployment by qualified MSPs serving HIPAA-covered entities. A Business Associate Agreement is required prior to production deployment.
+This software is intended for deployment by HIPAA-covered entities, business associates, or qualified IT providers acting on their behalf. A Business Associate Agreement is required prior to production deployment.

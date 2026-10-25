@@ -6,7 +6,7 @@ Always read `CURSORRULES.md` before touching any code. It defines build order, h
 
 ## Project overview
 
-Hermes Relay is a local-first PHI enforcement gateway for MSPs serving HIPAA-covered entities. It provides deterministic PHI/PII detection, redaction, and cryptographically signed compliance evidence — without sending PHI to external infrastructure.
+Hermes Relay is a local-first PHI enforcement gateway for HIPAA-covered entities, their business associates, and the MSPs that serve them. It provides deterministic PHI/PII detection, redaction, and cryptographically signed compliance evidence — without sending PHI to external infrastructure.
 
 The repository contains two FastAPI services:
 
@@ -58,7 +58,7 @@ Import smoke check:
 .venv/bin/python -m pytest
 ```
 
-Target: **562+ tests passing, 0 failures**. The test floor must never decrease.
+Target: **836+ tests passing, 0 failures** (17 strict xfails document known audit findings). The test floor must never decrease.
 
 Coverage (optional):
 

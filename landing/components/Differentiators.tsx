@@ -41,7 +41,7 @@ const DIFFERENTIATORS: readonly Differentiator[] = [
   },
   {
     index: "03",
-    label: "Built for MSPs and SMB Healthcare",
+    label: "Built for SMB Healthcare and the Teams That Serve It",
     verdict: "The customers who need this most are the ones no competitor serves.",
     body:
       "Nightfall costs $20,000-$60,000 per year and requires enterprise procurement, a security team, and a multi-month sales cycle. The 10-person billing company in Knoxville, the regional clinic, the MSP managing 15 HIPAA-covered clients -- none of them will ever see a Nightfall contract. Hermes is priced, packaged, and deployed for exactly those customers. Self-hostable. Operational in a week. No enterprise contract, no security team required.",

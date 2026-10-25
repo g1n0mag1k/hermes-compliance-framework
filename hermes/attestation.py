@@ -19,6 +19,11 @@ from datetime import UTC, datetime
 from typing import ClassVar
 
 from hermes.classifier import COVERED_CFRS, NOT_COVERED_CFRS
+from hermes.tenant_keys import (
+    KEY_SCHEME_GLOBAL,
+    KEY_SCHEME_PER_WORKSPACE,
+    resolve_key_scheme,
+)
 
 REVIEW_DECISIONS = ("accepted", "overridden", "escalated")
 DEFAULT_DB_PATH = "hermes_chain.db"
@@ -141,14 +146,60 @@ class AttestationChain:
     ISSUER = "Hermes Relay v1.0.0 — hermesrelay.dev"
     COMPLIANCE_FRAMEWORKS: ClassVar[list[str]] = ["HIPAA", "PCI-DSS"]
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | None = None,
+        signing_key: bytes | None = None,
+    ) -> None:
+        """
+        signing_key: per-workspace HMAC key (see hermes.tenant_keys). When
+        omitted the deployment-wide SIGNING_KEY is used (legacy single-tenant).
+
+        The key scheme a chain DB was created with is recorded in its
+        chain_meta table, and the chain is always reopened with that scheme:
+          - A chain that already holds receipts signed with the global key
+            keeps using the global key even if a per-workspace key is passed,
+            so historical receipts keep verifying.
+          - A chain created with a per-workspace key refuses to open without
+            one, instead of silently failing verification later.
+        """
         self._chain: list[ChainItem] = []
         self._lock = threading.Lock()
         self._genesis_hash = hashlib.sha256(b"hermes-genesis-block").hexdigest()
         self._db_path = db_path or os.environ.get("HERMES_DB_PATH", DEFAULT_DB_PATH)
         self._conn = sqlite3.connect(self._db_path, check_same_thread=False)  # type: ignore[arg-type]
         self._init_db()
+        self._key_scheme = resolve_key_scheme(
+            self._conn, "chain_meta", "receipts", signing_key
+        )
+        if self._key_scheme == KEY_SCHEME_PER_WORKSPACE:
+            if signing_key is None:
+                self._conn.close()
+                raise ValueError(
+                    f"Chain at {self._db_path!r} was created with a per-workspace "
+                    "signing key. Open it via hermes.workspaces.get_chain_for_workspace()."
+                )
+            self._signing_key = signing_key
+        elif self._key_scheme == KEY_SCHEME_GLOBAL:
+            if signing_key is not None:
+                warnings.warn(
+                    f"Chain at {self._db_path!r} predates per-workspace signing keys; "
+                    "continuing with the deployment-wide HERMES_SIGNING_KEY so existing "
+                    "receipts remain verifiable.",
+                    stacklevel=2,
+                )
+            self._signing_key = SIGNING_KEY
+        else:
+            self._conn.close()
+            raise ValueError(
+                f"Unknown key_scheme {self._key_scheme!r} in {self._db_path!r}"
+            )
         self._load_from_db()
+
+    @property
+    def key_scheme(self) -> str:
+        """'global' (deployment-wide key) or 'per_workspace_v1'."""
+        return self._key_scheme
 
     def _init_db(self) -> None:
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -247,7 +298,7 @@ class AttestationChain:
         excluded from content before this is called."""
         canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
         return hmac.new(
-            SIGNING_KEY,
+            self._signing_key,
             canonical.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
@@ -542,7 +593,7 @@ class AttestationChain:
             }
             canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
             signature = hmac.new(
-                SIGNING_KEY,
+                self._signing_key,
                 canonical.encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()
@@ -569,7 +620,7 @@ class AttestationChain:
                        if k != "checkpoint_signature"}
             canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
             expected_sig = hmac.new(
-                SIGNING_KEY,
+                self._signing_key,
                 canonical.encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()

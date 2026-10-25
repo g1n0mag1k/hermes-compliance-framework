@@ -6,6 +6,30 @@ This project is pre-1.0 and under active solo development. Entries prioritize ac
 
 ## [Unreleased]
 
+### Added — Multi-tenancy
+- Per-workspace HMAC signing keys for V1 attestation chains and per-workspace vault keys, derived from `HERMES_SIGNING_KEY` / `HERMES_VAULT_KEY` (`hermes/tenant_keys.py`). Same value → different vault token per workspace.
+- Key-scheme record (`chain_meta` / `vault_meta`) so existing workspace chains and vaults keep their original key and historical receipts keep verifying; new ones use per-workspace keys.
+- Per-workspace gateway policy (`GET/PUT/DELETE /v1/workspaces/{id}/policy`), read by the gateway on every request — no restart. Fails closed (503) if the policy store is unreadable.
+- Per-workspace AI provider credentials, AES-256-GCM encrypted at rest (`GET/PUT/DELETE /v1/workspaces/{id}/provider-credentials/{provider}`), wired into the gateway pipeline with fallback to the deployment env keys. Azure endpoints restricted to Azure hosts.
+- `GET /v1/workspaces/{id}/chain-integrity` for a parent workspace to verify each child chain.
+- Optional `role` on `POST /v1/workspaces`.
+- Neutral role names `org_admin`, `operator`, `viewer`. The earlier names `msp_admin`, `msp_tech`, `client_readonly` remain accepted everywhere (API, canary router, dashboard) and stored roles are not rewritten. New workspaces default to `org_admin`.
+- `docs/MULTI_TENANCY.md`; 59 tests in `tests/test_multi_tenant.py`.
+
+### Changed — Multi-tenancy
+- Role checks on core endpoints: `/v1/scrub`, `/v1/review`, `/v1/trial-scan`, `/api/v1/evaluate` require `org_admin` or `operator`; listing workspaces and rotating keys require `org_admin`. `viewer` keeps status and history.
+- `require_role` now accepts the legacy `HERMES_API_KEY` (previously it rejected it with 401).
+- A client workspace cannot change its own policy or AI credentials; its parent workspace does.
+
+### Fixed — Multi-tenancy
+- Workspace IDs with a trailing newline were accepted (`re.match` + `$`); now `fullmatch`. Removed the corresponding strict xfail.
+- `POST /v1/workspaces` accepted a `parent_workspace_id` that did not exist, so whoever later registered that ID inherited access. Now rejected, as are grandchildren.
+- `default` workspace ID reserved for the legacy single-tenant key.
+- Pinned `preshed==3.0.12`: 3.0.14 crashes spaCy 3.8.16 model loading, which broke fresh installs and Docker builds.
+- `/v1/telemetry/canary-audit` returned 500 for every registered workspace key (it called `.get()` on a `Workspace` object and only recognised roles `admin`/`auditor`, which the workspace model never issues). It now accepts `org_admin`/`operator` (and legacy names) and rejects `viewer`.
+- Buyer-facing copy (README, landing page, API/CLI titles, package metadata, pitch one-pager, deployment and integration docs) no longer frames Hermes as MSP-only: it is described as built for HIPAA-covered entities, their business associates, and the MSPs that serve them.
+- `scripts/install_workspaces.py` now refuses to overwrite existing files (it restored an old snapshot of 8 core files and committed with `git add -A`).
+
 ### Known Limitations
 
 - **Vanta full-state push** (`dispatch_vanta_custom_resource` in `hermes/webhooks.py`):

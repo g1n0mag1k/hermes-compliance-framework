@@ -1,7 +1,10 @@
 import hashlib
 import json
 import os
+import sqlite3
+import threading
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Literal
 
 PolicyDecision = Literal["ALLOW", "REDACT", "BLOCK"]
@@ -92,10 +95,141 @@ class EnforcementDecision:
     all_detectors_clean: bool
 
 
+# ---------------------------------------------------------------------------
+# Persisted per-workspace policy assignments (multi-tenant)
+# ---------------------------------------------------------------------------
+# The API process writes assignments; the gateway process reads them on every
+# request, so a change made through the API takes effect on the next gateway
+# request with no restart and no cross-process cache to invalidate.
+#
+# Precedence in PolicyEngine: in-process override (set_workspace_policy, used by
+# tests/admin) > persisted assignment > deployment default (_active_policy).
+
+_policy_db_lock = threading.Lock()
+
+
+def _policy_db_path() -> str:
+    explicit = os.environ.get("HERMES_POLICY_DB")
+    if explicit:
+        return explicit
+    from hermes.workspaces import _data_dir
+
+    return str(_data_dir() / "workspace_policies.db")
+
+
+def _policy_conn() -> sqlite3.Connection:
+    from pathlib import Path
+
+    path = _policy_db_path()
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS workspace_policies (
+            workspace_id TEXT PRIMARY KEY,
+            policy_id    TEXT NOT NULL,
+            updated_at   TEXT NOT NULL
+        )
+        """
+    )
+    return conn
+
+
+def get_policy_by_id(policy_id: str) -> Policy:
+    policy = _POLICY_BY_ID.get(policy_id)
+    if policy is None:
+        raise ValueError(
+            f"Unknown policy_id {policy_id!r}. Supported: {sorted(_POLICY_BY_ID)}"
+        )
+    return policy
+
+
+def available_policy_ids() -> list[str]:
+    return sorted(_POLICY_BY_ID)
+
+
+def save_workspace_policy(workspace_id: str, policy_id: str) -> Policy:
+    """Persist a policy assignment for a workspace. Raises ValueError if unknown."""
+    policy = get_policy_by_id(policy_id)
+    with _policy_db_lock:
+        conn = _policy_conn()
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO workspace_policies (workspace_id, policy_id, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(workspace_id) DO UPDATE SET
+                        policy_id = excluded.policy_id,
+                        updated_at = excluded.updated_at
+                    """,
+                    (workspace_id, policy_id, datetime.now(UTC).isoformat()),
+                )
+        finally:
+            conn.close()
+    return policy
+
+
+def delete_workspace_policy(workspace_id: str) -> bool:
+    """Remove a persisted assignment (workspace reverts to the default)."""
+    with _policy_db_lock:
+        conn = _policy_conn()
+        try:
+            with conn:
+                cur = conn.execute(
+                    "DELETE FROM workspace_policies WHERE workspace_id = ?",
+                    (workspace_id,),
+                )
+        finally:
+            conn.close()
+    return cur.rowcount > 0
+
+
+def load_persisted_policy(workspace_id: str) -> Policy | None:
+    """
+    Return the persisted policy for a workspace, or None if none is assigned.
+
+    Fails closed: if the store cannot be read, or holds a policy_id this build
+    does not know, raises RuntimeError rather than silently applying a weaker
+    default policy. The gateway turns RuntimeError into a 503.
+    """
+    try:
+        with _policy_db_lock:
+            conn = _policy_conn()
+            try:
+                row = conn.execute(
+                    "SELECT policy_id FROM workspace_policies WHERE workspace_id = ?",
+                    (workspace_id,),
+                ).fetchone()
+            finally:
+                conn.close()
+    except sqlite3.Error as exc:
+        raise RuntimeError(f"Workspace policy store unavailable: {exc}") from exc
+    if row is None:
+        return None
+    policy = _POLICY_BY_ID.get(row[0])
+    if policy is None:
+        raise RuntimeError(
+            f"Workspace {workspace_id!r} is assigned unknown policy {row[0]!r}"
+        )
+    return policy
+
+
+def resolve_workspace_policy(workspace_id: str) -> tuple[Policy, str]:
+    """Return (policy, source) where source is 'override', 'workspace' or 'default'."""
+    override = _workspace_policies.get(workspace_id)
+    if override is not None:
+        return override, "override"
+    persisted = load_persisted_policy(workspace_id)
+    if persisted is not None:
+        return persisted, "workspace"
+    return _active_policy, "default"
+
+
 class PolicyEngine:
     def __init__(self, workspace_id: str) -> None:
         self._workspace_id = workspace_id
-        self._policy = _workspace_policies.get(workspace_id, _active_policy)
+        self._policy, self._policy_source = resolve_workspace_policy(workspace_id)
 
     def get_policy(self) -> Policy:
         return self._policy

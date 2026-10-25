@@ -244,7 +244,7 @@ def cmd_export_receipts(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="hermes-relay",
-        description="Hermes Relay — Local-first PHI detection and compliance evidence for MSPs",
+        description="Hermes Relay — Local-first PHI detection and compliance evidence for HIPAA-regulated organizations",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-hermes/demo.py — 90-second MSP demo script
+hermes/demo.py — 90-second demo script
 
 Shows:
 1. PHI detected and redacted

@@ -4,10 +4,11 @@ hermes/workspaces.py — Multi-tenant workspace model for Hermes Relay.
 A workspace is a fully isolated tenant: its own API key, its own
 attestation chain DB, its own vault DB, its own trial quota.
 
-The MSP use case:
-  - The MSP signs up → one workspace per MSP (their "management" workspace)
-  - They add clients → one workspace per HIPAA-covered client
-  - The MSP dashboard shows all their client workspaces in a table
+Parent / child model (one level deep):
+  - A parent organization gets a top-level workspace — e.g. an MSP, a health
+    system, a healthtech vendor, an insurance agency
+  - It adds child workspaces → one per client, facility or customer
+  - The dashboard shows the parent's child workspaces in a table
   - Each workspace has its own receipt chain, independent of every other
 
 Design decisions:
@@ -58,8 +59,32 @@ def _registry_db_path() -> str:
 # Workspace dataclass
 # ---------------------------------------------------------------------------
 
-VALID_ROLES = frozenset({"msp_admin", "msp_tech", "client_readonly"})
-DEFAULT_ROLE = "msp_admin"
+# Canonical role names. They are deliberately plain: a role name is not a
+# secret (it is returned by GET /v1/workspace and shown in the dashboard), and
+# a caller cannot claim a role — the server reads it from the registry row that
+# matches the caller's API key.
+#   org_admin — full control of its own workspace and the workspaces it manages
+#   operator  — run scans, reviews and canaries; read status and integrity
+#   viewer    — read status and scan history only
+CANONICAL_ROLES = ("org_admin", "operator", "viewer")
+
+# Earlier names, still accepted everywhere so existing registries, API clients
+# and dashboards keep working. They are never rewritten in stored data.
+LEGACY_ROLE_ALIASES = {
+    "msp_admin": "org_admin",
+    "msp_tech": "operator",
+    "client_readonly": "viewer",
+}
+
+VALID_ROLES = frozenset(CANONICAL_ROLES) | frozenset(LEGACY_ROLE_ALIASES)
+DEFAULT_ROLE = "org_admin"
+
+
+def canonical_role(role: str | None) -> str | None:
+    """Map a stored or requested role to its canonical name (None if unknown)."""
+    if role in CANONICAL_ROLES:
+        return role
+    return LEGACY_ROLE_ALIASES.get(role or "")
 
 
 @dataclass
@@ -70,8 +95,8 @@ class Workspace:
     api_key_hash: str              # SHA-256 of the raw API key — never store raw
     created_at: str
     plan: str                      # "trial" | "production" | "enterprise"
-    parent_workspace_id: str | None  # set when this workspace belongs to an MSP
-    role: str = DEFAULT_ROLE       # "msp_admin" | "msp_tech" | "client_readonly"
+    parent_workspace_id: str | None  # set when this is a child workspace
+    role: str = DEFAULT_ROLE       # see CANONICAL_ROLES / LEGACY_ROLE_ALIASES
 
     @property
     def chain_db_path(self) -> str:
@@ -96,7 +121,7 @@ def _row_to_workspace(row: tuple) -> Workspace:
         created_at=row[4],
         plan=row[5],
         parent_workspace_id=row[6],
-        role=row[7] if len(row) > 7 and row[7] else DEFAULT_ROLE,
+        role=row[7] if len(row) > 7 and row[7] else "msp_admin",
     )
 
 
@@ -300,7 +325,7 @@ def get_workspace(workspace_id: str) -> Workspace | None:
 def list_workspaces(parent_workspace_id: str | None = None) -> list[Workspace]:
     """
     List all workspaces, optionally filtered to children of a parent.
-    MSPs use this to list their client workspaces.
+    Parent workspaces use this to list their child workspaces.
     """
     with _registry_lock:
         conn = _get_registry_conn()
@@ -431,13 +456,19 @@ def get_chain_for_workspace(workspace: Workspace):
     Return the AttestationChain for a workspace, creating it if needed.
     Instances are cached per workspace_id for the lifetime of the process.
     """
-    from hermes.attestation import AttestationChain
+    from hermes.attestation import DEFAULT_DB_PATH, AttestationChain
+    from hermes.tenant_keys import workspace_signing_key
     with _cache_lock:
         if workspace.workspace_id not in _chain_cache:
+            legacy_db = os.environ.get("HERMES_DB_PATH", DEFAULT_DB_PATH)
+            _assert_not_shared_path(
+                workspace, workspace.chain_db_path, legacy_db, "HERMES_DB_PATH"
+            )
             # Ensure directory exists
             Path(workspace.chain_db_path).parent.mkdir(parents=True, exist_ok=True)
             _chain_cache[workspace.workspace_id] = AttestationChain(
-                db_path=workspace.chain_db_path
+                db_path=workspace.chain_db_path,
+                signing_key=workspace_signing_key(workspace.workspace_id),
             )
         return _chain_cache[workspace.workspace_id]
 
@@ -447,14 +478,32 @@ def get_vault_for_workspace(workspace: Workspace):
     Return the TokenVault for a workspace, creating it if needed.
     Instances are cached per workspace_id for the lifetime of the process.
     """
+    from hermes.tenant_keys import workspace_vault_key
     from hermes.vault import TokenVault
     with _cache_lock:
         if workspace.workspace_id not in _vault_cache:
+            legacy_vault = os.environ.get("HERMES_VAULT_DB_PATH", "hermes_vault.db")
+            _assert_not_shared_path(
+                workspace, workspace.vault_db_path, legacy_vault, "HERMES_VAULT_DB_PATH"
+            )
             Path(workspace.vault_db_path).parent.mkdir(parents=True, exist_ok=True)
             _vault_cache[workspace.workspace_id] = TokenVault(
-                db_path=workspace.vault_db_path
+                db_path=workspace.vault_db_path,
+                vault_key=workspace_vault_key(workspace.workspace_id),
             )
         return _vault_cache[workspace.workspace_id]
+
+
+def _assert_not_shared_path(
+    workspace: Workspace, ws_path: str, legacy_path: str, env_name: str
+) -> None:
+    """Refuse to open a workspace DB that resolves to the legacy single-tenant DB."""
+    if os.path.abspath(ws_path) == os.path.abspath(legacy_path):
+        raise RuntimeError(
+            f"Workspace {workspace.workspace_id!r} database {ws_path!r} resolves to "
+            f"the legacy single-tenant database ({env_name}). This would mix tenant "
+            "data. Point HERMES_DATA_DIR or the legacy path somewhere else."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -464,9 +513,19 @@ def get_vault_for_workspace(workspace: Workspace):
 _WORKSPACE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]$')
 
 
+RESERVED_WORKSPACE_IDS = frozenset({"default"})
+
+
 def _validate_workspace_id(workspace_id: str) -> None:
-    if not _WORKSPACE_ID_RE.match(workspace_id):
+    # fullmatch, not match: with match(), '$' also matches before a trailing
+    # newline, so "acme\n" would pass and create a directory with a newline in it.
+    if not isinstance(workspace_id, str) or not _WORKSPACE_ID_RE.fullmatch(workspace_id):
         raise ValueError(
             f"workspace_id must be 3–64 lowercase alphanumeric chars and hyphens, "
             f"starting and ending with alphanumeric. Got: {workspace_id!r}"
+        )
+    if workspace_id in RESERVED_WORKSPACE_IDS:
+        raise ValueError(
+            f"workspace_id {workspace_id!r} is reserved for the legacy "
+            "single-tenant deployment. Choose a different workspace_id."
         )

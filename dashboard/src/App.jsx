@@ -242,7 +242,7 @@ export default function App() {
                 workspaces={workspaces}
                 onScanComplete={load}
               />
-              <RequireRole allowedRoles={['msp_admin', 'msp_tech']}>
+              <RequireRole allowedRoles={['org_admin', 'operator']}>
                 <div className="flex flex-wrap items-center gap-3 mb-6">
                   <button
                     type="button"

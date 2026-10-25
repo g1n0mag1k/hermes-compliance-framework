@@ -48,5 +48,8 @@ Customer-facing quality control for Hermes Relay as of 2026-09-18.
 
 ## Multi-tenancy
 
-- Workspace isolation exists for gateway receipts and API keys.
-- Documentation previously mixed "single-tenant deployment" with workspace isolation — both are true: one deployment per customer environment, multiple workspaces per deployment.
+- Full detail: [MULTI_TENANCY.md](MULTI_TENANCY.md).
+- Isolated per workspace: API key, V1 attestation chain and its HMAC key, vault DB and its key, canary DB, trial quota, gateway policy, AI provider credentials (encrypted), evidence-outbox rows, gateway receipts (rows in the workspace chain DB).
+- Not isolated: gateway V2 receipts share one deployment-wide Ed25519 signing key (each signed payload carries `workspace_id`); Drata CCT config is global; PSA credentials are per-tenant but unencrypted.
+- Workspace chains/vaults that already held data before per-workspace keys keep using the deployment-wide key so historical receipts still verify (`key_scheme: global`).
+- Storage is SQLite on a single host; multi-host shared storage is not supported.

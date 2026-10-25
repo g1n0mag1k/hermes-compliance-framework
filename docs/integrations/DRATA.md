@@ -16,8 +16,8 @@ Companion documents:
 
 ## 1. What Hermes Relay is
 
-Hermes Relay is a local-first PHI enforcement gateway for MSPs serving
-HIPAA-covered entities. It runs inside the customer's environment as two
+Hermes Relay is a local-first PHI enforcement gateway for HIPAA-covered
+entities, their business associates, and the MSPs that serve them. It runs inside the customer's environment as two
 FastAPI services: the Hermes Relay API (`hermes/`, port 8787), which scrubs
 PHI from text submitted to `/v1/scrub`, and the AI Enforcement Gateway
 (`gateway/`, port 8788), a fail-closed proxy that inspects outbound requests
@@ -220,7 +220,7 @@ Where the result is surfaced (none of these contact Drata):
 
 | Surface | Behavior |
 |---|---|
-| `GET /v1/integrations/drata/status` (Hermes API, `msp_admin` / `msp_tech`) | `configured`, `connection_state`, `live_validated: false`, `transport: "CCT"`, `partner_connection: false`, and the caller workspace's outbox counts, `last_exported_at`, and sanitized `last_error` |
+| `GET /v1/integrations/drata/status` (Hermes API, `org_admin` / `operator`) | `configured`, `connection_state`, `live_validated: false`, `transport: "CCT"`, `partner_connection: false`, and the caller workspace's outbox counts, `last_exported_at`, and sanitized `last_error` |
 | `POST /api/v1/drata/config` | HTTP 501 `not_implemented`, with `state`, `reason`, and `live_validated` from `test_connection()`; stores nothing |
 | Dashboard "Check Drata Status" button | Calls the status endpoint |
 
@@ -421,7 +421,7 @@ Also true of the current code, not yet listed in `CURRENT_LIMITATIONS.md`:
   rows; no auto-requeue.
 - **Single global Drata configuration.** No per-workspace Drata URL or key;
   all workspaces on a deployment export to the same Drata connection and
-  resource. MSP parent workspaces are not aggregated with client workspaces
+  resource. Parent workspaces are not aggregated with their child workspaces
   in the status endpoint.
 - **Missing API key is not blocked at send time.** With a valid URL and no
   `HERMES_DRATA_API_KEY`, events are POSTed without an `Authorization`
@@ -451,7 +451,7 @@ requirements are known:
 
 - Live validation against a real Drata tenant (prerequisite for anything
   below).
-- Per-workspace Drata configuration, so each MSP client workspace can export
+- Per-workspace Drata configuration, so each child workspace can export
   to its own Drata tenant.
 - Whatever authentication model Drata specifies for partner integrations.
   Hermes does not assume OAuth or any other scheme until Drata confirms it.

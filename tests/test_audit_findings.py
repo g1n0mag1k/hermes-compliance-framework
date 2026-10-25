@@ -219,7 +219,6 @@ def test_proxy_deep_scrub_covers_all_string_fields():
 # hermes/workspaces.py
 # ---------------------------------------------------------------------------
 
-@_bug("_WORKSPACE_ID_RE uses re.match with '$', which accepts a trailing newline")
 def test_workspace_id_with_trailing_newline_is_rejected():
     from hermes.workspaces import _validate_workspace_id
 

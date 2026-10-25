@@ -96,9 +96,9 @@ export function Pricing() {
           No security team required.
         </h2>
         <p className="font-body text-body text-muted mt-6 max-w-[55ch]">
-          Hermes is built for the MSP managing 15 HIPAA-covered clients and the
-          10-person billing company — not the Fortune 500 with a six-month
-          procurement cycle.
+          Hermes is built for the regional clinic, the 10-person billing company
+          and the MSP managing 15 HIPAA-covered clients — not the Fortune 500
+          with a six-month procurement cycle.
         </p>
 
         <div className="mt-16 grid gap-6 md:grid-cols-2 max-w-[800px]">

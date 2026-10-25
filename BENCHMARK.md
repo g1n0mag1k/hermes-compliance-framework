@@ -47,5 +47,5 @@ Hermes v1.0.0 actively detects: **SSN** (regex), **payment card numbers** (regex
 > (proxy mode), and a token vault for reversible redaction (roadmap).
 
 ---
-_Hermes Relay — Zero-Trust Compliance Infrastructure for MSPs_
+_Hermes Relay — Zero-Trust Compliance Infrastructure for HIPAA-Regulated Organizations_
 _hermesrelay.dev | andrew@hermesrelay.dev_

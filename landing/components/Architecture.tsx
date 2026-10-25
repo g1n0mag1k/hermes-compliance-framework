@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------------
  * Architecture — technical deployment diagram in prose + spec table.
- * Answers the question every MSP's technical contact will ask:
+ * Answers the question every buyer's technical contact will ask:
  * "What actually runs, where, and what does it touch?"
  * ------------------------------------------------------------------------- */
 

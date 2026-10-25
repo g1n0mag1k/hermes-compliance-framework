@@ -5,20 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hermes-relay"
 version = "1.0.0"
-description = "Local-first PHI detection and compliance evidence for MSPs serving HIPAA-covered entities"
+description = "Local-first PHI detection and compliance evidence for HIPAA-covered entities, business associates and MSPs"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "Proprietary"}
 authors = [
     {name = "Andrew Rogers", email = "andrew@hermesrelay.dev"}
 ]
-keywords = ["HIPAA", "PHI", "compliance", "MSP", "healthcare", "DLP"]
+keywords = ["HIPAA", "PHI", "compliance", "healthcare", "business-associate", "MSP", "DLP", "multi-tenant"]
 classifiers = [
     "Programming Language :: Python :: 3.12",
     "Operating System :: POSIX :: Linux",
 ]
 dependencies = [
     "spacy==3.8.16",
+    # preshed 3.0.14 breaks spaCy 3.8.16 model loading (OverflowError in
+    # Tokenizer._flush_specials). Pin until spaCy ships a compatible release.
+    "preshed==3.0.12",
     "presidio-analyzer==2.2.364",
     "cryptography==50.0.2",
     "pydantic==2.14.1",

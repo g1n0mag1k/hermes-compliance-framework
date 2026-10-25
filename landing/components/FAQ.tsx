@@ -41,9 +41,9 @@ const FAQS: readonly FAQItem[] = [
       "Because Hermes runs entirely inside your environment with zero external calls during scrubbing, an incident involving Hermes itself has a narrower blast radius than a cloud-classifier failure would -- there is no third-party breach surface to notify about. That said, a formal, documented incident response plan matched to your organization's specific deployment is part of the pilot onboarding conversation, not something we hand you generically off a template.",
   },
   {
-    question: "Is Hermes a replacement for our compliance officer or MSP's judgment?",
+    question: "Is Hermes a replacement for our compliance officer's or IT provider's judgment?",
     answer:
-      "No. Hermes produces evidence — an HMAC-SHA256–signed record of what PHI was detected, under which regulation, and what happened to it on tested paths (verifiable with the same signing key). It does not replace the judgment calls a compliance officer or MSP makes about risk tolerance, client communication, or regulatory strategy. Think of it as the evidence layer underneath those decisions, not a substitute for making them.",
+      "No. Hermes produces evidence — an HMAC-SHA256–signed record of what PHI was detected, under which regulation, and what happened to it on tested paths (verifiable with the same signing key). It does not replace the judgment calls a compliance officer or IT provider makes about risk tolerance, client communication, or regulatory strategy. Think of it as the evidence layer underneath those decisions, not a substitute for making them.",
   },
   {
     question: "What happens to data if we stop using Hermes?",

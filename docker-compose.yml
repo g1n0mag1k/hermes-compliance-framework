@@ -1,4 +1,4 @@
-# Hermes Relay — canonical MSP Docker deployment.
+# Hermes Relay — canonical Docker deployment.
 #
 #   tenant application ──HTTP──▶ hermes-gateway :8788 ──HTTPS──▶ provider
 #                                     │
@@ -6,7 +6,7 @@
 #                     hermes_data volume (workspace registry,
 #                     per-workspace chain.db with V2 receipts)
 #                                     ▲
-#   MSP operator (host only) ──▶ hermes-api :8787 (workspace admin, /v1/scrub)
+#   operator (host only)     ──▶ hermes-api :8787 (workspace admin, /v1/scrub)
 #
 # Full procedure: docs/DEPLOYMENT.md. Configuration: .env.hermes
 # (copy .env.hermes.example). TLS is NOT provided here — terminate TLS in a

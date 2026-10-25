@@ -100,9 +100,22 @@ _verify_api_key = _get_api_key_dep()
 
 
 def _require_auditor_role(workspace: dict = Depends(_verify_api_key)) -> dict:
-    """Require 'admin' or 'auditor' role. Reject read-only callers."""
-    role = workspace.get("role", "")
-    if role not in ("admin", "auditor"):
+    """Require an admin/operator role. Reject read-only callers.
+
+    Accepts both caller shapes produced by _verify_api_key: the legacy
+    HERMES_API_KEY dict (role 'admin') and a registered Workspace object
+    (role org_admin / operator, or their legacy names msp_admin / msp_tech).
+    Previously a Workspace object crashed here (it has no .get), so registered
+    workspace keys always received a 500.
+    """
+    from hermes.workspaces import canonical_role
+
+    raw_role = (
+        workspace.get("role", "") if isinstance(workspace, dict)
+        else getattr(workspace, "role", "")
+    ) or ""
+    role = canonical_role(raw_role) or raw_role
+    if role not in ("admin", "auditor", "org_admin", "operator"):
         raise HTTPException(
             status_code=403,
             detail=(
@@ -438,7 +451,8 @@ async def canary_audit_endpoint(
     log.info(
         "canary_audit start txn=%s workspace=%s source=%s bytes=%d",
         txn_id,
-        workspace.get("id"),
+        workspace.get("id") if isinstance(workspace, dict)
+        else getattr(workspace, "workspace_id", None),
         body.source_label,
         len(payload_text.encode("utf-8")),
     )
