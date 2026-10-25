@@ -6,10 +6,17 @@ This project is pre-1.0 and under active solo development. Entries prioritize ac
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-25
+
 ### Fixed
 - Corrected a double-counting bug in the audit trail: Presidio's `EMAIL_ADDRESS` and `URL` recognizers both fire on email addresses (the URL recognizer matches the domain portion, e.g. `email.com` inside `patient@email.com`). Redaction was already correct (single `[REDACTED_EMAIL]`), but `flags_triggered` incorrectly counted both `HIPAA_PHI_EMAIL` and `HIPAA_PHI_URL` for one identifier. Fixed via `_merge_flag_sets()` — nested `HIPAA_PHI_URL` spans fully contained within a `HIPAA_PHI_EMAIL` span are suppressed from the count. Added regression tests: `test_email_domain_url_not_double_counted`, `test_standalone_url_still_detected`.
+- Frontend toolchain fix (Vite upgrade).
 
 ### Added
+- Multi-tenant workspace isolation.
+- Canary audit endpoint with HMAC-signed reports.
+- V2 COSE/Ed25519 receipt support.
+- Vanta and Sprinto webhook dispatchers.
 - Integrated Microsoft Presidio (`presidio-analyzer`, `presidio-anonymizer`, MIT licensed) as an additional detection layer alongside existing regex and spaCy NER logic.
 - New detection categories via Presidio: phone numbers, email addresses, URLs, IP addresses, US bank account numbers, and geographic locations/addresses.
 - `CFR_CITATION_MAP` — maps each detection flag to its specific 45 CFR §164.514(b)(2)(i) Safe Harbor identifier letter. Citations are now attached to every entry in the audit log's `flags_triggered` output, not just implied by category name.
@@ -21,6 +28,7 @@ This project is pre-1.0 and under active solo development. Entries prioritize ac
 - **Coverage: 3 of 18 → 8 of 18 HIPAA Safe Harbor identifier categories** now actively detected (names, dates, SSN, phone, email, URL, IP, address). Remaining 10 categories (fax, MRN, health plan beneficiary numbers, account numbers, certificate/license numbers, vehicle identifiers, device identifiers, biometric identifiers, full-face photos) remain on the roadmap and are documented as such.
 - `spacy` pinned to `3.8.16`, `presidio-analyzer` pinned to `2.2.364`.
 - `hermes/proxy.py` and `tests/test_api.py` updated to consume the new `FlagEntry` schema.
+- Pylint/DeepSource clean pass on all modified files.
 
 ### Corrected — Landing Page & Documentation Accuracy Pass
 Prior to this pass, several claims across the landing page, `README.md`, `BENCHMARK.md`, and `INVESTOR_TECH_BRIEF.md` implied more complete Safe Harbor coverage and audit trail completeness than the codebase actually delivered. All of the following were corrected to state actual coverage rather than aspirational coverage:
