@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import os
+from importlib.metadata import version as _pkg_version
 import sqlite3
 import threading
 import warnings
@@ -137,8 +138,14 @@ _COMPLIANCE_SIGN_EXCLUDE = _MUTABLE_FIELDS | {"receipt_hash", "schema_version"}
 _REVIEW_SIGN_EXCLUDE = _MUTABLE_FIELDS | {"review_receipt_hash"}
 
 
-class AttestationChain:
+try:
+    ISSUER = f"Hermes Relay v{_pkg_version('hermes-relay')} — hermesrelay.dev"
+except Exception:
     ISSUER = "Hermes Relay v1.0.0 — hermesrelay.dev"
+
+
+class AttestationChain:
+    ISSUER = ISSUER
     COMPLIANCE_FRAMEWORKS: ClassVar[list[str]] = ["HIPAA", "PCI-DSS"]
 
     def __init__(self, db_path: str | None = None) -> None:

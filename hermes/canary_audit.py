@@ -32,6 +32,7 @@ import hashlib
 import hmac
 import json
 import os
+from importlib.metadata import version as _pkg_version
 import re
 import secrets
 import uuid
@@ -44,7 +45,10 @@ from typing import Any, Callable
 # ─────────────────────────────────────────────────────────────────────────────
 
 AUDIT_REPORT_SCHEMA_VERSION = "1.0"
-ISSUER = "Hermes Relay v1.0.0 — hermesrelay.dev"
+try:
+    ISSUER = f"Hermes Relay v{_pkg_version('hermes-relay')} — hermesrelay.dev"
+except Exception:
+    ISSUER = "Hermes Relay v1.0.0 — hermesrelay.dev"
 RULESET = "hipaa-safe-harbor-16"
 
 # 45 CFR §164.514(b)(2)(i) Safe Harbor identifier categories (all 16 + HealthSherpa extras)
