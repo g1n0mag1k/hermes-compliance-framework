@@ -318,7 +318,7 @@ def sync_telemetry_receipt_to_drata_cct(
 
     req = urllib.request.Request(cct_url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:  # nosec B310 — URL constructed from operator-supplied config, never user input
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning(

@@ -94,7 +94,7 @@ def dispatch_webhook(receipt: ComplianceReceipt, event_type: str = "scrub") -> b
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:  # nosec B310 — URL constructed from operator-supplied config, never user input
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning(
@@ -173,7 +173,7 @@ def dispatch_drata_cct(receipt: ComplianceReceipt) -> bool:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:  # nosec B310 — URL constructed from operator-supplied config, never user input
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning(
@@ -201,13 +201,6 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         HERMES_VANTA_CLIENT_SECRET
         HERMES_VANTA_RESOURCE_ID
     """
-    import json
-    import logging
-    import os
-    import urllib.error
-    import urllib.request
-    logger = logging.getLogger("hermes.webhooks")
-
     client_id = os.environ.get("HERMES_VANTA_CLIENT_ID")
     client_secret = os.environ.get("HERMES_VANTA_CLIENT_SECRET")
     resource_id = os.environ.get("HERMES_VANTA_RESOURCE_ID")
@@ -227,7 +220,7 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         method="POST",
     )
     try:
-        with urllib.request.urlopen(token_req, timeout=3.0) as resp:
+        with urllib.request.urlopen(token_req, timeout=3.0) as resp:  # nosec B310 — hardcoded https://api.vanta.com endpoint
             token_data = json.loads(resp.read().decode("utf-8"))
             access_token = token_data.get("access_token")
             if not access_token:
@@ -237,10 +230,20 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         logger.warning("Vanta token fetch failed: %s", exc)
         return False
 
-    # IMPORTANT: Vanta PUT is full-state synchronization.
-    # Any uniqueId previously pushed but omitted from this call
-    # will be marked as no longer existing in Vanta.
-    # Always pass the complete set of current receipts, not just the latest.
+    # ── KNOWN LIMITATION: single-receipt push ─────────────────────────────────
+    # Vanta's PUT endpoint is full-state: it replaces the entire resource set
+    # for this resourceId. Any uniqueId previously pushed but absent from this
+    # call will be marked "no longer exists" in Vanta.
+    #
+    # This function currently pushes only the single receipt passed in, so every
+    # call silently deletes all prior receipts from Vanta's view. This is safe
+    # during development (no live Vanta customers yet) but MUST be fixed before
+    # production use: the function should accept `receipts: list` and query the
+    # full attestation chain (see hermes/attestation.py) before every PUT.
+    #
+    # Tracked as a known limitation; will be fixed when a Vanta customer is
+    # onboarded. Do not remove this comment without implementing the fix.
+    # ─────────────────────────────────────────────────────────────────────────
     resource_req = urllib.request.Request(
         "https://api.vanta.com/v1/resources/custom_resource",
         data=json.dumps({
@@ -267,7 +270,7 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         method="PUT",
     )
     try:
-        with urllib.request.urlopen(resource_req, timeout=3.0) as resp:
+        with urllib.request.urlopen(resource_req, timeout=3.0) as resp:  # nosec B310 — hardcoded https://api.vanta.com endpoint
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning("Vanta resource push returned non-2xx: %s", resp.status)
@@ -294,13 +297,6 @@ def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> 
         HERMES_SPRINTO_GRAPHQL_URL  (default: https://app.sprinto.com/dev-api/graphql)
         HERMES_SPRINTO_MUTATION     (confirm with Sprinto before setting)
     """
-    import json
-    import logging
-    import os
-    import urllib.error
-    import urllib.request
-    logger = logging.getLogger("hermes.webhooks")
-
     api_key = os.environ.get("HERMES_SPRINTO_API_KEY")
     if not api_key:
         return False
@@ -335,7 +331,7 @@ def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> 
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
+        with urllib.request.urlopen(req, timeout=3.0) as resp:  # nosec B310 — URL constructed from operator-supplied config, never user input
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning("Sprinto evidence push returned non-2xx: %s", resp.status)

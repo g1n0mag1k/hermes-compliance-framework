@@ -35,9 +35,10 @@ import os
 import re
 import secrets
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, date, timedelta
-from typing import Any, Callable
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -484,7 +485,7 @@ def _verify_report_signature(report_dict: dict[str, Any]) -> bool:
 def run_canary_audit(
     payload: str,
     transaction_id: str | None = None,
-    source_label: str = "api",
+    source_label: str = "api",  # noqa: ARG001  # kept for API compatibility
 ) -> AuditReport:
     """
     Run the full 16-category HIPAA Safe Harbor canary audit against *payload*.

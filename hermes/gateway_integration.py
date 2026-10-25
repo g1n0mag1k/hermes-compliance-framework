@@ -63,6 +63,7 @@ def drata_sanitize_error(message: str) -> str:
 def dispatch_psa_ticket(workspace_id: str, failed_category: str, evidence_url: str) -> None:
     """Open a PSA ticket for a drift event (background-task safe)."""
     import asyncio
+
     from gateway.evidence_export.dispatch import dispatch_psa_ticket as _dispatch
 
     asyncio.run(_dispatch(workspace_id, failed_category, evidence_url))

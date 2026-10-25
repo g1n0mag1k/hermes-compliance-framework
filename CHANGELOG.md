@@ -30,6 +30,16 @@ This project is pre-1.0 and under active solo development. Entries prioritize ac
 - Buyer-facing copy (README, landing page, API/CLI titles, package metadata, pitch one-pager, deployment and integration docs) no longer frames Hermes as MSP-only: it is described as built for HIPAA-covered entities, their business associates, and the MSPs that serve them.
 - `scripts/install_workspaces.py` now refuses to overwrite existing files (it restored an old snapshot of 8 core files and committed with `git add -A`).
 
+### Known Limitations
+
+- **Vanta full-state push** (`dispatch_vanta_custom_resource` in `hermes/webhooks.py`):
+  Vanta's PUT endpoint is full-state — it replaces the entire resource set for a
+  `resourceId`. The current implementation pushes only the single receipt passed in,
+  so every call silently removes all prior receipts from Vanta's view. This is safe
+  while no live Vanta customers exist but must be fixed before production use. The
+  fix requires the function to accept `receipts: list` and query the full attestation
+  chain before every PUT. Will be addressed when a Vanta integration is activated.
+
 ### Fixed
 - Corrected a double-counting bug in the audit trail: Presidio's `EMAIL_ADDRESS` and `URL` recognizers both fire on email addresses (the URL recognizer matches the domain portion, e.g. `email.com` inside `patient@email.com`). Redaction was already correct (single `[REDACTED_EMAIL]`), but `flags_triggered` incorrectly counted both `HIPAA_PHI_EMAIL` and `HIPAA_PHI_URL` for one identifier. Fixed via `_merge_flag_sets()` — nested `HIPAA_PHI_URL` spans fully contained within a `HIPAA_PHI_EMAIL` span are suppressed from the count. Added regression tests: `test_email_domain_url_not_double_counted`, `test_standalone_url_still_detected`.
 

@@ -307,13 +307,10 @@ def _claim_due_rows(
     try:
         # A PROCESSING row whose lease expired belongs to a flush that crashed
         # mid-send; its attempt was already counted at claim time.
+        # workspace_clause is a static literal ("AND workspace_id = ?" or ""), never user input
+        expire_sql = f"UPDATE evidence_outbox SET status = ?, last_error = ? WHERE status = ? AND next_attempt_at <= ? AND attempt_count >= ? {workspace_clause}"  # nosec B608
         conn.execute(
-            f"""
-            UPDATE evidence_outbox
-            SET status = ?, last_error = ?
-            WHERE status = ? AND next_attempt_at <= ? AND attempt_count >= ?
-            {workspace_clause}
-            """,
+            expire_sql,
             (
                 OutboxStatus.DEAD_LETTER.value,
                 "max_attempts_exceeded",
@@ -323,15 +320,9 @@ def _claim_due_rows(
                 *workspace_args,
             ),
         )
+        claim_sql = f"SELECT event_id, evidence_payload, attempt_count FROM evidence_outbox WHERE status IN (?, ?) AND next_attempt_at <= ? AND attempt_count < ? {workspace_clause} ORDER BY created_at ASC LIMIT ?"  # nosec B608
         rows = conn.execute(
-            f"""
-            SELECT event_id, evidence_payload, attempt_count
-            FROM evidence_outbox
-            WHERE status IN (?, ?) AND next_attempt_at <= ? AND attempt_count < ?
-            {workspace_clause}
-            ORDER BY created_at ASC
-            LIMIT ?
-            """,
+            claim_sql,
             (
                 OutboxStatus.PENDING.value,
                 OutboxStatus.PROCESSING.value,
