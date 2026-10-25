@@ -132,7 +132,13 @@ def test_receipt_persistence_failure_returns_503(client, workspace, monkeypatch)
     def _raise_persist(*args, **kwargs):
         raise OSError("disk full")
 
-    monkeypatch.setattr(gateway_evidence, "_persist_gateway_receipt", _raise_persist)
+    monkeypatch.setattr(
+        gateway_evidence,
+        "_persist_gateway_receipt_in_transaction",
+        _raise_persist,
+    )
+
+    before_head = gateway_evidence.get_v2_chain_head(ws.workspace_id)
 
     response = client.post(
         "/gateway/openai/v1/chat/completions",
@@ -144,6 +150,7 @@ def test_receipt_persistence_failure_returns_503(client, workspace, monkeypatch)
     assert body["error"]["code"] == "evidence_persistence_error"
     assert body["receipt_digest"]
     assert body["forwarded"] is True
+    assert gateway_evidence.get_v2_chain_head(ws.workspace_id) == before_head
 
 
 def test_production_refuses_ephemeral_signer(monkeypatch):

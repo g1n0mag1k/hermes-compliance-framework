@@ -29,10 +29,12 @@ CREATE TABLE IF NOT EXISTS gateway_receipts (
     payload TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_gateway_receipts_workspace_sequence
+    ON gateway_receipts (workspace_id, gateway_sequence);
 """
 
 _v2_chain_heads: dict[str, str | None] = {}
-_chain_lock = threading.Lock()
+_chain_lock = threading.RLock()
 
 
 def _is_production_env() -> bool:
@@ -155,35 +157,81 @@ def _row_to_receipt_dict(row: tuple) -> dict[str, Any]:
     }
 
 
-def _persist_gateway_receipt(
+def _chain_tail_in_transaction(
+    conn: sqlite3.Connection,
+    workspace_id: str,
+) -> tuple[str | None, int | None]:
+    """Last persisted digest and sequence for workspace (caller holds BEGIN IMMEDIATE)."""
+    row = conn.execute(
+        """
+        SELECT receipt_digest, gateway_sequence FROM gateway_receipts
+        WHERE workspace_id = ?
+        ORDER BY gateway_sequence DESC
+        LIMIT 1
+        """,
+        (workspace_id,),
+    ).fetchone()
+    if row is None:
+        return None, None
+    return row[0], int(row[1])
+
+
+def _persist_gateway_receipt_in_transaction(
+    conn: sqlite3.Connection,
     workspace: Workspace,
     receipt: ReceiptV2,
     gateway_sequence: int,
     transaction_id: str,
 ) -> None:
     created_at = datetime.now(UTC).isoformat()
+    conn.execute(
+        """
+        INSERT INTO gateway_receipts (
+            workspace_id, receipt_digest, prev_receipt_digest,
+            gateway_sequence, transaction_id, cose_sign1_hex,
+            payload, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            workspace.workspace_id,
+            receipt.receipt_digest,
+            receipt.prev_receipt_digest,
+            gateway_sequence,
+            transaction_id,
+            receipt.cose_sign1_bytes.hex(),
+            json.dumps(receipt.payload, sort_keys=True),
+            created_at,
+        ),
+    )
+
+
+def _persist_gateway_receipt(
+    workspace: Workspace,
+    receipt: ReceiptV2,
+    gateway_sequence: int,
+    transaction_id: str,
+) -> None:
+    """Persist one receipt; sequence must already match the ledger allocation."""
     conn = _get_chain_db_conn(workspace)
     try:
-        with conn:
-            conn.execute(
-                """
-                INSERT INTO gateway_receipts (
-                    workspace_id, receipt_digest, prev_receipt_digest,
-                    gateway_sequence, transaction_id, cose_sign1_hex,
-                    payload, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    workspace.workspace_id,
-                    receipt.receipt_digest,
-                    receipt.prev_receipt_digest,
-                    gateway_sequence,
-                    transaction_id,
-                    receipt.cose_sign1_bytes.hex(),
-                    json.dumps(receipt.payload, sort_keys=True),
-                    created_at,
-                ),
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            _persist_gateway_receipt_in_transaction(
+                conn,
+                workspace,
+                receipt,
+                gateway_sequence,
+                transaction_id,
             )
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+    except (IOError, OSError, sqlite3.DatabaseError) as exc:
+        raise ReceiptPersistenceError(
+            receipt,
+            f"Gateway receipt persistence failed: {exc}",
+        ) from exc
     except Exception as exc:
         raise ReceiptPersistenceError(
             receipt,
@@ -211,56 +259,82 @@ def issue_gateway_receipt(
     get_chain_for_workspace(workspace)
 
     with _chain_lock:
-        prev_digest = _v2_chain_heads.get(workspace.workspace_id)
-    if prev_digest is None:
-        prev_digest = _get_last_persisted_digest(workspace)
+        conn = _get_chain_db_conn(workspace)
+        receipt: ReceiptV2 | None = None
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                db_prev, last_sequence = _chain_tail_in_transaction(
+                    conn, workspace.workspace_id
+                )
+                cached_prev = _v2_chain_heads.get(workspace.workspace_id)
+                if cached_prev is not None:
+                    prev_digest = cached_prev
+                else:
+                    prev_digest = db_prev
 
-    gateway_sequence = _next_gateway_sequence(workspace)
+                if last_sequence is None:
+                    gateway_sequence = 0
+                else:
+                    gateway_sequence = last_sequence + 1
 
-    payload = {
-        "transaction_id": transaction_id,
-        "gateway_decision": _decision_label(decision.decision),
-        "decision": decision.decision,
-        "forwarded": forwarded,
-        "upstream_provider": provider_id,
-        "endpoint_path": endpoint_path,
-        "phi_categories_detected": sorted(flags_triggered.keys()),
-        "phi_categories_redacted": sorted(flags_redacted.keys()),
-        "content_types_inspected": decision.content_types_inspected,
-        "content_types_not_inspected": decision.content_types_not_inspected,
-        "detector_states": detectors_executed,
-        "policy_version": decision.policy_version,
-        "policy_digest": decision.policy_digest,
-        "policy_id": decision.policy_id,
-        "gateway_version": __version__,
-        "workspace_id": workspace.workspace_id,
-        "all_detectors_clean": decision.all_detectors_clean,
-        "gateway_sequence": gateway_sequence,
-    }
-    if upstream_status is not None:
-        payload["upstream_status"] = upstream_status
-    if failure_class is not None:
-        payload["failure_class"] = failure_class
+                payload = {
+                    "transaction_id": transaction_id,
+                    "gateway_decision": _decision_label(decision.decision),
+                    "decision": decision.decision,
+                    "forwarded": forwarded,
+                    "upstream_provider": provider_id,
+                    "endpoint_path": endpoint_path,
+                    "phi_categories_detected": sorted(flags_triggered.keys()),
+                    "phi_categories_redacted": sorted(flags_redacted.keys()),
+                    "content_types_inspected": decision.content_types_inspected,
+                    "content_types_not_inspected": decision.content_types_not_inspected,
+                    "detector_states": detectors_executed,
+                    "policy_version": decision.policy_version,
+                    "policy_digest": decision.policy_digest,
+                    "policy_id": decision.policy_id,
+                    "gateway_version": __version__,
+                    "workspace_id": workspace.workspace_id,
+                    "all_detectors_clean": decision.all_detectors_clean,
+                    "gateway_sequence": gateway_sequence,
+                }
+                if upstream_status is not None:
+                    payload["upstream_status"] = upstream_status
+                if failure_class is not None:
+                    payload["failure_class"] = failure_class
 
-    builder = ReceiptV2Builder(_get_gateway_signer())
-    receipt = builder.build(payload, prev_receipt_digest=prev_digest)
+                builder = ReceiptV2Builder(_get_gateway_signer())
+                receipt = builder.build(payload, prev_receipt_digest=prev_digest)
 
-    try:
-        _persist_gateway_receipt(
-            workspace,
-            receipt,
-            gateway_sequence,
-            transaction_id,
-        )
-    except ReceiptPersistenceError:
-        raise
-    except Exception as exc:
-        raise ReceiptPersistenceError(
-            receipt,
-            f"Gateway receipt persistence failed: {exc}",
-        ) from exc
+                _persist_gateway_receipt_in_transaction(
+                    conn,
+                    workspace,
+                    receipt,
+                    gateway_sequence,
+                    transaction_id,
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+        except (IOError, OSError, sqlite3.DatabaseError, sqlite3.IntegrityError) as exc:
+            if receipt is None:
+                raise
+            raise ReceiptPersistenceError(
+                receipt,
+                f"Gateway receipt persistence failed: {exc}",
+            ) from exc
+        except Exception as exc:
+            if receipt is not None:
+                raise ReceiptPersistenceError(
+                    receipt,
+                    f"Gateway receipt persistence failed: {exc}",
+                ) from exc
+            raise
+        finally:
+            conn.close()
 
-    with _chain_lock:
+        assert receipt is not None
         _v2_chain_heads[workspace.workspace_id] = receipt.receipt_digest
 
     try_export_evidence(receipt, workspace.workspace_id)
