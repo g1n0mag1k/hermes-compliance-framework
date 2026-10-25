@@ -4,16 +4,14 @@
 // Environment variables required (set in Netlify UI → Site → Environment variables):
 //   STRIPE_SECRET_KEY          — sk_live_... (Stripe secret key)
 //   STRIPE_WEBHOOK_SECRET      — whsec_...  (from Stripe Dashboard → Webhooks → signing secret)
-//   KEYGEN_ACCOUNT_SLUG        — rogersandy90
+//   KEYGEN_ACCOUNT_SLUG        — (set in Netlify env)
 //   KEYGEN_PRODUCT_ID          — 933323e7-e2f9-4ccb-9f13-b574cc38bf4e
 //   KEYGEN_POLICY_ID           — b05916b2-3a72-4608-aeec-4246dd58e05d
 //   KEYGEN_ADMIN_TOKEN         — your Keygen admin/product token (never the license key itself)
 //   SENDGRID_API_KEY           — SG.... (or swap for any transactional email provider)
 //   FROM_EMAIL                 — noreply@hermesrelay.dev
 //
-// Stripe product/price wired to this webhook:
-//   Product ID:  prod_VN8iUDJpWsHQLh
-//   Price ID:    price_1UMOR8BeC3pIIEz60aIADISI  ($29/month Per Repo)
+// Stripe product/price IDs are set in Netlify env vars (STRIPE_PRODUCT_ID, STRIPE_PRICE_ID).
 //
 // Events handled:
 //   checkout.session.completed   → create Keygen license, email key to customer
