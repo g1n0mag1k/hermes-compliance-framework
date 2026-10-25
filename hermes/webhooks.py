@@ -237,10 +237,20 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         logger.warning("Vanta token fetch failed: %s", exc)
         return False
 
-    # IMPORTANT: Vanta PUT is full-state synchronization.
-    # Any uniqueId previously pushed but omitted from this call
-    # will be marked as no longer existing in Vanta.
-    # Always pass the complete set of current receipts, not just the latest.
+    # ── KNOWN LIMITATION: single-receipt push ─────────────────────────────────
+    # Vanta's PUT endpoint is full-state: it replaces the entire resource set
+    # for this resourceId. Any uniqueId previously pushed but absent from this
+    # call will be marked "no longer exists" in Vanta.
+    #
+    # This function currently pushes only the single receipt passed in, so every
+    # call silently deletes all prior receipts from Vanta's view. This is safe
+    # during development (no live Vanta customers yet) but MUST be fixed before
+    # production use: the function should accept `receipts: list` and query the
+    # full attestation chain (see hermes/attestation.py) before every PUT.
+    #
+    # Tracked as a known limitation; will be fixed when a Vanta customer is
+    # onboarded. Do not remove this comment without implementing the fix.
+    # ─────────────────────────────────────────────────────────────────────────
     resource_req = urllib.request.Request(
         "https://api.vanta.com/v1/resources/custom_resource",
         data=json.dumps({
