@@ -485,7 +485,7 @@ def _verify_report_signature(report_dict: dict[str, Any]) -> bool:
 def run_canary_audit(
     payload: str,
     transaction_id: str | None = None,
-    _source_label: str = "api",
+    source_label: str = "api",  # noqa: ARG001  # kept for API compatibility
 ) -> AuditReport:
     """
     Run the full 16-category HIPAA Safe Harbor canary audit against *payload*.
