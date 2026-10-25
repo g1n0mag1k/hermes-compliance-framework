@@ -146,7 +146,8 @@ class TestCanaryAuditEngine:
         report = run_canary_audit(CLEAN_PAYLOAD)
         assert report.transaction_id.startswith("txn_canary_")
 
-    def test_each_scrubber_catches_its_needle(self):
+    @staticmethod
+    def test_each_scrubber_catches_its_needle():
         """Per-category canary invariant: every scrubber must catch its own token."""
         from hermes.canary_audit import _build_canary_vectors
         vectors = _build_canary_vectors()
@@ -180,13 +181,15 @@ class TestCanaryAuditEngine:
 
 class TestHealthSherpaDetection:
 
-    def test_phi_column_names_detected(self):
+    @staticmethod
+    def test_phi_column_names_detected():
         from hermes.canary_audit import _detect_healthsherpa_phi_columns
         cols = _detect_healthsherpa_phi_columns(HS_CSV_HEADER)
         col_set = {c.lower() for c in cols}
         assert "ssn" in col_set or "first_name" in col_set or "dob" in col_set
 
-    def test_no_false_positives_on_clean_header(self):
+    @staticmethod
+    def test_no_false_positives_on_clean_header():
         from hermes.canary_audit import _detect_healthsherpa_phi_columns
         clean_header = "metric_name,cpu_usage,mem_mb,latency_ms,request_count"
         cols = _detect_healthsherpa_phi_columns(clean_header)

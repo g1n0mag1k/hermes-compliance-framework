@@ -356,7 +356,7 @@ def _chain_to_attestation(
         try:
             from hermes.api import _get_chain  # type: ignore[import]
             chain = _get_chain(workspace)
-        except (ImportError, Exception):
+        except Exception:
             chain = ATTESTATION_CHAIN
 
         flags_triggered = {
