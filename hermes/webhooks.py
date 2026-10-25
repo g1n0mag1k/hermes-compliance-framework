@@ -94,7 +94,7 @@ def dispatch_webhook(receipt: ComplianceReceipt, event_type: str = "scrub") -> b
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:  # nosec B310 — URL constructed from operator-supplied config, never user input
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning(
@@ -173,7 +173,7 @@ def dispatch_drata_cct(receipt: ComplianceReceipt) -> bool:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_SECONDS) as resp:  # nosec B310 — URL constructed from operator-supplied config, never user input
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning(
@@ -227,7 +227,7 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         method="POST",
     )
     try:
-        with urllib.request.urlopen(token_req, timeout=3.0) as resp:
+        with urllib.request.urlopen(token_req, timeout=3.0) as resp:  # nosec B310 — hardcoded https://api.vanta.com endpoint
             token_data = json.loads(resp.read().decode("utf-8"))
             access_token = token_data.get("access_token")
             if not access_token:
@@ -267,7 +267,7 @@ def dispatch_vanta_custom_resource(receipt, chain_integrity: bool = False) -> bo
         method="PUT",
     )
     try:
-        with urllib.request.urlopen(resource_req, timeout=3.0) as resp:
+        with urllib.request.urlopen(resource_req, timeout=3.0) as resp:  # nosec B310 — hardcoded https://api.vanta.com endpoint
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning("Vanta resource push returned non-2xx: %s", resp.status)
@@ -335,7 +335,7 @@ def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> 
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
+        with urllib.request.urlopen(req, timeout=3.0) as resp:  # nosec B310 — URL constructed from operator-supplied config, never user input
             success = 200 <= resp.status < 300
             if not success:
                 logger.warning("Sprinto evidence push returned non-2xx: %s", resp.status)

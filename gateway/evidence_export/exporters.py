@@ -65,7 +65,7 @@ def _post_json(
         attempts = attempt + 1
         req = urllib.request.Request(url, data=data, headers=request_headers, method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310 — URL is the operator-configured webhook endpoint, never user input
                 if 200 <= resp.status < 300:
                     return True, attempts, None
                 last_error = f"HTTP {resp.status}"
