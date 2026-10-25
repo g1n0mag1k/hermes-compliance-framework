@@ -33,6 +33,7 @@ from hermes.drata_state import (
     DrataConfigState,
     get_drata_config_state,  # noqa: F401 — re-exported for identity test
 )
+from hermes.payload_guard_middleware import PayloadGuardMiddleware
 from hermes.webhooks import dispatch_drata_cct, dispatch_webhook
 
 # -------------------------------------------------------------------------
@@ -43,6 +44,11 @@ app = FastAPI(
     description="Zero-Data-Retention PHI/PII Redaction Layer for HIPAA-regulated organizations",
     version="1.0.0"
 )
+
+# BEFORE: No ASGI-layer cap on request body size or JSON nesting depth.
+# AFTER: PayloadGuardMiddleware rejects oversize or over-deep JSON before routes run.
+# REASON: Protect /v1/scrub and related POST endpoints before Pydantic and the scrubber.
+app.add_middleware(PayloadGuardMiddleware)
 
 # -------------------------------------------------------------------------
 # SCHEMAS & AUTHENTICATION

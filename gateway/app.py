@@ -27,6 +27,7 @@ from gateway.pipeline import GatewayPipeline, GatewayRequest
 from gateway.policy import PolicyEngine, reload_policy
 from gateway.providers import PROVIDER_REGISTRY, resolve_provider, validate_path
 from hermes.classifier import DetectorFailureError, scrub_payload
+from hermes.payload_guard_middleware import PayloadGuardMiddleware
 from hermes.workspaces import Workspace, get_workspace_by_api_key
 
 app = FastAPI(
@@ -34,6 +35,11 @@ app = FastAPI(
     description="Fail-closed AI PHI enforcement gateway",
     version=__version__,
 )
+
+# BEFORE: Gateway relay POST bodies were only bounded inside the pipeline after read.
+# AFTER: PayloadGuardMiddleware enforces size and JSON depth at the ASGI edge.
+# REASON: Block pathological provider-bound payloads before scrub_payload / upstream I/O.
+app.add_middleware(PayloadGuardMiddleware)
 
 _start_time = time.time()
 
