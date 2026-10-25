@@ -774,6 +774,144 @@ def _verify_occurrence_completeness(
 
 
 # -------------------------------------------------------------------------
+# EVASION PRE-PROCESS
+# 1:1 folds and deletions only. Never NFKC: compatibility normalization
+# rewrites clinical superscripts (10⁶ → 106) and expands one character
+# into several (ﬁ → fi, ⅓ → 1/3), which corrupts dosages and shifts
+# redaction offsets. NFKC also does not fold cross-script confusables.
+# -------------------------------------------------------------------------
+_FULLWIDTH_ASCII_FIRST = 0xFF01
+_FULLWIDTH_ASCII_LAST = 0xFF5E
+_FULLWIDTH_ASCII_DELTA = 0xFEE0
+
+# Single-character Cyrillic/Greek letters that are Latin twins.
+# Lowercase clinical Greek (α, β, μ / micro) is intentionally absent so
+# μg, μL, and β-blocker survive even when the token also contains Latin.
+_CONFUSABLE_TO_LATIN: dict[str, str] = {
+    "\u0405": "S",  # Ѕ CYRILLIC CAPITAL LETTER DZE
+    "\u0406": "I",  # І
+    "\u0408": "J",  # Ј
+    "\u0410": "A",  # А
+    "\u0412": "B",  # В
+    "\u0415": "E",  # Е
+    "\u041a": "K",  # К
+    "\u041c": "M",  # М
+    "\u041d": "H",  # Н
+    "\u041e": "O",  # О
+    "\u0420": "P",  # Р
+    "\u0421": "C",  # С
+    "\u0422": "T",  # Т
+    "\u0423": "Y",  # У
+    "\u0425": "X",  # Х
+    "\u04ae": "Y",  # Ү
+    "\u0430": "a",  # а
+    "\u0435": "e",  # е
+    "\u043a": "k",  # к
+    "\u043c": "m",  # м
+    "\u043e": "o",  # о
+    "\u0440": "p",  # р
+    "\u0441": "c",  # с
+    "\u0443": "y",  # у
+    "\u0445": "x",  # х
+    "\u0455": "s",  # ѕ
+    "\u0456": "i",  # і
+    "\u0458": "j",  # ј
+    "\u04af": "y",  # ү
+    "\u04bb": "h",  # һ
+    "\u0501": "d",  # ԁ
+    "\u051b": "q",  # ԛ
+    "\u051d": "w",  # ԝ
+    "\u0391": "A",  # Α
+    "\u0392": "B",  # Β
+    "\u0395": "E",  # Ε
+    "\u0396": "Z",  # Ζ
+    "\u0397": "H",  # Η
+    "\u0399": "I",  # Ι
+    "\u039a": "K",  # Κ
+    "\u039c": "M",  # Μ
+    "\u039d": "N",  # Ν
+    "\u039f": "O",  # Ο
+    "\u03a1": "P",  # Ρ
+    "\u03a4": "T",  # Τ
+    "\u03a5": "Y",  # Υ
+    "\u03a7": "X",  # Χ
+    "\u03b9": "i",  # ι
+    "\u03bd": "v",  # ν
+    "\u03bf": "o",  # ο
+}
+
+
+def _is_preserved_whitespace(ch: str) -> bool:
+    return ch in "\n\r\t"
+
+
+def _is_token_boundary(ch: str) -> bool:
+    """Whitespace or Unicode punctuation. Symbols (μ is a letter) stay in the token."""
+    if ch.isspace():
+        return True
+    return unicodedata.category(ch).startswith(("P", "Z"))
+
+
+def _is_latin_or_digit(ch: str) -> bool:
+    if "0" <= ch <= "9" or "A" <= ch <= "Z" or "a" <= ch <= "z":
+        return True
+    category = unicodedata.category(ch)
+    if category == "Nd":
+        return True
+    return category.startswith("L") and unicodedata.name(ch, "").startswith("LATIN ")
+
+
+def sanitize_and_fold_evasions(text: str) -> tuple[str, dict]:
+    """Strip invisible characters and fold same-length homoglyph evasions.
+
+    Returns ``(sanitized_text, telemetry_meta)`` where telemetry_meta is
+    ``{"format_chars_stripped": int, "mixed_script_homoglyphs_folded": int}``.
+    Fullwidth folds are 1:1 and are not included in the telemetry counts.
+    """
+    kept: list[str] = []
+    format_chars_stripped = 0
+    for ch in text:
+        category = unicodedata.category(ch)
+        if category == "Cf" or (category == "Cc" and not _is_preserved_whitespace(ch)):
+            format_chars_stripped += 1
+            continue
+        codepoint = ord(ch)
+        if _FULLWIDTH_ASCII_FIRST <= codepoint <= _FULLWIDTH_ASCII_LAST:
+            ch = chr(codepoint - _FULLWIDTH_ASCII_DELTA)
+        kept.append(ch)
+
+    mixed_script_homoglyphs_folded = 0
+    index = 0
+    length = len(kept)
+    while index < length:
+        if _is_token_boundary(kept[index]):
+            index += 1
+            continue
+        end = index + 1
+        while end < length and not _is_token_boundary(kept[end]):
+            end += 1
+        has_latin_or_digit = False
+        confusable_offsets: list[int] = []
+        for offset in range(index, end):
+            ch = kept[offset]
+            if _is_latin_or_digit(ch):
+                has_latin_or_digit = True
+            elif ch in _CONFUSABLE_TO_LATIN:
+                confusable_offsets.append(offset)
+        if has_latin_or_digit and confusable_offsets:
+            for offset in confusable_offsets:
+                kept[offset] = _CONFUSABLE_TO_LATIN[kept[offset]]
+            mixed_script_homoglyphs_folded += len(confusable_offsets)
+        index = end
+
+    telemetry_meta = {
+        "format_chars_stripped": format_chars_stripped,
+        "mixed_script_homoglyphs_folded": mixed_script_homoglyphs_folded,
+    }
+    return "".join(kept), telemetry_meta
+
+
+# -------------------------------------------------------------------------
 # GLOBAL THREAD LOCK & ORCHESTRATOR
 # -------------------------------------------------------------------------
 def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
@@ -797,13 +935,12 @@ def _scrub_payload_impl(
             return VAULT.store(flag_name, matched_value, transaction_id)
         return _static_redaction_token(placeholder)
 
-    # Unicode normalization — NFKC folds homoglyphs, fullwidth chars,
-    # and compatibility variants before any detection pass.
-    # Prevents evasion via Cyrillic lookalikes, Unicode dashes, etc.
-    text = unicodedata.normalize('NFKC', text)
-    # Explicit dash normalization — NFKC does not fold Unicode dashes
-    # to ASCII hyphen. Normalize all dash variants so SSN/phone/date
-    # regex patterns work correctly against obfuscated input.
+    # Evasion pre-process runs on the full input before any detector.
+    # sanitized_text is the canonical string every later stage slices.
+    text, _ = sanitize_and_fold_evasions(text)
+    # Explicit dash normalization — fold Unicode dashes to ASCII hyphen
+    # so SSN/phone/date regex patterns match obfuscated input. This loop
+    # is independent of the evasion pre-process above.
     _UNICODE_DASHES = '\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u2012\ufe58\ufe63\uff0d'
     for _dash in _UNICODE_DASHES:
         text = text.replace(_dash, '-')
