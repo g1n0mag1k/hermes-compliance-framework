@@ -107,18 +107,21 @@ def _h(key):
 
 
 class TestKeyDerivation:
-    def test_deterministic_and_32_bytes(self):
+    @staticmethod
+    def test_deterministic_and_32_bytes():
         k1 = derive_workspace_key(b"root", PURPOSE_ATTESTATION, "acme")
         k2 = derive_workspace_key(b"root", PURPOSE_ATTESTATION, "acme")
         assert k1 == k2 and len(k1) == 32
 
-    def test_differs_by_workspace_purpose_and_root(self):
+    @staticmethod
+    def test_differs_by_workspace_purpose_and_root():
         base = derive_workspace_key(b"root", PURPOSE_ATTESTATION, "acme")
         assert base != derive_workspace_key(b"root", PURPOSE_ATTESTATION, "beta")
         assert base != derive_workspace_key(b"root", PURPOSE_VAULT, "acme")
         assert base != derive_workspace_key(b"other", PURPOSE_ATTESTATION, "acme")
 
-    def test_rejects_bad_inputs(self):
+    @staticmethod
+    def test_rejects_bad_inputs():
         with pytest.raises(ValueError):
             derive_workspace_key(b"root", "nope", "acme")
         with pytest.raises(ValueError):
@@ -133,7 +136,8 @@ class TestKeyDerivation:
 
 
 class TestChainKeys:
-    def test_new_workspace_chain_uses_per_workspace_key(self):
+    @staticmethod
+    def test_new_workspace_chain_uses_per_workspace_key():
         ws, _ = create_workspace("chainkey-a", "A", "a@example.com")
         chain = get_chain_for_workspace(ws)
         assert chain.key_scheme == KEY_SCHEME_PER_WORKSPACE
@@ -146,7 +150,8 @@ class TestChainKeys:
         global_sig = hmac.new(SIGNING_KEY, canonical.encode(), hashlib.sha256).hexdigest()
         assert receipt.receipt_hash != global_sig
 
-    def test_workspace_chains_cannot_verify_each_other(self, tmp_path):
+    @staticmethod
+    def test_workspace_chains_cannot_verify_each_other(tmp_path):
         ws_a, _ = create_workspace("chainkey-b1", "B1", "b1@example.com")
         ws_b, _ = create_workspace("chainkey-b2", "B2", "b2@example.com")
         get_chain_for_workspace(ws_a).issue("txn-1", {}, {}, 4, 4)
@@ -161,13 +166,15 @@ class TestChainKeys:
         )
         assert forged.verify_chain() is False
 
-    def test_per_workspace_chain_refuses_to_open_without_key(self):
+    @staticmethod
+    def test_per_workspace_chain_refuses_to_open_without_key():
         ws, _ = create_workspace("chainkey-c", "C", "c@example.com")
         get_chain_for_workspace(ws).issue("txn-c", {}, {}, 1, 1)
         with pytest.raises(ValueError, match="per-workspace"):
             AttestationChain(db_path=ws.chain_db_path)
 
-    def test_reopen_with_key_round_trips(self):
+    @staticmethod
+    def test_reopen_with_key_round_trips():
         ws, _ = create_workspace("chainkey-d", "D", "d@example.com")
         get_chain_for_workspace(ws).issue("txn-d", {}, {}, 1, 1)
         reopened = AttestationChain(
@@ -178,7 +185,8 @@ class TestChainKeys:
         checkpoint = reopened.issue_checkpoint()
         assert reopened.verify_checkpoint(checkpoint)
 
-    def test_legacy_chain_with_receipts_keeps_global_key(self):
+    @staticmethod
+    def test_legacy_chain_with_receipts_keeps_global_key():
         ws, _ = create_workspace("chainkey-legacy", "L", "l@example.com")
         # Simulate a chain written before this change: global key, no chain_meta.
         legacy = AttestationChain(db_path=ws.chain_db_path)
@@ -196,14 +204,16 @@ class TestChainKeys:
         assert chain.verify_chain()
         assert any("predates per-workspace" in str(w.message) for w in caught)
 
-    def test_global_singleton_chain_unchanged(self, tmp_path):
+    @staticmethod
+    def test_global_singleton_chain_unchanged(tmp_path):
         chain = AttestationChain(db_path=str(tmp_path / "legacy.db"))
         assert chain.key_scheme == KEY_SCHEME_GLOBAL
         chain.issue("txn", {}, {}, 1, 1)
         assert chain.verify_chain()
         assert AttestationChain(db_path=str(tmp_path / "legacy.db")).verify_chain()
 
-    def test_chain_refuses_legacy_db_path(self, monkeypatch):
+    @staticmethod
+    def test_chain_refuses_legacy_db_path(monkeypatch):
         ws, _ = create_workspace("chainkey-shared", "S", "s@example.com")
         monkeypatch.setenv("HERMES_DB_PATH", ws.chain_db_path)
         with pytest.raises(RuntimeError, match="legacy single-tenant"):
@@ -216,7 +226,8 @@ class TestChainKeys:
 
 
 class TestVaultKeys:
-    def test_same_value_gives_different_tokens_per_workspace(self):
+    @staticmethod
+    def test_same_value_gives_different_tokens_per_workspace():
         ws_a, _ = create_workspace("vaultkey-a", "A", "a@example.com")
         ws_b, _ = create_workspace("vaultkey-b", "B", "b@example.com")
         va, vb = get_vault_for_workspace(ws_a), get_vault_for_workspace(ws_b)
@@ -227,7 +238,8 @@ class TestVaultKeys:
         assert va.retrieve(ta, workspace_id=ws_a.workspace_id) == "372-18-5421"
         assert vb.retrieve(tb, workspace_id=ws_b.workspace_id) == "372-18-5421"
 
-    def test_vault_ciphertext_not_decryptable_with_other_key(self):
+    @staticmethod
+    def test_vault_ciphertext_not_decryptable_with_other_key():
         from cryptography.exceptions import InvalidTag
 
         ws_a, _ = create_workspace("vaultkey-c", "C", "c@example.com")
@@ -256,13 +268,15 @@ class TestVaultKeys:
         with pytest.raises(InvalidTag):
             foreign.retrieve(token, workspace_id="shared-row")
 
-    def test_per_workspace_vault_refuses_to_open_without_key(self):
+    @staticmethod
+    def test_per_workspace_vault_refuses_to_open_without_key():
         ws, _ = create_workspace("vaultkey-e", "E", "e@example.com")
         get_vault_for_workspace(ws).store("SSN", "1", "t", workspace_id=ws.workspace_id)
         with pytest.raises(ValueError, match="per-workspace"):
             TokenVault(db_path=ws.vault_db_path)
 
-    def test_legacy_vault_with_entries_keeps_global_key(self, tmp_path):
+    @staticmethod
+    def test_legacy_vault_with_entries_keeps_global_key(tmp_path):
         path = str(tmp_path / "legacy_vault.db")
         legacy = TokenVault(db_path=path)
         token = legacy.store("SSN", "372-18-5421", "t")
@@ -283,11 +297,13 @@ class TestVaultKeys:
 
 class TestWorkspaceIds:
     @pytest.mark.parametrize("bad", ["default", "abc\n", "ab", "-abc", "ABC", "a/b/c"])
-    def test_invalid_or_reserved_ids_rejected(self, bad):
+    @staticmethod
+    def test_invalid_or_reserved_ids_rejected(bad):
         with pytest.raises(ValueError):
             _validate_workspace_id(bad)
 
-    def test_api_rejects_unknown_parent(self, api):
+    @staticmethod
+    def test_api_rejects_unknown_parent(api):
         resp = api.post(
             "/v1/workspaces",
             json={
@@ -300,7 +316,8 @@ class TestWorkspaceIds:
         )
         assert resp.status_code == 400
 
-    def test_api_rejects_grandchild(self, api):
+    @staticmethod
+    def test_api_rejects_grandchild(api):
         _create(api, "hier-msp")
         _create(api, "hier-client", parent="hier-msp")
         resp = api.post(
@@ -315,7 +332,8 @@ class TestWorkspaceIds:
         )
         assert resp.status_code == 400
 
-    def test_api_sets_role(self, api):
+    @staticmethod
+    def test_api_sets_role(api):
         key = _create(api, "role-tech", role="operator")
         assert api.get("/v1/workspace", headers=_h(key)).json()["role"] == "operator"
 
@@ -326,7 +344,8 @@ class TestWorkspaceIds:
 
 
 class TestRoles:
-    def test_new_workspaces_default_to_org_admin(self, api):
+    @staticmethod
+    def test_new_workspaces_default_to_org_admin(api):
         resp = api.post(
             "/v1/workspaces",
             json={"workspace_id": "role-default", "name": "D", "owner_email": "d@example.com"},
@@ -334,7 +353,8 @@ class TestRoles:
         )
         assert resp.json()["workspace"]["role"] == "org_admin"
 
-    def test_unknown_role_rejected(self, api):
+    @staticmethod
+    def test_unknown_role_rejected(api):
         resp = api.post(
             "/v1/workspaces",
             json={"workspace_id": "role-bad", "name": "B", "owner_email": "b@example.com", "role": "superuser"},
@@ -346,7 +366,8 @@ class TestRoles:
         "legacy, canonical",
         [("msp_admin", "org_admin"), ("msp_tech", "operator"), ("client_readonly", "viewer")],
     )
-    def test_legacy_role_names_behave_like_canonical(self, api, legacy, canonical):
+    @staticmethod
+    def test_legacy_role_names_behave_like_canonical(api, legacy, canonical):
         key_legacy = _create(api, f"alias-{legacy.replace('_', '-')}", role=legacy)
         key_canon = _create(api, f"alias-{canonical.replace('_', '-')}", role=canonical)
         probes = [
@@ -362,7 +383,8 @@ class TestRoles:
         # Stored role is not rewritten.
         assert api.get("/v1/workspace", headers=_h(key_legacy)).json()["role"] == legacy
 
-    def test_canonical_role_mapping(self):
+    @staticmethod
+    def test_canonical_role_mapping():
         from hermes.workspaces import canonical_role
 
         assert canonical_role("msp_admin") == "org_admin"
@@ -370,13 +392,15 @@ class TestRoles:
         assert canonical_role("root") is None
         assert canonical_role(None) is None
 
-    def test_require_role_rejects_empty_role_list(self):
+    @staticmethod
+    def test_require_role_rejects_empty_role_list():
         from hermes.api import require_role
 
         with pytest.raises(ValueError):
             require_role(["not-a-role"])
 
-    def test_viewer_cannot_scrub_or_review(self, api):
+    @staticmethod
+    def test_viewer_cannot_scrub_or_review(api):
         key = _create(api, "ro-client", role="viewer")
         assert api.post("/v1/scrub", json={"payload": SCRUB_TEXT}, headers=_h(key)).status_code == 403
         assert api.post("/v1/trial-scan", headers=_h(key)).status_code == 403
@@ -386,21 +410,25 @@ class TestRoles:
             headers=_h(key),
         ).status_code == 403
 
-    def test_viewer_can_read_status_and_history(self, api):
+    @staticmethod
+    def test_viewer_can_read_status_and_history(api):
         key = _create(api, "ro-reader", role="viewer")
         assert api.get("/v1/status", headers=_h(key)).status_code == 200
         assert api.get("/v1/scan-history", headers=_h(key)).status_code == 200
 
-    def test_operator_can_scrub_but_not_list_or_rotate(self, api):
+    @staticmethod
+    def test_operator_can_scrub_but_not_list_or_rotate(api):
         key = _create(api, "tech-user", role="operator")
         assert api.post("/v1/scrub", json={"payload": SCRUB_TEXT}, headers=_h(key)).status_code == 200
         assert api.get("/v1/workspaces", headers=_h(key)).status_code == 403
         assert api.post("/v1/workspaces/tech-user/rotate-key", headers=_h(key)).status_code == 403
 
-    def test_unknown_key_is_401(self, api):
+    @staticmethod
+    def test_unknown_key_is_401(api):
         assert api.get("/v1/status", headers=_h("not-a-key")).status_code == 401
 
-    def test_legacy_env_key_still_works(self, api, monkeypatch):
+    @staticmethod
+    def test_legacy_env_key_still_works(api, monkeypatch):
         monkeypatch.setenv("HERMES_API_KEY", "legacy-single-tenant-key")
         resp = api.post("/v1/scrub", json={"payload": SCRUB_TEXT}, headers=_h("legacy-single-tenant-key"))
         assert resp.status_code == 200
@@ -416,7 +444,8 @@ class TestCanaryAuditRoles:
     """Registered workspace keys used to crash /v1/telemetry/canary-audit (500)."""
 
     @pytest.mark.parametrize("role", ["org_admin", "operator", "msp_admin", "msp_tech"])
-    def test_operating_roles_can_run_canary_audit(self, api, role):
+    @staticmethod
+    def test_operating_roles_can_run_canary_audit(api, role):
         key = _create(api, f"canary-{role.replace('_', '-')}", role=role)
         resp = api.post(
             "/v1/telemetry/canary-audit", json={"payload_text": "hello"}, headers=_h(key)
@@ -424,7 +453,8 @@ class TestCanaryAuditRoles:
         assert resp.status_code == 200, resp.text
 
     @pytest.mark.parametrize("role", ["viewer", "client_readonly"])
-    def test_viewer_cannot_run_canary_audit(self, api, role):
+    @staticmethod
+    def test_viewer_cannot_run_canary_audit(api, role):
         key = _create(api, f"canary-{role.replace('_', '-')}", role=role)
         resp = api.post(
             "/v1/telemetry/canary-audit", json={"payload_text": "hello"}, headers=_h(key)
@@ -433,7 +463,8 @@ class TestCanaryAuditRoles:
 
 
 class TestChainIsolationApi:
-    def test_two_workspaces_have_independent_chains(self, api):
+    @staticmethod
+    def test_two_workspaces_have_independent_chains(api):
         key_a = _create(api, "iso-api-a")
         key_b = _create(api, "iso-api-b")
         api.post("/v1/scrub", json={"payload": SCRUB_TEXT}, headers=_h(key_a))
@@ -442,7 +473,8 @@ class TestChainIsolationApi:
         assert api.get("/v1/status", headers=_h(key_a)).json()["total_scans"] == 2
         assert api.get("/v1/status", headers=_h(key_b)).json()["total_scans"] == 1
 
-    def test_chain_integrity_access_rules(self, api):
+    @staticmethod
+    def test_chain_integrity_access_rules(api):
         msp = _create(api, "ci-msp")
         client = _create(api, "ci-client", parent="ci-msp", role="operator")
         other = _create(api, "ci-other")
@@ -461,7 +493,8 @@ class TestChainIsolationApi:
         assert api.get("/v1/workspaces/ci-msp/chain-integrity", headers=_h(client)).status_code == 403
         assert api.get("/v1/workspaces/nope-missing/chain-integrity", headers=_h(msp)).status_code == 404
 
-    def test_empty_chain_reports_no_data(self, api):
+    @staticmethod
+    def test_empty_chain_reports_no_data(api):
         key = _create(api, "ci-empty")
         resp = api.get("/v1/workspaces/ci-empty/chain-integrity", headers=_h(key))
         assert resp.json()["chain_integrity"] == "no_data"
@@ -473,7 +506,8 @@ class TestChainIsolationApi:
 
 
 class TestWorkspacePolicyApi:
-    def test_default_then_set_then_delete(self, api):
+    @staticmethod
+    def test_default_then_set_then_delete(api):
         key = _create(api, "pol-msp")
         resp = api.get("/v1/workspaces/pol-msp/policy", headers=_h(key))
         assert resp.json()["source"] == "default"
@@ -491,14 +525,16 @@ class TestWorkspacePolicyApi:
         resp = api.delete("/v1/workspaces/pol-msp/policy", headers=_h(key))
         assert resp.json()["source"] == "default"
 
-    def test_unknown_policy_rejected(self, api):
+    @staticmethod
+    def test_unknown_policy_rejected(api):
         key = _create(api, "pol-bad")
         resp = api.put(
             "/v1/workspaces/pol-bad/policy", json={"policy_id": "ALLOW_EVERYTHING"}, headers=_h(key)
         )
         assert resp.status_code == 400
 
-    def test_client_cannot_change_own_policy_but_msp_can(self, api):
+    @staticmethod
+    def test_client_cannot_change_own_policy_but_msp_can(api):
         msp = _create(api, "pol-parent")
         client = _create(api, "pol-child", parent="pol-parent")  # even as org_admin
         assert api.put(
@@ -513,7 +549,8 @@ class TestWorkspacePolicyApi:
         ).status_code == 200
         assert api.get("/v1/workspaces/pol-child/policy", headers=_h(client)).json()["policy_id"] == "HIPAA_PRODUCTION_BLOCK"
 
-    def test_unrelated_workspace_cannot_read_or_set(self, api):
+    @staticmethod
+    def test_unrelated_workspace_cannot_read_or_set(api):
         _create(api, "pol-victim")
         attacker = _create(api, "pol-attacker")
         assert api.get("/v1/workspaces/pol-victim/policy", headers=_h(attacker)).status_code == 403
@@ -521,13 +558,15 @@ class TestWorkspacePolicyApi:
             "/v1/workspaces/pol-victim/policy", json={"policy_id": "HIPAA_STRICT"}, headers=_h(attacker)
         ).status_code == 403
 
-    def test_operator_cannot_set_policy(self, api):
+    @staticmethod
+    def test_operator_cannot_set_policy(api):
         key = _create(api, "pol-tech", role="operator")
         assert api.put(
             "/v1/workspaces/pol-tech/policy", json={"policy_id": "HIPAA_STRICT"}, headers=_h(key)
         ).status_code == 403
 
-    def test_policy_store_failure_fails_closed(self, monkeypatch):
+    @staticmethod
+    def test_policy_store_failure_fails_closed(monkeypatch):
         def broken(*_a, **_k):
             raise sqlite3.OperationalError("disk I/O error")
 
@@ -535,7 +574,8 @@ class TestWorkspacePolicyApi:
         with pytest.raises(RuntimeError, match="policy store unavailable"):
             gateway_policy.PolicyEngine("any-workspace")
 
-    def test_unknown_persisted_policy_fails_closed(self):
+    @staticmethod
+    def test_unknown_persisted_policy_fails_closed():
         gateway_policy.save_workspace_policy("ghost-ws", "HIPAA_STRICT")
         conn = gateway_policy._policy_conn()
         conn.execute("UPDATE workspace_policies SET policy_id = 'REMOVED_POLICY'")
@@ -551,7 +591,8 @@ class TestWorkspacePolicyApi:
 
 
 class TestProviderCredentials:
-    def test_encrypted_at_rest_and_round_trip(self):
+    @staticmethod
+    def test_encrypted_at_rest_and_round_trip():
         store = ProviderCredentialStore()
         store.set_credential("cred-ws", "openai", "sk-secret-value-123")
         raw = sqlite3.connect(store._db_path).execute(
@@ -560,7 +601,8 @@ class TestProviderCredentials:
         assert "sk-secret-value-123" not in raw
         assert store.get_credential("cred-ws", "openai") == ("sk-secret-value-123", None)
 
-    def test_other_workspace_cannot_decrypt(self):
+    @staticmethod
+    def test_other_workspace_cannot_decrypt():
         store = ProviderCredentialStore()
         store.set_credential("cred-a", "openai", "sk-a")
         conn = sqlite3.connect(store._db_path)
@@ -582,31 +624,37 @@ class TestProviderCredentials:
             "https://acme.openai.azure.com?x=1",
         ],
     )
-    def test_azure_base_url_rejected(self, url):
+    @staticmethod
+    def test_azure_base_url_rejected(url):
         with pytest.raises(ValueError):
             validate_provider_base_url("azure_openai", url)
 
-    def test_azure_base_url_accepted_and_normalized(self):
+    @staticmethod
+    def test_azure_base_url_accepted_and_normalized():
         assert validate_provider_base_url("azure_openai", "https://Acme.OpenAI.Azure.com/") == "https://acme.openai.azure.com"
 
-    def test_base_url_only_for_azure(self):
+    @staticmethod
+    def test_base_url_only_for_azure():
         with pytest.raises(ValueError):
             validate_provider_base_url("openai", "https://acme.openai.azure.com")
 
-    def test_resolve_falls_back_to_env(self, monkeypatch):
+    @staticmethod
+    def test_resolve_falls_back_to_env(monkeypatch):
         monkeypatch.setenv("HERMES_OPENAI_API_KEY", "sk-env")
         headers, base = resolve_upstream_for_workspace({}, resolve_provider("openai"), "no-creds-ws")
         assert headers["Authorization"] == "Bearer sk-env"
         assert base == "https://api.openai.com"
 
-    def test_resolve_prefers_workspace_credential(self, monkeypatch):
+    @staticmethod
+    def test_resolve_prefers_workspace_credential(monkeypatch):
         monkeypatch.setenv("HERMES_ANTHROPIC_API_KEY", "env-key")
         ProviderCredentialStore().set_credential("has-creds-ws", "anthropic", "ws-key")
         headers, _ = resolve_upstream_for_workspace({}, resolve_provider("anthropic"), "has-creds-ws")
         assert headers["x-api-key"] == "ws-key"
         assert headers["anthropic-version"] == "2023-06-01"
 
-    def test_api_never_returns_credential(self, api):
+    @staticmethod
+    def test_api_never_returns_credential(api):
         key = _create(api, "cred-api")
         resp = api.put(
             "/v1/workspaces/cred-api/provider-credentials/openai",
@@ -619,7 +667,8 @@ class TestProviderCredentials:
         listing = api.get("/v1/workspaces/cred-api/provider-credentials", headers=_h(key))
         assert "sk-should-never-come-back" not in listing.text
 
-    def test_api_rejects_unknown_provider_and_bad_azure_url(self, api):
+    @staticmethod
+    def test_api_rejects_unknown_provider_and_bad_azure_url(api):
         key = _create(api, "cred-bad")
         assert api.put(
             "/v1/workspaces/cred-bad/provider-credentials/not-a-provider",
@@ -632,13 +681,15 @@ class TestProviderCredentials:
             headers=_h(key),
         ).status_code == 400
 
-    def test_api_delete(self, api):
+    @staticmethod
+    def test_api_delete(api):
         key = _create(api, "cred-del")
         api.put("/v1/workspaces/cred-del/provider-credentials/openai", json={"credential": "x"}, headers=_h(key))
         assert api.delete("/v1/workspaces/cred-del/provider-credentials/openai", headers=_h(key)).status_code == 200
         assert api.delete("/v1/workspaces/cred-del/provider-credentials/openai", headers=_h(key)).status_code == 404
 
-    def test_client_cannot_set_own_credentials(self, api):
+    @staticmethod
+    def test_client_cannot_set_own_credentials(api):
         _create(api, "cred-parent")
         client = _create(api, "cred-child", parent="cred-parent")
         assert api.put(
