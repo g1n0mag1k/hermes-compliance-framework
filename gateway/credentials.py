@@ -139,7 +139,7 @@ class CredentialManager:
 # Per-workspace AI provider credentials (multi-tenant)
 # ---------------------------------------------------------------------------
 #
-# An MSP can give each client workspace its own OpenAI / Anthropic / Azure
+# A parent organization can give each child workspace its own OpenAI / Anthropic / Azure
 # OpenAI credential so usage and billing stay separated per client. When a
 # workspace has no stored credential, the gateway falls back to the
 # deployment-wide env var (provider.credential_env) exactly as before.

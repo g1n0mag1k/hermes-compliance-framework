@@ -1,4 +1,4 @@
-# Hermes Relay — MSP Docker Deployment Guide
+# Hermes Relay — Docker Deployment Guide
 
 This is the **one supported Docker deployment** of Hermes Relay: the root
 `docker-compose.yml`, built locally from this repository. Follow it top to
@@ -23,7 +23,7 @@ hermes_data volume  ── workspace registry + per-workspace chain.db (receipt 
       ▲
 hermes-api  :8787  (bound to 127.0.0.1 on the host) ── workspace creation, /v1/scrub
       ▲
-MSP operator, on the Docker host only
+Operator, on the Docker host only
 ```
 
 | Container | Command | Host port | Purpose |

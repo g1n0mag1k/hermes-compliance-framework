@@ -6,7 +6,7 @@ Always read `CURSORRULES.md` before touching any code. It defines build order, h
 
 ## Project overview
 
-Hermes Relay is a local-first PHI enforcement gateway for MSPs serving HIPAA-covered entities. It provides deterministic PHI/PII detection, redaction, and cryptographically signed compliance evidence — without sending PHI to external infrastructure.
+Hermes Relay is a local-first PHI enforcement gateway for HIPAA-covered entities, their business associates, and the MSPs that serve them. It provides deterministic PHI/PII detection, redaction, and cryptographically signed compliance evidence — without sending PHI to external infrastructure.
 
 The repository contains two FastAPI services:
 

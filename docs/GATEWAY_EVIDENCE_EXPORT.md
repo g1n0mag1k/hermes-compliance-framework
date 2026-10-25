@@ -47,7 +47,7 @@ If the outbox write fails, the error is logged and the gateway response is retur
 
 ### Status endpoint
 
-`GET /v1/integrations/drata/status` (Hermes API, `msp_admin` / `msp_tech`) reports
+`GET /v1/integrations/drata/status` (Hermes API, `org_admin` / `operator`) reports
 state computed only from local Hermes state; it makes no network call.
 
 | Field | Source |
@@ -62,8 +62,8 @@ state computed only from local Hermes state; it makes no network call.
 | `partner_connection` | always `false` — not implemented |
 
 The outbox database is a single global file, but every row carries `workspace_id`
-and the endpoint only counts the caller's rows. MSP parent workspaces are not
-aggregated with their client workspaces. If the outbox cannot be read, the five
+and the endpoint only counts the caller's rows. Parent workspaces are not
+aggregated with their child workspaces. If the outbox cannot be read, the five
 outbox fields are `null` and the request still returns 200.
 
 ## EvidenceEvent

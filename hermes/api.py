@@ -40,7 +40,7 @@ from hermes.webhooks import dispatch_drata_cct, dispatch_webhook
 # -------------------------------------------------------------------------
 app = FastAPI(
     title="Hermes Compliance API",
-    description="Zero-Data-Retention PHI/PII Redaction Layer for MSPs",
+    description="Zero-Data-Retention PHI/PII Redaction Layer for HIPAA-regulated organizations",
     version="1.0.0"
 )
 
@@ -206,14 +206,22 @@ def require_role(allowed_roles: list[str]):
     Dependency factory: authenticate via API key and enforce workspace.role.
 
     Uses the same X-API-Key header as verify_api_key. Raises 403 when the
-    workspace role is not in allowed_roles.
+    workspace role is not in allowed_roles. Roles are compared by canonical
+    name, so legacy names (msp_admin, msp_tech, client_readonly) and current
+    names (org_admin, operator, viewer) are interchangeable on both sides.
     """
+    from hermes.workspaces import canonical_role
+
+    allowed = {canonical_role(r) for r in allowed_roles} - {None}
+    if not allowed:
+        raise ValueError(f"require_role got no valid roles: {allowed_roles!r}")
+
     def _dependency(x_api_key: str = Header(..., alias="X-API-Key")):
         # Resolve through verify_api_key so the legacy single-tenant
         # HERMES_API_KEY keeps working (it maps to the "default" workspace,
-        # role msp_admin). Raises 401 for unknown keys.
+        # role org_admin). Raises 401 for unknown keys.
         workspace = verify_api_key(x_api_key)
-        if workspace.role not in allowed_roles:
+        if canonical_role(workspace.role) not in allowed:
             raise HTTPException(
                 status_code=403,
                 detail="Insufficient permissions",
@@ -223,13 +231,13 @@ def require_role(allowed_roles: list[str]):
     return _dependency
 
 
-# Role sets for endpoint authorization.
-#   msp_admin       — full control: workspaces, keys, policies, credentials
-#   msp_tech        — operate: scans, reviews, canary, read status/integrity
-#   client_readonly — read status and scan history only
-ROLES_ALL = ["msp_admin", "msp_tech", "client_readonly"]
-ROLES_OPERATE = ["msp_admin", "msp_tech"]
-ROLES_ADMIN = ["msp_admin"]
+# Role sets for endpoint authorization (canonical names; legacy aliases match).
+#   org_admin — full control: workspaces, keys, policies, credentials
+#   operator  — operate: scans, reviews, canary, read status/integrity
+#   viewer    — read status and scan history only
+ROLES_ALL = ["org_admin", "operator", "viewer"]
+ROLES_OPERATE = ["org_admin", "operator"]
+ROLES_ADMIN = ["org_admin"]
 
 
 class _LegacyWorkspace:
@@ -239,7 +247,7 @@ class _LegacyWorkspace:
     owner_email = ""
     plan = "production"
     parent_workspace_id = None
-    role = "msp_admin"
+    role = "org_admin"
     created_at = ""
 
 # -------------------------------------------------------------------------
@@ -455,7 +463,7 @@ def review_endpoint(request: ReviewRequest, workspace=Depends(require_role(ROLES
     tags=["System"],
 )
 def status_endpoint(workspace=Depends(require_role(ROLES_ALL))):
-    """Dashboard data source — aggregate attestation-chain metrics for MSP UI."""
+    """Dashboard data source — aggregate attestation-chain metrics for the dashboard."""
     chain_obj = _get_chain(workspace)
     chain = chain_obj.export_chain()
     total_scans = len(chain)
@@ -617,11 +625,16 @@ class WorkspaceCreateRequest(BaseModel):
     owner_email: str = Field(..., min_length=3)
     plan: str = Field(default="trial")
     parent_workspace_id: str | None = None
-    role: Literal["msp_admin", "msp_tech", "client_readonly"] = Field(
-        default="msp_admin",
+    role: Literal[
+        "org_admin", "operator", "viewer",
+        "msp_admin", "msp_tech", "client_readonly",  # legacy aliases
+    ] = Field(
+        default="org_admin",
         description=(
-            "Role carried by this workspace's API key. Use msp_tech for client "
-            "workspaces that should scan but not change their own configuration."
+            "Role carried by this workspace's API key: org_admin, operator or "
+            "viewer. Use operator for child workspaces that should scan but not "
+            "change their own configuration. Legacy names msp_admin, msp_tech "
+            "and client_readonly are still accepted."
         ),
     )
 
@@ -633,7 +646,7 @@ class WorkspaceOut(BaseModel):
     created_at: str
     plan: str
     parent_workspace_id: str | None
-    role: str = "msp_admin"
+    role: str = "org_admin"
 
 
 class WorkspaceCreateResponse(BaseModel):
@@ -649,7 +662,7 @@ def _workspace_out(workspace) -> WorkspaceOut:
         created_at=getattr(workspace, "created_at", "") or "",
         plan=workspace.plan,
         parent_workspace_id=workspace.parent_workspace_id,
-        role=getattr(workspace, "role", "msp_admin") or "msp_admin",
+        role=getattr(workspace, "role", "org_admin") or "org_admin",
     )
 
 
@@ -669,7 +682,7 @@ def create_workspace_endpoint(
         parent = get_workspace(request.parent_workspace_id)
         # The parent must already exist (otherwise whoever later registers that
         # ID would silently gain access to this workspace) and must be a
-        # top-level workspace: access control is one level deep (MSP -> client).
+        # top-level workspace: access control is one level deep (parent -> child).
         if parent is None:
             raise HTTPException(
                 status_code=400,
@@ -678,7 +691,7 @@ def create_workspace_endpoint(
         if parent.parent_workspace_id is not None:
             raise HTTPException(
                 status_code=400,
-                detail="parent_workspace_id must be a top-level (MSP) workspace",
+                detail="parent_workspace_id must be a top-level workspace",
             )
     try:
         workspace, raw_key = create_workspace(
@@ -700,7 +713,7 @@ def create_workspace_endpoint(
 
 @app.get("/v1/workspaces", response_model=list[WorkspaceOut], tags=["Workspaces"])
 def list_workspaces_endpoint(workspace=Depends(require_role(ROLES_ADMIN))):
-    """List all workspaces. MSPs see their own client workspaces."""
+    """List the caller's child workspaces (e.g. an MSP's clients, a health system's facilities)."""
     from hermes.workspaces import list_workspaces
     workspaces = list_workspaces(parent_workspace_id=workspace.workspace_id)
     return [_workspace_out(w) for w in workspaces]
@@ -713,7 +726,7 @@ def current_workspace_endpoint(workspace=Depends(verify_api_key)):
 
 
 @app.post("/api/v1/sentry/config", tags=["Integrations"])
-def sentry_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech"]))):
+def sentry_config_endpoint(workspace=Depends(require_role(ROLES_OPERATE))):
     """Reserved — returns 501 Not Implemented until a real DSN probe path exists."""
     return JSONResponse(
         status_code=501,
@@ -725,7 +738,7 @@ def sentry_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tec
 
 
 @app.post("/api/v1/drata/config", tags=["Integrations"])
-def drata_config_endpoint(workspace=Depends(require_role(["msp_admin", "msp_tech"]))):
+def drata_config_endpoint(workspace=Depends(require_role(ROLES_OPERATE))):
     """
     Report Drata configuration state. Configuring or syncing Drata from the
     dashboard is not implemented: this endpoint stores nothing and does not
@@ -776,7 +789,7 @@ class DrataIntegrationStatus(BaseModel):
     tags=["Integrations"],
 )
 def drata_integration_status_endpoint(
-    workspace=Depends(require_role(["msp_admin", "msp_tech"])),
+    workspace=Depends(require_role(ROLES_OPERATE)),
 ):
     """
     Report Drata integration state computed only from local Hermes state.
@@ -981,9 +994,9 @@ def rotate_key_endpoint(workspace_id: str, workspace=Depends(require_role(ROLES_
 # MULTI-TENANT WORKSPACE CONFIGURATION
 # -------------------------------------------------------------------------
 # Read access  : the workspace itself or its direct parent (can_access_workspace).
-# Write access : msp_admin role AND the workspace's manager — its parent when it
-#                has one, otherwise itself. A client workspace therefore cannot
-#                change its own gateway policy or AI credentials; its MSP does.
+# Write access : org_admin role AND the workspace's manager — its parent when it
+#                has one, otherwise itself. A child workspace therefore cannot
+#                change its own gateway policy or AI credentials; its parent does.
 
 
 def _load_target_workspace(caller, workspace_id: str):

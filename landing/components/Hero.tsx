@@ -100,8 +100,8 @@ export function Hero() {
             detected and redacted. Egress we have tested: Sentry (via
             before_send) and Splunk HEC webhook. 16 of 18 HIPAA Safe Harbor
             categories detected in text; 2 reference-only (biometric
-            identifiers, full-face photos). Built for MSPs serving
-            HIPAA-covered entities.
+            identifiers, full-face photos). Built for HIPAA-covered entities,
+            their business associates, and the MSPs that serve them.
           </p>
 
           <div className="mt-8 sm:mt-10 flex flex-wrap items-center gap-4">

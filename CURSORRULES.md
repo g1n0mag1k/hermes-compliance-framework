@@ -1,8 +1,8 @@
 # Hermes Relay — Build Plan & AI Rules
 
 ## What This Is
-Local-first PHI detection and compliance evidence tool for MSPs 
-serving HIPAA-covered entities. Includes Drata Custom Connections and
+Local-first PHI detection and compliance evidence tool for HIPAA-covered
+entities, their business associates, and the MSPs that serve them. Includes Drata Custom Connections and
 Tests (CCT) export code that is contract-tested against mocks only and
 NOT live-validated (see "Drata Integration — Honest State").
 
@@ -131,7 +131,7 @@ Two Drata export paths exist. They must not be conflated with a validated integr
 - Path B (gateway, CANONICAL): DrataConnector in gateway/evidence_export/drata_connector.py — {"data":...} wrapper, X-Idempotency-Key, 2 retries. DrataExporter in exporters.py is a thin wrapper around it. send_test_evidence() returns UNSUPPORTED (no network call). test_connection() is an offline STRUCTURAL check only (NOT_CONFIGURED / CONFIG_INVALID / CONFIGURED, live_validated always False); test_connection(live=True) returns UNSUPPORTED. send_evidence() refuses non-https CCT URLs with a warning.
 - Path A is LEGACY: kept unchanged for backward compatibility, not routed through DrataConnector.
 - POST /api/v1/drata/config does NOT call Drata. It returns HTTP 501 not_implemented with state NOT_CONFIGURED, CONFIG_INVALID, or CONFIGURED from DrataConnector.test_connection() (URL set, https, API key present). No live connection test exists, so CONNECTION_TEST_* / CONNECTION_* states are never reported. It is kept but no longer used by the dashboard.
-- GET /v1/integrations/drata/status (msp_admin / msp_tech) does NOT call Drata. It returns configured, connection_state (offline test_connection() state), live_validated=false, transport="CCT", partner_connection=false, and the caller workspace's outbox counts (pending incl. PROCESSING / exported / dead_letter), last_exported_at, and sanitized last_error. Outbox fields are null if the outbox cannot be read. The dashboard "Check Drata Status" button calls this endpoint; CONNECTED / SYNCING labels are reserved and never shown.
+- GET /v1/integrations/drata/status (org_admin / operator; legacy msp_admin / msp_tech) does NOT call Drata. It returns configured, connection_state (offline test_connection() state), live_validated=false, transport="CCT", partner_connection=false, and the caller workspace's outbox counts (pending incl. PROCESSING / exported / dead_letter), last_exported_at, and sanitized last_error. Outbox fields are null if the outbox cannot be read. The dashboard "Check Drata Status" button calls this endpoint; CONNECTED / SYNCING labels are reserved and never shown.
 - Payload shape mismatch between Path A and Path B is unresolved — live Drata behavior unknown.
 - No per-workspace Drata config. Both paths use a single global HERMES_DRATA_CCT_URL.
 

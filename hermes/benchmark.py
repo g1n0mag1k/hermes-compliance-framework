@@ -213,7 +213,7 @@ def generate_report(results: list[BenchmarkResult]) -> str:
         "> deployment: zero-trust LLM proxy mode, cryptographic compliance receipts",
         "> (proxy mode), and a token vault for reversible redaction (roadmap).\n",
         "---",
-        "_Hermes Relay — Zero-Trust Compliance Infrastructure for MSPs_",
+        "_Hermes Relay — Zero-Trust Compliance Infrastructure for HIPAA-Regulated Organizations_",
         "_hermesrelay.dev | andrew@hermesrelay.dev_",
     ]
 

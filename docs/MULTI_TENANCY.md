@@ -1,14 +1,24 @@
 # Multi-Tenancy
 
-One Hermes Relay deployment can serve many isolated tenants. The intended shape
-is an MSP with one **management workspace** and one **client workspace** per
-HIPAA-covered client:
+One Hermes Relay deployment can serve many isolated tenants. The shape is a
+**parent workspace** for the organization that runs Hermes and a **child
+workspace** for each client, facility or customer whose data must stay separate:
+
+| Parent organization | Child workspaces |
+|---|---|
+| MSP | each HIPAA-covered client |
+| Health system | each hospital or clinic |
+| Healthtech / AI vendor | each customer tenant |
+| Insurance agency or broker | each client group |
+| Billing company | each provider client |
 
 ```
-msp-acme                (top-level, role msp_admin)   ← MSP staff key
- ├── clinic-one         (parent = msp-acme, role msp_tech)
- └── clinic-two         (parent = msp-acme, role msp_tech)
+acme                    (top-level, role org_admin)   ← parent organization's key
+ ├── clinic-one         (parent = acme, role operator)
+ └── clinic-two         (parent = acme, role operator)
 ```
+
+A single organization with no clients can simply use one top-level workspace.
 
 The legacy single-tenant setup (`HERMES_API_KEY` env var, global chain at
 `HERMES_DB_PATH`) keeps working unchanged.
@@ -63,17 +73,24 @@ Each chain/vault DB records its key scheme (`chain_meta` / `vault_meta` table):
 
 ## Roles
 
-| Role | Can |
-|---|---|
-| `msp_admin` | Everything below, plus list workspaces, rotate keys, set policies and AI credentials (on workspaces it manages) |
-| `msp_tech` | `/v1/scrub`, `/v1/review`, `/v1/trial-scan`, `/api/v1/evaluate`, chain integrity, read status |
-| `client_readonly` | `/v1/status`, `/v1/scan-history`, `/v1/workspace`, read policy |
+| Role | Earlier name (still accepted) | Can |
+|---|---|---|
+| `org_admin` | `msp_admin` | Everything below, plus list workspaces, rotate keys, set policies and AI credentials (on workspaces it manages) |
+| `operator` | `msp_tech` | `/v1/scrub`, `/v1/review`, `/v1/trial-scan`, `/api/v1/evaluate`, `/v1/telemetry/canary-audit`, chain integrity, read status |
+| `viewer` | `client_readonly` | `/v1/status`, `/v1/scan-history`, `/v1/workspace`, read policy |
 
-The legacy `HERMES_API_KEY` maps to the `default` workspace with role `msp_admin`.
+Earlier names behave exactly like the current ones and stored roles are never
+rewritten, so existing registries, API clients and dashboards keep working.
+New workspaces default to `org_admin`. The legacy `HERMES_API_KEY` maps to the
+`default` workspace with role `org_admin`.
+
+Role names are not secrets: `GET /v1/workspace` returns the caller's role and
+the dashboard reads it. A caller cannot claim a role — the server takes it from
+the registry row that matches the caller's API key.
 
 **Management rule:** a workspace with a parent is managed by its parent. A
-client workspace cannot change its own gateway policy or AI credentials — even
-with an `msp_admin` key. Give client workspaces `msp_tech` keys.
+child workspace cannot change its own gateway policy or AI credentials — even
+with an `org_admin` key. Give child workspaces `operator` keys.
 
 **Hierarchy is one level deep.** `parent_workspace_id` must name an existing
 top-level workspace; the API rejects unknown parents (otherwise whoever later
@@ -84,18 +101,18 @@ registered that ID would inherit access) and grandchildren.
 All take `X-API-Key`. Creating a workspace takes `X-Admin-Token` (`HERMES_ADMIN_TOKEN`).
 
 ```
-POST   /v1/workspaces                                        create (role optional, default msp_admin)
-GET    /v1/workspaces                                        list children            msp_admin
+POST   /v1/workspaces                                        create (role optional, default org_admin)
+GET    /v1/workspaces                                        list children            org_admin
 GET    /v1/workspace                                         caller's own workspace   any
-POST   /v1/workspaces/{id}/rotate-key                        rotate                   msp_admin
+POST   /v1/workspaces/{id}/rotate-key                        rotate                   org_admin
 
 GET    /v1/workspaces/{id}/policy                            effective policy         any, self or parent
-PUT    /v1/workspaces/{id}/policy        {"policy_id": ...}  assign                   msp_admin, manager
-DELETE /v1/workspaces/{id}/policy                            revert to default        msp_admin, manager
+PUT    /v1/workspaces/{id}/policy        {"policy_id": ...}  assign                   org_admin, manager
+DELETE /v1/workspaces/{id}/policy                            revert to default        org_admin, manager
 
-GET    /v1/workspaces/{id}/chain-integrity                   verify chain             msp_admin/msp_tech, self or parent
+GET    /v1/workspaces/{id}/chain-integrity                   verify chain             org_admin/operator, self or parent
 
-GET    /v1/workspaces/{id}/provider-credentials              which are set (never values)  msp_admin, manager
+GET    /v1/workspaces/{id}/provider-credentials              which are set (never values)  org_admin, manager
 PUT    /v1/workspaces/{id}/provider-credentials/{provider}   {"credential": ..., "base_url": ...}
 DELETE /v1/workspaces/{id}/provider-credentials/{provider}
 ```
@@ -118,27 +135,27 @@ the deployment-wide `HERMES_*_API_KEY` env vars, exactly as before.
 ## Provisioning example
 
 ```bash
-# 1. MSP management workspace
+# 1. Parent workspace
 curl -s -X POST localhost:8787/v1/workspaces -H "X-Admin-Token: $HERMES_ADMIN_TOKEN" \
   -H 'content-type: application/json' \
-  -d '{"workspace_id":"msp-acme","name":"Acme MSP","owner_email":"ops@acme.example","plan":"production"}'
-# → save api_key as MSP_KEY (shown once)
+  -d '{"workspace_id":"acme","name":"Acme Health","owner_email":"ops@acme.example","plan":"production"}'
+# → save api_key as PARENT_KEY (shown once)
 
-# 2. Client workspace under it
+# 2. Child workspace under it
 curl -s -X POST localhost:8787/v1/workspaces -H "X-Admin-Token: $HERMES_ADMIN_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"workspace_id":"clinic-one","name":"Clinic One","owner_email":"it@clinic.example",
-       "plan":"production","parent_workspace_id":"msp-acme","role":"msp_tech"}'
-# → save api_key as CLIENT_KEY; give it to the client's integration
+       "plan":"production","parent_workspace_id":"acme","role":"operator"}'
+# → save api_key as CHILD_KEY; give it to that client's or facility's integration
 
-# 3. MSP sets the client's policy and AI key
-curl -s -X PUT localhost:8787/v1/workspaces/clinic-one/policy -H "X-API-Key: $MSP_KEY" \
+# 3. Parent sets the child's policy and AI key
+curl -s -X PUT localhost:8787/v1/workspaces/clinic-one/policy -H "X-API-Key: $PARENT_KEY" \
   -H 'content-type: application/json' -d '{"policy_id":"HIPAA_PRODUCTION_BLOCK"}'
 curl -s -X PUT localhost:8787/v1/workspaces/clinic-one/provider-credentials/openai \
-  -H "X-API-Key: $MSP_KEY" -H 'content-type: application/json' -d '{"credential":"sk-..."}'
+  -H "X-API-Key: $PARENT_KEY" -H 'content-type: application/json' -d '{"credential":"sk-..."}'
 
-# 4. MSP checks the client's evidence chain
-curl -s localhost:8787/v1/workspaces/clinic-one/chain-integrity -H "X-API-Key: $MSP_KEY"
+# 4. Parent checks the child's evidence chain
+curl -s localhost:8787/v1/workspaces/clinic-one/chain-integrity -H "X-API-Key: $PARENT_KEY"
 ```
 
 ## Not multi-tenant yet (do not claim)

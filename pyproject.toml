@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hermes-relay"
 version = "1.0.0"
-description = "Local-first PHI detection and compliance evidence for MSPs serving HIPAA-covered entities"
+description = "Local-first PHI detection and compliance evidence for HIPAA-covered entities, business associates and MSPs"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "Proprietary"}
 authors = [
     {name = "Andrew Rogers", email = "andrew@hermesrelay.dev"}
 ]
-keywords = ["HIPAA", "PHI", "compliance", "MSP", "healthcare", "DLP"]
+keywords = ["HIPAA", "PHI", "compliance", "healthcare", "business-associate", "MSP", "DLP", "multi-tenant"]
 classifiers = [
     "Programming Language :: Python :: 3.12",
     "Operating System :: POSIX :: Linux",

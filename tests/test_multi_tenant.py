@@ -82,7 +82,7 @@ def api():
     return TestClient(api_app)
 
 
-def _create(api, workspace_id, *, parent=None, role="msp_admin", plan="production"):
+def _create(api, workspace_id, *, parent=None, role="org_admin", plan="production"):
     body = {
         "workspace_id": workspace_id,
         "name": workspace_id,
@@ -316,8 +316,8 @@ class TestWorkspaceIds:
         assert resp.status_code == 400
 
     def test_api_sets_role(self, api):
-        key = _create(api, "role-tech", role="msp_tech")
-        assert api.get("/v1/workspace", headers=_h(key)).json()["role"] == "msp_tech"
+        key = _create(api, "role-tech", role="operator")
+        assert api.get("/v1/workspace", headers=_h(key)).json()["role"] == "operator"
 
 
 # ---------------------------------------------------------------------------
@@ -326,8 +326,58 @@ class TestWorkspaceIds:
 
 
 class TestRoles:
-    def test_client_readonly_cannot_scrub_or_review(self, api):
-        key = _create(api, "ro-client", role="client_readonly")
+    def test_new_workspaces_default_to_org_admin(self, api):
+        resp = api.post(
+            "/v1/workspaces",
+            json={"workspace_id": "role-default", "name": "D", "owner_email": "d@example.com"},
+            headers={"X-Admin-Token": ADMIN_TOKEN},
+        )
+        assert resp.json()["workspace"]["role"] == "org_admin"
+
+    def test_unknown_role_rejected(self, api):
+        resp = api.post(
+            "/v1/workspaces",
+            json={"workspace_id": "role-bad", "name": "B", "owner_email": "b@example.com", "role": "superuser"},
+            headers={"X-Admin-Token": ADMIN_TOKEN},
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.parametrize(
+        "legacy, canonical",
+        [("msp_admin", "org_admin"), ("msp_tech", "operator"), ("client_readonly", "viewer")],
+    )
+    def test_legacy_role_names_behave_like_canonical(self, api, legacy, canonical):
+        key_legacy = _create(api, f"alias-{legacy.replace('_', '-')}", role=legacy)
+        key_canon = _create(api, f"alias-{canonical.replace('_', '-')}", role=canonical)
+        probes = [
+            ("post", "/v1/scrub", {"payload": "hello"}),
+            ("get", "/v1/status", None),
+            ("get", "/v1/workspaces", None),
+        ]
+        for method, path, body in probes:
+            kwargs = {"json": body} if body is not None else {}
+            a = getattr(api, method)(path, headers=_h(key_legacy), **kwargs).status_code
+            b = getattr(api, method)(path, headers=_h(key_canon), **kwargs).status_code
+            assert a == b, (legacy, path, a, b)
+        # Stored role is not rewritten.
+        assert api.get("/v1/workspace", headers=_h(key_legacy)).json()["role"] == legacy
+
+    def test_canonical_role_mapping(self):
+        from hermes.workspaces import canonical_role
+
+        assert canonical_role("msp_admin") == "org_admin"
+        assert canonical_role("operator") == "operator"
+        assert canonical_role("root") is None
+        assert canonical_role(None) is None
+
+    def test_require_role_rejects_empty_role_list(self):
+        from hermes.api import require_role
+
+        with pytest.raises(ValueError):
+            require_role(["not-a-role"])
+
+    def test_viewer_cannot_scrub_or_review(self, api):
+        key = _create(api, "ro-client", role="viewer")
         assert api.post("/v1/scrub", json={"payload": SCRUB_TEXT}, headers=_h(key)).status_code == 403
         assert api.post("/v1/trial-scan", headers=_h(key)).status_code == 403
         assert api.post(
@@ -336,13 +386,13 @@ class TestRoles:
             headers=_h(key),
         ).status_code == 403
 
-    def test_client_readonly_can_read_status_and_history(self, api):
-        key = _create(api, "ro-reader", role="client_readonly")
+    def test_viewer_can_read_status_and_history(self, api):
+        key = _create(api, "ro-reader", role="viewer")
         assert api.get("/v1/status", headers=_h(key)).status_code == 200
         assert api.get("/v1/scan-history", headers=_h(key)).status_code == 200
 
-    def test_msp_tech_can_scrub_but_not_list_or_rotate(self, api):
-        key = _create(api, "tech-user", role="msp_tech")
+    def test_operator_can_scrub_but_not_list_or_rotate(self, api):
+        key = _create(api, "tech-user", role="operator")
         assert api.post("/v1/scrub", json={"payload": SCRUB_TEXT}, headers=_h(key)).status_code == 200
         assert api.get("/v1/workspaces", headers=_h(key)).status_code == 403
         assert api.post("/v1/workspaces/tech-user/rotate-key", headers=_h(key)).status_code == 403
@@ -362,6 +412,26 @@ class TestRoles:
 # ---------------------------------------------------------------------------
 
 
+class TestCanaryAuditRoles:
+    """Registered workspace keys used to crash /v1/telemetry/canary-audit (500)."""
+
+    @pytest.mark.parametrize("role", ["org_admin", "operator", "msp_admin", "msp_tech"])
+    def test_operating_roles_can_run_canary_audit(self, api, role):
+        key = _create(api, f"canary-{role.replace('_', '-')}", role=role)
+        resp = api.post(
+            "/v1/telemetry/canary-audit", json={"payload_text": "hello"}, headers=_h(key)
+        )
+        assert resp.status_code == 200, resp.text
+
+    @pytest.mark.parametrize("role", ["viewer", "client_readonly"])
+    def test_viewer_cannot_run_canary_audit(self, api, role):
+        key = _create(api, f"canary-{role.replace('_', '-')}", role=role)
+        resp = api.post(
+            "/v1/telemetry/canary-audit", json={"payload_text": "hello"}, headers=_h(key)
+        )
+        assert resp.status_code == 403
+
+
 class TestChainIsolationApi:
     def test_two_workspaces_have_independent_chains(self, api):
         key_a = _create(api, "iso-api-a")
@@ -374,7 +444,7 @@ class TestChainIsolationApi:
 
     def test_chain_integrity_access_rules(self, api):
         msp = _create(api, "ci-msp")
-        client = _create(api, "ci-client", parent="ci-msp", role="msp_tech")
+        client = _create(api, "ci-client", parent="ci-msp", role="operator")
         other = _create(api, "ci-other")
         api.post("/v1/scrub", json={"payload": SCRUB_TEXT}, headers=_h(client))
 
@@ -430,7 +500,7 @@ class TestWorkspacePolicyApi:
 
     def test_client_cannot_change_own_policy_but_msp_can(self, api):
         msp = _create(api, "pol-parent")
-        client = _create(api, "pol-child", parent="pol-parent")  # even as msp_admin
+        client = _create(api, "pol-child", parent="pol-parent")  # even as org_admin
         assert api.put(
             "/v1/workspaces/pol-child/policy",
             json={"policy_id": "HIPAA_PRODUCTION_BLOCK"},
@@ -451,8 +521,8 @@ class TestWorkspacePolicyApi:
             "/v1/workspaces/pol-victim/policy", json={"policy_id": "HIPAA_STRICT"}, headers=_h(attacker)
         ).status_code == 403
 
-    def test_msp_tech_cannot_set_policy(self, api):
-        key = _create(api, "pol-tech", role="msp_tech")
+    def test_operator_cannot_set_policy(self, api):
+        key = _create(api, "pol-tech", role="operator")
         assert api.put(
             "/v1/workspaces/pol-tech/policy", json={"policy_id": "HIPAA_STRICT"}, headers=_h(key)
         ).status_code == 403

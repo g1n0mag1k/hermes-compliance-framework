@@ -32,7 +32,7 @@ const COLUMNS: readonly Column[] = [
     source: "45 CFR §164.514(b) — Safe Harbor standard",
   },
   {
-    label: "What MSPs cannot produce",
+    label: "What most teams cannot produce",
     content:
       "A per-token, CFR-cited, HMAC-SHA256–signed record of what was detected and redacted — 16 of 18 Safe Harbor categories in text today, with biometric (P) and full-face photo (Q) reference-only.",
     source: "OCR Risk Analysis Initiative — 2026",
@@ -87,8 +87,8 @@ export function Problem() {
           <p className="font-body text-body text-ink">
             OCR issued seven resolution agreements against business associates
             in 2025 alone — the highest enforcement total against business
-            associates since 2013. For MSPs serving healthcare clients, the
-            documentation gap is not a hypothetical compliance problem. It is
+            associates since 2013. For business associates — MSPs, billing
+            companies, healthtech vendors, insurance partners — the documentation gap is not a hypothetical compliance problem. It is
             an active enforcement trend.
           </p>
         </div>
