@@ -78,3 +78,70 @@ def list_gateway_receipts(workspace) -> list:
     from gateway.evidence import list_gateway_receipts as _list
 
     return _list(workspace)
+
+
+# ---------------------------------------------------------------------------
+# Multi-tenant gateway configuration helpers (policy + provider credentials)
+# ---------------------------------------------------------------------------
+
+
+def gateway_available_policy_ids() -> list[str]:
+    from gateway.policy import available_policy_ids
+
+    return available_policy_ids()
+
+
+def gateway_resolve_workspace_policy(workspace_id: str) -> dict:
+    """Return the effective gateway policy for a workspace as a plain dict."""
+    from gateway.policy import resolve_workspace_policy
+
+    policy, source = resolve_workspace_policy(workspace_id)
+    return {
+        "policy_id": policy.policy_id,
+        "policy_version": policy.policy_version,
+        "policy_digest": policy.digest,
+        "source": source,
+    }
+
+
+def gateway_save_workspace_policy(workspace_id: str, policy_id: str) -> None:
+    """Persist a policy assignment. Raises ValueError for unknown policy_id."""
+    from gateway.policy import save_workspace_policy
+
+    save_workspace_policy(workspace_id, policy_id)
+
+
+def gateway_delete_workspace_policy(workspace_id: str) -> bool:
+    from gateway.policy import delete_workspace_policy
+
+    return delete_workspace_policy(workspace_id)
+
+
+def gateway_set_provider_credential(
+    workspace_id: str, provider_id: str, credential: str, base_url: str | None
+) -> None:
+    """Store an encrypted provider credential. Raises ValueError on bad input."""
+    from gateway.credentials import ProviderCredentialStore
+
+    ProviderCredentialStore().set_credential(
+        workspace_id, provider_id, credential, base_url
+    )
+
+
+def gateway_list_provider_credentials(workspace_id: str) -> list[dict]:
+    """Metadata only — never returns credential values."""
+    from gateway.credentials import ProviderCredentialStore
+
+    return ProviderCredentialStore().list_configured(workspace_id)
+
+
+def gateway_delete_provider_credential(workspace_id: str, provider_id: str) -> bool:
+    from gateway.credentials import ProviderCredentialStore
+
+    return ProviderCredentialStore().delete_credential(workspace_id, provider_id)
+
+
+def gateway_provider_ids() -> list[str]:
+    from gateway.providers import PROVIDER_REGISTRY
+
+    return sorted(PROVIDER_REGISTRY)

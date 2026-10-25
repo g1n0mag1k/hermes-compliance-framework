@@ -4,6 +4,9 @@
 # pyproject.toml is the source of truth for version numbers.
 
 spacy==3.8.16
+# preshed 3.0.14 breaks spaCy 3.8.16 model loading (OverflowError in
+# Tokenizer._flush_specials). Pin until spaCy ships a compatible release.
+preshed==3.0.12
 presidio-analyzer==2.2.364
 cryptography==50.0.2
 pydantic==2.14.0

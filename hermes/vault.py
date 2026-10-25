@@ -22,6 +22,12 @@ from datetime import UTC, datetime
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from hermes.tenant_keys import (
+    KEY_SCHEME_GLOBAL,
+    KEY_SCHEME_PER_WORKSPACE,
+    resolve_key_scheme,
+)
+
 
 def _load_vault_key() -> bytes:
     key_hex = os.environ.get("HERMES_VAULT_KEY")
@@ -80,10 +86,17 @@ def _aesgcm_decrypt(ciphertext_hex: str, key: bytes) -> str:
     return aesgcm.decrypt(nonce, ct, None).decode("utf-8")
 
 
-def _generate_token(pii_type: str, original_value: str) -> str:
-    """HMAC-SHA256 derived token. Deterministic per (key, pii_type, value)."""
+def _generate_token(
+    pii_type: str, original_value: str, key: bytes | None = None
+) -> str:
+    """HMAC-SHA256 derived token. Deterministic per (key, pii_type, value).
+
+    key defaults to the deployment-wide VAULT_KEY. Per-workspace vaults pass
+    their derived key so the same value yields different tokens in different
+    workspaces (no cross-tenant correlation by token).
+    """
     mac = hmac.new(
-        VAULT_KEY,
+        key if key is not None else VAULT_KEY,
         f"{pii_type}:{original_value}".encode(),
         hashlib.sha256,
     ).hexdigest()[:16]
@@ -151,14 +164,58 @@ def _load_all_entries(conn: sqlite3.Connection) -> dict[str, VaultEntry]:
 
 
 class TokenVault:
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | None = None,
+        vault_key: bytes | None = None,
+    ) -> None:
+        """
+        vault_key: per-workspace key (see hermes.tenant_keys). When omitted the
+        deployment-wide VAULT_KEY is used (legacy single-tenant).
+
+        The key scheme is recorded in the vault_meta table. A vault that already
+        holds entries encrypted with the global key keeps using it, so existing
+        tokens stay decryptable; a vault created with a per-workspace key
+        refuses to open without one.
+        """
         self._db_path = db_path or _get_db_path()
         self._lock = threading.Lock()
 
         conn = sqlite3.connect(self._db_path)
-        _init_db(conn)
-        self._store: dict[str, VaultEntry] = _load_all_entries(conn)
-        conn.close()
+        try:
+            _init_db(conn)
+            self._key_scheme = resolve_key_scheme(
+                conn, "vault_meta", "vault_entries", vault_key
+            )
+            if self._key_scheme == KEY_SCHEME_PER_WORKSPACE:
+                if vault_key is None:
+                    raise ValueError(
+                        f"Vault at {self._db_path!r} was created with a per-workspace "
+                        "key. Open it via hermes.workspaces.get_vault_for_workspace()."
+                    )
+                if len(vault_key) != 32:
+                    raise ValueError("vault_key must be exactly 32 bytes")
+                self._key = vault_key
+            elif self._key_scheme == KEY_SCHEME_GLOBAL:
+                if vault_key is not None:
+                    warnings.warn(
+                        f"Vault at {self._db_path!r} predates per-workspace keys; "
+                        "continuing with HERMES_VAULT_KEY so existing tokens decrypt.",
+                        stacklevel=2,
+                    )
+                self._key = VAULT_KEY
+            else:
+                raise ValueError(
+                    f"Unknown key_scheme {self._key_scheme!r} in {self._db_path!r}"
+                )
+            self._store: dict[str, VaultEntry] = _load_all_entries(conn)
+        finally:
+            conn.close()
+
+    @property
+    def key_scheme(self) -> str:
+        """'global' (deployment-wide key) or 'per_workspace_v1'."""
+        return self._key_scheme
 
     def store(
         self,
@@ -167,8 +224,8 @@ class TokenVault:
         transaction_id: str,
         workspace_id: str = "default",
     ) -> str:
-        token = _generate_token(pii_type, original_value)
-        encrypted = _aesgcm_encrypt(original_value, VAULT_KEY)
+        token = _generate_token(pii_type, original_value, self._key)
+        encrypted = _aesgcm_encrypt(original_value, self._key)
         entry = VaultEntry(
             token=token,
             pii_type=pii_type,
@@ -213,7 +270,7 @@ class TokenVault:
                 conn.close()
         if row is None:
             return None
-        return _aesgcm_decrypt(row[0], VAULT_KEY)
+        return _aesgcm_decrypt(row[0], self._key)
 
     def retrieve_entry(
         self, token: str, workspace_id: str = "default"

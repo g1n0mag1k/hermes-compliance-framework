@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from gateway.credentials import inject_provider_credentials, strip_client_auth_headers
+from gateway.credentials import resolve_upstream_for_workspace, strip_client_auth_headers
 from gateway.evidence import issue_gateway_receipt
 from gateway.exceptions import ReceiptPersistenceError, UpstreamTransportFailure
 from gateway.inspector import (
@@ -436,8 +436,12 @@ class GatewayPipeline:
         # 11. strip_client_auth_headers()
         forward_headers = strip_client_auth_headers(dict(request.headers))
 
-        # 12. inject_provider_credentials()
-        forward_headers = inject_provider_credentials(forward_headers, provider)
+        # 12. Inject provider credentials — the workspace's own stored credential
+        #     when configured, else the deployment-wide env var
+        #     (inject_provider_credentials). Raises RuntimeError when none exists.
+        forward_headers, upstream_base_url = resolve_upstream_for_workspace(
+            forward_headers, provider, workspace.workspace_id
+        )
 
         # 13. Filter request headers
         forward_headers = {
@@ -448,7 +452,7 @@ class GatewayPipeline:
         if forward_body:
             forward_headers["content-length"] = str(len(forward_body))
 
-        upstream_url = provider.effective_base_url()
+        upstream_url = upstream_base_url
         if request.query_string:
             upstream_url = f"{upstream_url}{sanitized_path}?{sanitized_query}"
         else:

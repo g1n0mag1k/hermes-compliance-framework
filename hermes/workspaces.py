@@ -431,13 +431,19 @@ def get_chain_for_workspace(workspace: Workspace):
     Return the AttestationChain for a workspace, creating it if needed.
     Instances are cached per workspace_id for the lifetime of the process.
     """
-    from hermes.attestation import AttestationChain
+    from hermes.attestation import DEFAULT_DB_PATH, AttestationChain
+    from hermes.tenant_keys import workspace_signing_key
     with _cache_lock:
         if workspace.workspace_id not in _chain_cache:
+            legacy_db = os.environ.get("HERMES_DB_PATH", DEFAULT_DB_PATH)
+            _assert_not_shared_path(
+                workspace, workspace.chain_db_path, legacy_db, "HERMES_DB_PATH"
+            )
             # Ensure directory exists
             Path(workspace.chain_db_path).parent.mkdir(parents=True, exist_ok=True)
             _chain_cache[workspace.workspace_id] = AttestationChain(
-                db_path=workspace.chain_db_path
+                db_path=workspace.chain_db_path,
+                signing_key=workspace_signing_key(workspace.workspace_id),
             )
         return _chain_cache[workspace.workspace_id]
 
@@ -447,14 +453,32 @@ def get_vault_for_workspace(workspace: Workspace):
     Return the TokenVault for a workspace, creating it if needed.
     Instances are cached per workspace_id for the lifetime of the process.
     """
+    from hermes.tenant_keys import workspace_vault_key
     from hermes.vault import TokenVault
     with _cache_lock:
         if workspace.workspace_id not in _vault_cache:
+            legacy_vault = os.environ.get("HERMES_VAULT_DB_PATH", "hermes_vault.db")
+            _assert_not_shared_path(
+                workspace, workspace.vault_db_path, legacy_vault, "HERMES_VAULT_DB_PATH"
+            )
             Path(workspace.vault_db_path).parent.mkdir(parents=True, exist_ok=True)
             _vault_cache[workspace.workspace_id] = TokenVault(
-                db_path=workspace.vault_db_path
+                db_path=workspace.vault_db_path,
+                vault_key=workspace_vault_key(workspace.workspace_id),
             )
         return _vault_cache[workspace.workspace_id]
+
+
+def _assert_not_shared_path(
+    workspace: Workspace, ws_path: str, legacy_path: str, env_name: str
+) -> None:
+    """Refuse to open a workspace DB that resolves to the legacy single-tenant DB."""
+    if os.path.abspath(ws_path) == os.path.abspath(legacy_path):
+        raise RuntimeError(
+            f"Workspace {workspace.workspace_id!r} database {ws_path!r} resolves to "
+            f"the legacy single-tenant database ({env_name}). This would mix tenant "
+            "data. Point HERMES_DATA_DIR or the legacy path somewhere else."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -464,9 +488,19 @@ def get_vault_for_workspace(workspace: Workspace):
 _WORKSPACE_ID_RE = re.compile(r'^[a-z0-9][a-z0-9\-]{1,62}[a-z0-9]$')
 
 
+RESERVED_WORKSPACE_IDS = frozenset({"default"})
+
+
 def _validate_workspace_id(workspace_id: str) -> None:
-    if not _WORKSPACE_ID_RE.match(workspace_id):
+    # fullmatch, not match: with match(), '$' also matches before a trailing
+    # newline, so "acme\n" would pass and create a directory with a newline in it.
+    if not isinstance(workspace_id, str) or not _WORKSPACE_ID_RE.fullmatch(workspace_id):
         raise ValueError(
             f"workspace_id must be 3–64 lowercase alphanumeric chars and hyphens, "
             f"starting and ending with alphanumeric. Got: {workspace_id!r}"
+        )
+    if workspace_id in RESERVED_WORKSPACE_IDS:
+        raise ValueError(
+            f"workspace_id {workspace_id!r} is reserved for the legacy "
+            "single-tenant deployment. Choose a different workspace_id."
         )

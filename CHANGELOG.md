@@ -6,6 +6,27 @@ This project is pre-1.0 and under active solo development. Entries prioritize ac
 
 ## [Unreleased]
 
+### Added — Multi-tenancy
+- Per-workspace HMAC signing keys for V1 attestation chains and per-workspace vault keys, derived from `HERMES_SIGNING_KEY` / `HERMES_VAULT_KEY` (`hermes/tenant_keys.py`). Same value → different vault token per workspace.
+- Key-scheme record (`chain_meta` / `vault_meta`) so existing workspace chains and vaults keep their original key and historical receipts keep verifying; new ones use per-workspace keys.
+- Per-workspace gateway policy (`GET/PUT/DELETE /v1/workspaces/{id}/policy`), read by the gateway on every request — no restart. Fails closed (503) if the policy store is unreadable.
+- Per-workspace AI provider credentials, AES-256-GCM encrypted at rest (`GET/PUT/DELETE /v1/workspaces/{id}/provider-credentials/{provider}`), wired into the gateway pipeline with fallback to the deployment env keys. Azure endpoints restricted to Azure hosts.
+- `GET /v1/workspaces/{id}/chain-integrity` for MSPs to verify each client chain.
+- Optional `role` on `POST /v1/workspaces`.
+- `docs/MULTI_TENANCY.md`; 59 tests in `tests/test_multi_tenant.py`.
+
+### Changed — Multi-tenancy
+- Role checks on core endpoints: `/v1/scrub`, `/v1/review`, `/v1/trial-scan`, `/api/v1/evaluate` require `msp_admin` or `msp_tech`; listing workspaces and rotating keys require `msp_admin`. `client_readonly` keeps status and history.
+- `require_role` now accepts the legacy `HERMES_API_KEY` (previously it rejected it with 401).
+- A client workspace cannot change its own policy or AI credentials; its parent MSP does.
+
+### Fixed — Multi-tenancy
+- Workspace IDs with a trailing newline were accepted (`re.match` + `$`); now `fullmatch`. Removed the corresponding strict xfail.
+- `POST /v1/workspaces` accepted a `parent_workspace_id` that did not exist, so whoever later registered that ID inherited access. Now rejected, as are grandchildren.
+- `default` workspace ID reserved for the legacy single-tenant key.
+- Pinned `preshed==3.0.12`: 3.0.14 crashes spaCy 3.8.16 model loading, which broke fresh installs and Docker builds.
+- `scripts/install_workspaces.py` now refuses to overwrite existing files (it restored an old snapshot of 8 core files and committed with `git add -A`).
+
 ### Fixed
 - Corrected a double-counting bug in the audit trail: Presidio's `EMAIL_ADDRESS` and `URL` recognizers both fire on email addresses (the URL recognizer matches the domain portion, e.g. `email.com` inside `patient@email.com`). Redaction was already correct (single `[REDACTED_EMAIL]`), but `flags_triggered` incorrectly counted both `HIPAA_PHI_EMAIL` and `HIPAA_PHI_URL` for one identifier. Fixed via `_merge_flag_sets()` — nested `HIPAA_PHI_URL` spans fully contained within a `HIPAA_PHI_EMAIL` span are suppressed from the count. Added regression tests: `test_email_domain_url_not_double_counted`, `test_standalone_url_still_detected`.
 

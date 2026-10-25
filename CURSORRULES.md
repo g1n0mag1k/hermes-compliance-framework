@@ -13,7 +13,7 @@ Exit target: Drata or Nightfall acquisition
 ---
 
 ## Current State
-- 562 tests passing, 0 failures
+- 836 tests passing, 0 failures (17 strict xfails document open audit findings)
 - 16 of 18 HIPAA Safe Harbor categories covered (P and Q are 
   reference_only — binary artifacts, acknowledged)
 - FastAPI /v1/scrub and /v1/review endpoints functional
@@ -41,7 +41,7 @@ against mocks only; live Drata acceptance is UNKNOWN — see Honest State)
 
 ## Hard Rules — Never Violate These
 
-- PYTEST MUST STAY GREEN. 562 tests is the floor. Never decrease.
+- PYTEST MUST STAY GREEN. 836 tests is the floor. Never decrease.
 - Never add external API calls to classifier.py or the scanner
 - Never remove HERMES_SIGNING_KEY or HERMES_API_KEY checks
 - Never add ML inference to the detection pipeline
@@ -56,6 +56,9 @@ against mocks only; live Drata acceptance is UNKNOWN — see Honest State)
 ## Key Files
 - hermes/classifier.py — PHI detection engine. Do not touch without explicit instruction.
 - hermes/attestation.py — HMAC chain. Do not touch without explicit instruction.
+- hermes/tenant_keys.py — per-workspace key derivation + key_scheme migration guard. See docs/MULTI_TENANCY.md.
+- tests/test_multi_tenant.py — multi-tenant isolation, RBAC, per-workspace policy/credentials
+- scripts/install_workspaces.py — OBSOLETE one-time bootstrap; overwrites core files with an old snapshot. Guarded; never run it.
 - hermes/webhooks.py — generic webhooks and dispatch_drata_cct() (Drata Path A)
 - hermes/api.py — /v1/scrub and webhook/CCT wiring
 - tests/test_webhooks.py — webhook and Drata CCT contract tests
@@ -94,7 +97,7 @@ scripts/install_workspaces.py — bootstrap workspace installer (moved from repo
 tests/test_gateway.py       — gateway app/pipeline/policy/provider tests
                               (one of several gateway test files)
 
-Current test count: 562 passing
+Current test count: 836 passing
 Gateway supports: OpenAI, Azure OpenAI, Anthropic
 Auth: Bearer (OpenAI), api-key (Azure), x-api-key (Anthropic)
 Recursive JSON inspection covers tool arguments, nested blocks,
@@ -172,7 +175,7 @@ Every implementation session must:
 - run git pull origin main first
 - verify git status is clean before starting
 - run targeted tests
-- run the full pytest suite (floor: 562 passed — must not decrease)
+- run the full pytest suite (floor: 836 passed — must not decrease)
 - inspect git diff and git status before staging
 - use git add -p to review staged changes
 - create a descriptive commit message

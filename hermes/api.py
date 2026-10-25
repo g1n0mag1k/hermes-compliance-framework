@@ -209,14 +209,10 @@ def require_role(allowed_roles: list[str]):
     workspace role is not in allowed_roles.
     """
     def _dependency(x_api_key: str = Header(..., alias="X-API-Key")):
-        from hermes.workspaces import get_workspace_by_api_key
-
-        workspace = get_workspace_by_api_key(x_api_key)
-        if workspace is None:
-            raise HTTPException(
-                status_code=401,
-                detail="Unauthorized: Invalid or missing API Key",
-            )
+        # Resolve through verify_api_key so the legacy single-tenant
+        # HERMES_API_KEY keeps working (it maps to the "default" workspace,
+        # role msp_admin). Raises 401 for unknown keys.
+        workspace = verify_api_key(x_api_key)
         if workspace.role not in allowed_roles:
             raise HTTPException(
                 status_code=403,
@@ -225,6 +221,15 @@ def require_role(allowed_roles: list[str]):
         return workspace
 
     return _dependency
+
+
+# Role sets for endpoint authorization.
+#   msp_admin       — full control: workspaces, keys, policies, credentials
+#   msp_tech        — operate: scans, reviews, canary, read status/integrity
+#   client_readonly — read status and scan history only
+ROLES_ALL = ["msp_admin", "msp_tech", "client_readonly"]
+ROLES_OPERATE = ["msp_admin", "msp_tech"]
+ROLES_ADMIN = ["msp_admin"]
 
 
 class _LegacyWorkspace:
@@ -377,7 +382,7 @@ def health_check():
     response_model=ScrubResponse,
     tags=["Pipeline"],
 )
-def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks, workspace=Depends(verify_api_key)):
+def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks, workspace=Depends(require_role(ROLES_OPERATE))):
     """
     Synchronous endpoint execution. FastAPI delegates this to a
     background threadpool to cleanly respect our _PIPELINE_LOCK.
@@ -424,7 +429,7 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks, wor
     response_model=HumanReviewReceiptOut,
     tags=["Pipeline"],
 )
-def review_endpoint(request: ReviewRequest, workspace=Depends(verify_api_key)):
+def review_endpoint(request: ReviewRequest, workspace=Depends(require_role(ROLES_OPERATE))):
     """Record a human review/override decision for a prior /v1/scrub
     transaction, chained into the same AttestationChain as tamper-evident
     proof that a control was actually looked at by a person."""
@@ -449,7 +454,7 @@ def review_endpoint(request: ReviewRequest, workspace=Depends(verify_api_key)):
     response_model=StatusResponse,
     tags=["System"],
 )
-def status_endpoint(workspace=Depends(verify_api_key)):
+def status_endpoint(workspace=Depends(require_role(ROLES_ALL))):
     """Dashboard data source — aggregate attestation-chain metrics for MSP UI."""
     chain_obj = _get_chain(workspace)
     chain = chain_obj.export_chain()
@@ -522,7 +527,7 @@ def status_endpoint(workspace=Depends(verify_api_key)):
     response_model=ScanHistoryResponse,
     tags=["Status"],
 )
-def scan_history_endpoint(days: int = 7, workspace=Depends(verify_api_key)):
+def scan_history_endpoint(days: int = 7, workspace=Depends(require_role(ROLES_ALL))):
     """Daily scan counts for the dashboard trend sparkline — zero-seeded by calendar day."""
     if days < 1:
         raise HTTPException(status_code=400, detail="days must be at least 1")
@@ -573,7 +578,7 @@ def scan_history_endpoint(days: int = 7, workspace=Depends(verify_api_key)):
     response_model=ScrubResponse,
     tags=["Pipeline"],
 )
-def trial_scan_endpoint(background_tasks: BackgroundTasks, workspace=Depends(verify_api_key)):
+def trial_scan_endpoint(background_tasks: BackgroundTasks, workspace=Depends(require_role(ROLES_OPERATE))):
     """Run a fixed canary PHI scan subject to persistent trial quota limits."""
     from hermes.workspaces import get_trial_quota as _ws_trial_quota
     from hermes.workspaces import increment_trial_quota as _ws_increment
@@ -612,6 +617,13 @@ class WorkspaceCreateRequest(BaseModel):
     owner_email: str = Field(..., min_length=3)
     plan: str = Field(default="trial")
     parent_workspace_id: str | None = None
+    role: Literal["msp_admin", "msp_tech", "client_readonly"] = Field(
+        default="msp_admin",
+        description=(
+            "Role carried by this workspace's API key. Use msp_tech for client "
+            "workspaces that should scan but not change their own configuration."
+        ),
+    )
 
 
 class WorkspaceOut(BaseModel):
@@ -651,7 +663,23 @@ def create_workspace_endpoint(
     if not expected or not hmac.compare_digest(x_admin_token or "", expected):
         raise HTTPException(status_code=401, detail="Admin token required to create workspaces")
 
-    from hermes.workspaces import create_workspace
+    from hermes.workspaces import create_workspace, get_workspace
+
+    if request.parent_workspace_id is not None:
+        parent = get_workspace(request.parent_workspace_id)
+        # The parent must already exist (otherwise whoever later registers that
+        # ID would silently gain access to this workspace) and must be a
+        # top-level workspace: access control is one level deep (MSP -> client).
+        if parent is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"parent_workspace_id {request.parent_workspace_id!r} does not exist",
+            )
+        if parent.parent_workspace_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="parent_workspace_id must be a top-level (MSP) workspace",
+            )
     try:
         workspace, raw_key = create_workspace(
             workspace_id=request.workspace_id,
@@ -659,6 +687,7 @@ def create_workspace_endpoint(
             owner_email=request.owner_email,
             plan=request.plan,
             parent_workspace_id=request.parent_workspace_id,
+            role=request.role,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -670,7 +699,7 @@ def create_workspace_endpoint(
 
 
 @app.get("/v1/workspaces", response_model=list[WorkspaceOut], tags=["Workspaces"])
-def list_workspaces_endpoint(workspace=Depends(verify_api_key)):
+def list_workspaces_endpoint(workspace=Depends(require_role(ROLES_ADMIN))):
     """List all workspaces. MSPs see their own client workspaces."""
     from hermes.workspaces import list_workspaces
     workspaces = list_workspaces(parent_workspace_id=workspace.workspace_id)
@@ -796,7 +825,7 @@ def drata_integration_status_endpoint(
 async def evaluate_phi_canary(
     payload: dict,
     background_tasks: BackgroundTasks,
-    workspace=Depends(verify_api_key),
+    workspace=Depends(require_role(ROLES_OPERATE)),
 ):
     """Run PHI canary evaluation; open a PSA ticket on drift via BackgroundTasks."""
     from hermes.auditor import load_prior_result, run_canary, save_result
@@ -932,7 +961,7 @@ async def ingest_telemetry_receipt(
 
 
 @app.post("/v1/workspaces/{workspace_id}/rotate-key", tags=["Workspaces"])
-def rotate_key_endpoint(workspace_id: str, workspace=Depends(verify_api_key)):
+def rotate_key_endpoint(workspace_id: str, workspace=Depends(require_role(ROLES_ADMIN))):
     """Rotate the API key for a workspace. Returns new key once."""
     from hermes.workspaces import can_access_workspace, get_workspace, rotate_api_key
 
@@ -946,6 +975,250 @@ def rotate_key_endpoint(workspace_id: str, workspace=Depends(verify_api_key)):
         raise HTTPException(status_code=403, detail="Cannot rotate a key you do not own.")
     new_key = rotate_api_key(workspace_id)
     return {"workspace_id": workspace_id, "api_key": new_key}
+
+
+# -------------------------------------------------------------------------
+# MULTI-TENANT WORKSPACE CONFIGURATION
+# -------------------------------------------------------------------------
+# Read access  : the workspace itself or its direct parent (can_access_workspace).
+# Write access : msp_admin role AND the workspace's manager — its parent when it
+#                has one, otherwise itself. A client workspace therefore cannot
+#                change its own gateway policy or AI credentials; its MSP does.
+
+
+def _load_target_workspace(caller, workspace_id: str):
+    """Return the target workspace after a read-access check (404 / 403)."""
+    from hermes.workspaces import can_access_workspace, get_workspace
+
+    target = get_workspace(workspace_id)
+    if target is None:
+        if isinstance(caller, _LegacyWorkspace) and workspace_id == caller.workspace_id:
+            return caller
+        raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found.")
+    if not can_access_workspace(caller, target):
+        raise HTTPException(status_code=403, detail="Cannot access a workspace you do not own.")
+    return target
+
+
+def _require_manager(caller, target) -> None:
+    manager_id = target.parent_workspace_id or target.workspace_id
+    if caller.workspace_id != manager_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the managing workspace may change this configuration.",
+        )
+
+
+class WorkspacePolicyOut(BaseModel):
+    workspace_id: str
+    policy_id: str
+    policy_version: str
+    policy_digest: str
+    source: Literal["override", "workspace", "default"]
+    available_policy_ids: list[str]
+
+
+class WorkspacePolicySetRequest(BaseModel):
+    policy_id: str = Field(..., min_length=1, max_length=64)
+
+
+def _policy_out(workspace_id: str) -> WorkspacePolicyOut:
+    from hermes.gateway_integration import (
+        gateway_available_policy_ids,
+        gateway_resolve_workspace_policy,
+    )
+
+    try:
+        resolved = gateway_resolve_workspace_policy(workspace_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return WorkspacePolicyOut(
+        workspace_id=workspace_id,
+        available_policy_ids=gateway_available_policy_ids(),
+        **resolved,
+    )
+
+
+@app.get(
+    "/v1/workspaces/{workspace_id}/policy",
+    response_model=WorkspacePolicyOut,
+    tags=["Workspaces"],
+)
+def get_workspace_policy_endpoint(
+    workspace_id: str, workspace=Depends(require_role(ROLES_ALL))
+):
+    """Effective gateway enforcement policy for a workspace."""
+    target = _load_target_workspace(workspace, workspace_id)
+    return _policy_out(target.workspace_id)
+
+
+@app.put(
+    "/v1/workspaces/{workspace_id}/policy",
+    response_model=WorkspacePolicyOut,
+    tags=["Workspaces"],
+)
+def set_workspace_policy_endpoint(
+    workspace_id: str,
+    request: WorkspacePolicySetRequest,
+    workspace=Depends(require_role(ROLES_ADMIN)),
+):
+    """Assign a gateway policy. Applies to the workspace's next gateway request."""
+    from hermes.gateway_integration import gateway_save_workspace_policy
+
+    target = _load_target_workspace(workspace, workspace_id)
+    _require_manager(workspace, target)
+    try:
+        gateway_save_workspace_policy(target.workspace_id, request.policy_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _policy_out(target.workspace_id)
+
+
+@app.delete(
+    "/v1/workspaces/{workspace_id}/policy",
+    response_model=WorkspacePolicyOut,
+    tags=["Workspaces"],
+)
+def delete_workspace_policy_endpoint(
+    workspace_id: str, workspace=Depends(require_role(ROLES_ADMIN))
+):
+    """Remove the workspace's policy assignment (reverts to the deployment default)."""
+    from hermes.gateway_integration import gateway_delete_workspace_policy
+
+    target = _load_target_workspace(workspace, workspace_id)
+    _require_manager(workspace, target)
+    gateway_delete_workspace_policy(target.workspace_id)
+    return _policy_out(target.workspace_id)
+
+
+class ChainIntegrityOut(BaseModel):
+    workspace_id: str
+    chain_length: int
+    chain_integrity: Literal["verified", "failed", "no_data"]
+    key_scheme: str
+
+
+@app.get(
+    "/v1/workspaces/{workspace_id}/chain-integrity",
+    response_model=ChainIntegrityOut,
+    tags=["Workspaces"],
+)
+def chain_integrity_endpoint(
+    workspace_id: str, workspace=Depends(require_role(ROLES_OPERATE))
+):
+    """Verify one workspace's attestation chain (HMAC, linkage, sequence, head)."""
+    target = _load_target_workspace(workspace, workspace_id)
+    chain = _get_chain(target)
+    length = chain.chain_length()
+    integrity: Literal["verified", "failed", "no_data"]
+    if length == 0:
+        integrity = "no_data"
+    else:
+        integrity = "verified" if chain.verify_chain() else "failed"
+    return ChainIntegrityOut(
+        workspace_id=target.workspace_id,
+        chain_length=length,
+        chain_integrity=integrity,
+        key_scheme=chain.key_scheme,
+    )
+
+
+class ProviderCredentialSetRequest(BaseModel):
+    credential: str = Field(..., min_length=1, max_length=4096)
+    base_url: str | None = Field(
+        default=None,
+        description="azure_openai only: https://<resource>.openai.azure.com",
+    )
+
+
+class ProviderCredentialOut(BaseModel):
+    provider_id: str
+    base_url: str | None
+    updated_at: str
+
+
+class ProviderCredentialListOut(BaseModel):
+    workspace_id: str
+    configured: list[ProviderCredentialOut]
+    available_provider_ids: list[str]
+
+
+def _provider_list_out(workspace_id: str) -> ProviderCredentialListOut:
+    from hermes.gateway_integration import (
+        gateway_list_provider_credentials,
+        gateway_provider_ids,
+    )
+
+    return ProviderCredentialListOut(
+        workspace_id=workspace_id,
+        configured=[
+            ProviderCredentialOut(**row)
+            for row in gateway_list_provider_credentials(workspace_id)
+        ],
+        available_provider_ids=gateway_provider_ids(),
+    )
+
+
+@app.get(
+    "/v1/workspaces/{workspace_id}/provider-credentials",
+    response_model=ProviderCredentialListOut,
+    tags=["Workspaces"],
+)
+def list_provider_credentials_endpoint(
+    workspace_id: str, workspace=Depends(require_role(ROLES_ADMIN))
+):
+    """Which AI providers have workspace-specific credentials. Never returns values."""
+    target = _load_target_workspace(workspace, workspace_id)
+    _require_manager(workspace, target)
+    return _provider_list_out(target.workspace_id)
+
+
+@app.put(
+    "/v1/workspaces/{workspace_id}/provider-credentials/{provider_id}",
+    response_model=ProviderCredentialListOut,
+    tags=["Workspaces"],
+)
+def set_provider_credential_endpoint(
+    workspace_id: str,
+    provider_id: str,
+    request: ProviderCredentialSetRequest,
+    workspace=Depends(require_role(ROLES_ADMIN)),
+):
+    """Store an AI provider credential for this workspace (encrypted at rest)."""
+    from hermes.gateway_integration import gateway_set_provider_credential
+
+    target = _load_target_workspace(workspace, workspace_id)
+    _require_manager(workspace, target)
+    try:
+        gateway_set_provider_credential(
+            target.workspace_id, provider_id, request.credential, request.base_url
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _provider_list_out(target.workspace_id)
+
+
+@app.delete(
+    "/v1/workspaces/{workspace_id}/provider-credentials/{provider_id}",
+    response_model=ProviderCredentialListOut,
+    tags=["Workspaces"],
+)
+def delete_provider_credential_endpoint(
+    workspace_id: str,
+    provider_id: str,
+    workspace=Depends(require_role(ROLES_ADMIN)),
+):
+    """Remove a workspace credential (gateway falls back to the deployment key)."""
+    from hermes.gateway_integration import gateway_delete_provider_credential
+
+    target = _load_target_workspace(workspace, workspace_id)
+    _require_manager(workspace, target)
+    if not gateway_delete_provider_credential(target.workspace_id, provider_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"No {provider_id!r} credential stored for '{target.workspace_id}'.",
+        )
+    return _provider_list_out(target.workspace_id)
 
 
 # -------------------------------------------------------------------------

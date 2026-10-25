@@ -58,7 +58,7 @@ Import smoke check:
 .venv/bin/python -m pytest
 ```
 
-Target: **562+ tests passing, 0 failures**. The test floor must never decrease.
+Target: **836+ tests passing, 0 failures** (17 strict xfails document known audit findings). The test floor must never decrease.
 
 Coverage (optional):
 

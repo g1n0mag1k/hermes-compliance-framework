@@ -178,7 +178,7 @@ Receipt N:
 | Limitation | Context | Roadmap Response |
 |---|---|---|
 | Binary content inspection (P/Q) | Biometric identifiers and full-face photographs: text references only; binary image/biometric payloads not inspected | Content-channel inspection for embedded media |
-| Single-tenant per deployment | No multi-tenant RBAC yet | Per-tenant API keys + scoped audit logs |
+| Partial V2 tenant isolation | Workspaces, RBAC, per-workspace V1 signing/vault keys, policies and AI credentials are shipped; gateway V2 receipts share one deployment signing key and Drata export is global | Per-tenant V2 signing keys and per-tenant Drata routing |
 | English-only NER | spaCy `en_core_web_sm` is English | Multi-language model support in v1.1 |
 | No streaming support | Single-shot scrub only | Streaming endpoint for LLM proxy mode |
 
