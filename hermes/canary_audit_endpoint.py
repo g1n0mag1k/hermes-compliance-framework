@@ -25,7 +25,6 @@ import base64
 import hmac as _hmac_module
 import logging
 import os
-import os as _os
 import time
 import uuid
 from dataclasses import asdict
@@ -84,7 +83,7 @@ def _get_api_key_dep():
         except ImportError:
             pass
 
-        expected = _os.environ.get(_API_KEY_ENV_VAR)
+        expected = os.environ.get(_API_KEY_ENV_VAR)
         if expected and _hmac_module.compare_digest(x_api_key, expected):
             return {"id": "system", "name": "system", "role": "admin"}
 
@@ -545,7 +544,7 @@ class ReportVerifyResponse(BaseModel):
 )
 async def verify_canary_audit_report(
     body: ReportVerifyRequest,
-    workspace: dict = Depends(_verify_api_key),
+    _workspace: dict = Depends(_verify_api_key),
 ) -> ReportVerifyResponse:
     valid = verify_audit_report(body.report)
     report_id = body.report.get("report_id")
