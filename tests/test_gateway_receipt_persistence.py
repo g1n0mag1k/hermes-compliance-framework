@@ -1,10 +1,12 @@
-"""Gateway receipt ledger locking and fail-closed persistence."""
+"""Gateway receipt ledger locking, fail-closed persistence, and threadpool offload."""
 
 from __future__ import annotations
 
+import asyncio
 import concurrent.futures
 
 import pytest
+from starlette.concurrency import run_in_threadpool
 
 import gateway.evidence as gateway_evidence
 from gateway.exceptions import ReceiptPersistenceError

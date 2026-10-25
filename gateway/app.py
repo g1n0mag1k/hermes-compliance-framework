@@ -15,6 +15,7 @@ from fastapi import (
     Response,
 )
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from gateway import __version__
 from gateway.evidence import (
@@ -138,7 +139,11 @@ async def gateway_relay(
     )
 
     try:
-        result = _pipeline.process(gateway_request, workspace)
+        result = await run_in_threadpool(
+            _pipeline.process,
+            gateway_request,
+            workspace,
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
