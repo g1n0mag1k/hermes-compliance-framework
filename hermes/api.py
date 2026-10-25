@@ -951,7 +951,8 @@ def rotate_key_endpoint(workspace_id: str, workspace=Depends(verify_api_key)):
 # -------------------------------------------------------------------------
 # CANARY AUDIT ROUTER — /v1/telemetry/canary-audit
 # -------------------------------------------------------------------------
-from hermes.canary_audit_endpoint import router as _canary_audit_router  # noqa: E402
+from hermes.canary_audit_endpoint import router as _canary_audit_router
+
 app.include_router(_canary_audit_router)
 
 # Serve React dashboard — API routes take priority, static files fall through

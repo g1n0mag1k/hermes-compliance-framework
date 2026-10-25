@@ -25,7 +25,6 @@ import base64
 import hmac as _hmac_module
 import logging
 import os
-import os as _os
 import time
 import uuid
 from dataclasses import asdict
@@ -84,7 +83,7 @@ def _get_api_key_dep():
         except ImportError:
             pass
 
-        expected = _os.environ.get(_API_KEY_ENV_VAR)
+        expected = os.environ.get(_API_KEY_ENV_VAR)
         if expected and _hmac_module.compare_digest(x_api_key, expected):
             return {"id": "system", "name": "system", "role": "admin"}
 
@@ -275,7 +274,7 @@ class CanaryAuditReportResponse(BaseModel):
     report_signature: str
 
     @classmethod
-    def from_audit_report(cls, report: AuditReport) -> "CanaryAuditReportResponse":
+    def from_audit_report(cls, report: AuditReport) -> CanaryAuditReportResponse:
         return cls(**asdict(report))
 
 
@@ -356,19 +355,22 @@ def _chain_to_attestation(
         try:
             from hermes.api import _get_chain  # type: ignore[import]
             chain = _get_chain(workspace)
-        except (ImportError, Exception):
+        except Exception:
             chain = ATTESTATION_CHAIN
+
+        flags_triggered = {
+            f"HIPAA_CANARY_{c.upper()}": 1
+            for c in report_dict.get("payload_phi_categories", [])
+        }
+        flags_redacted = {
+            f"HIPAA_CANARY_{c.upper()}": 1
+            for c in report_dict.get("categories_passed", [])
+        }
 
         receipt = chain.issue(
             transaction_id=report_dict["transaction_id"],
-            flags_triggered={
-                f"HIPAA_CANARY_{c.upper()}": 1
-                for c in report_dict.get("payload_phi_categories", [])
-            },
-            flags_redacted={
-                f"HIPAA_CANARY_{c.upper()}": 1
-                for c in report_dict.get("categories_passed", [])
-            },
+            flags_triggered=flags_triggered,
+            flags_redacted=flags_redacted,
             char_count_in=report_dict["payload_char_count_in"],
             char_count_out=report_dict["payload_char_count_out"],
         )
@@ -448,7 +450,7 @@ async def canary_audit_endpoint(
             source_label=body.source_label,
         )
     except Exception as exc:
-        log.exception("canary_audit engine failure txn=%s: %s", txn_id, exc)
+        log.exception("canary_audit engine failure txn=%s", txn_id)
         raise HTTPException(
             status_code=500,
             detail=f"Canary audit engine error: {exc}",
@@ -542,7 +544,7 @@ class ReportVerifyResponse(BaseModel):
 )
 async def verify_canary_audit_report(
     body: ReportVerifyRequest,
-    workspace: dict = Depends(_verify_api_key),
+    _workspace: dict = Depends(_verify_api_key),
 ) -> ReportVerifyResponse:
     valid = verify_audit_report(body.report)
     report_id = body.report.get("report_id")

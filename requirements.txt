@@ -6,8 +6,8 @@
 spacy==3.8.16
 presidio-analyzer==2.2.364
 cryptography==50.0.2
-pydantic==2.14.0
-fastapi==0.143.0
+pydantic==2.14.1
+fastapi==0.143.2
 uvicorn==0.54.0
 httpx==0.28.1
 python-dotenv==1.2.4
