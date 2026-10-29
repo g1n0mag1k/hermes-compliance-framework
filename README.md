@@ -189,7 +189,7 @@ See `AGENTS.md` and `docs/DEPLOYMENT.md` for full CLI reference and environment 
 
 Hermes is designed for on-premise or private cloud deployment inside the customer environment.
 
-**The sensitive workload never runs on Sui-Generis LLC infrastructure.**
+**The sensitive workload never runs on Sui-Generis infrastructure.**
 
 Supported install: Docker Compose, built from this repository. Follow
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
@@ -203,7 +203,7 @@ hermesrelay.dev
 
 ## Legal
 
-Built and maintained by Sui-Generis LLC  
+Built and maintained by Sui-Generis  
 Rocky Top, Tennessee  
 
 This software is intended for deployment by HIPAA-covered entities, business associates, or qualified IT providers acting on their behalf. A Business Associate Agreement is required prior to production deployment.

@@ -7,7 +7,7 @@ export default function PrivacyPage() {
         <div className="w-full max-w-content mx-auto max-w-[720px]">
           <p className="font-mono text-mono text-signal uppercase tracking-[0.1em]">Legal</p>
           <h1 className="font-display text-h2 text-ink mt-8">Privacy Policy</h1>
-          <p className="font-mono text-caption text-muted mt-4">Effective: July 2026 · Sui-Generis LLC</p>
+          <p className="font-mono text-caption text-muted mt-4">Effective: July 2026 · Sui-Generis</p>
 
           <div className="mt-12 flex flex-col gap-10 font-body text-body text-muted">
             <div>
@@ -20,7 +20,7 @@ export default function PrivacyPage() {
             </div>
             <div>
               <h2 className="font-display text-h3 text-ink mb-4">PHI and the Hermes product</h2>
-              <p>The Hermes Relay API operates on a zero-egress, zero-PHI-retention architecture. PHI processed through the API never transits or is stored on Sui-Generis LLC infrastructure. Customers deploy Hermes inside their own environment. Sui-Generis LLC does not receive, process, or retain any PHI from customer deployments. Business Associate Agreements are available upon request for HIPAA-covered deployments.</p>
+              <p>The Hermes Relay API operates on a zero-egress, zero-PHI-retention architecture. PHI processed through the API never transits or is stored on Sui-Generis infrastructure. Customers deploy Hermes inside their own environment. Sui-Generis does not receive, process, or retain any PHI from customer deployments. Business Associate Agreements are available upon request for HIPAA-covered deployments.</p>
             </div>
             <div>
               <h2 className="font-display text-h3 text-ink mb-4">Cookies</h2>

@@ -3,7 +3,7 @@
 
 **Document type:** Statement of Work (SOW)  
 **Product:** Hermes Relay — zero-egress PHI redaction API with hash-chained attestation  
-**Provider:** Sui-Generis LLC  
+**Provider:** Sui-Generis  
 **Provider address:** Rocky Top, Tennessee  
 **Provider contact:** Andrew Rogers, Founder — andrew@hermesrelay.dev  
 **Provider website:** https://hermesrelay.dev  
@@ -19,7 +19,7 @@
 | Client primary contact | ________________________ |
 | Client email | ________________________ |
 
-This Statement of Work (“SOW”) is entered into by and between **Sui-Generis LLC** (“Provider”) and the client named above (“Client”). This SOW describes the services Provider will perform for the Hermes Relay 30-day pilot and the commercial terms governing that engagement. A Business Associate Agreement (BAA) is available upon request and, when executed, is incorporated by reference for HIPAA-covered deployments.
+This Statement of Work (“SOW”) is entered into by and between **Sui-Generis** (“Provider”) and the client named above (“Client”). This SOW describes the services Provider will perform for the Hermes Relay 30-day pilot and the commercial terms governing that engagement. A Business Associate Agreement (BAA) is available upon request and, when executed, is incorporated by reference for HIPAA-covered deployments.
 
 ---
 
@@ -105,7 +105,7 @@ Delays caused by Client’s failure to meet these responsibilities may shift mil
 ## 6. Intellectual Property Ownership
 
 - **Client owns their deployment.** Configuration files, environment-specific secrets, attestation receipts generated in Client’s environment, and operational data produced by Client’s use of Hermes Relay remain Client’s property. Provider does not claim ownership of Client PHI or Client business data.
-- **Sui-Generis LLC owns the software.** Hermes Relay, including source code, binaries, models bundled with the product, documentation authored by Provider, trademarks, and related intellectual property, remain the exclusive property of Sui-Generis LLC (and its licensors, if any).
+- **Sui-Generis owns the software.** Hermes Relay, including source code, binaries, models bundled with the product, documentation authored by Provider, trademarks, and related intellectual property, remain the exclusive property of Sui-Generis (and its licensors, if any).
 - Client receives a limited, non-exclusive, non-transferable right to install and use Hermes Relay in Client’s environment for the pilot term (and, if Client purchases production service, for the subscription term) solely for Client’s internal business purposes.
 - Client shall not assert ownership of Provider’s software by virtue of hosting it, funding the pilot, or suggesting product improvements. Feedback may be used by Provider to improve the product without obligation to Client.
 
@@ -134,7 +134,7 @@ Delays caused by Client’s failure to meet these responsibilities may shift mil
 
 By signing below, each party agrees to the terms of this Statement of Work.
 
-### Sui-Generis LLC
+### Sui-Generis
 
 | | |
 | --- | --- |
@@ -157,4 +157,4 @@ By signing below, each party agrees to the terms of this Statement of Work.
 
 ---
 
-*Sui-Generis LLC · Rocky Top, Tennessee · hermesrelay.dev · andrew@hermesrelay.dev*
+*Sui-Generis · Rocky Top, Tennessee · hermesrelay.dev · andrew@hermesrelay.dev*

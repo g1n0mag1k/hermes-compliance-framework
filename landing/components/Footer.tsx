@@ -17,7 +17,7 @@ export function Footer() {
           Hermes produces tamper-evident technical evidence about tested telemetry paths. It is not a HIPAA compliance certification, a de-identification determination, or legal advice.
         </p>
         <div className="w-full flex flex-col md:flex-row md:justify-between items-center gap-3 md:gap-6">
-        <span>© 2026 Sui-Generis LLC</span>
+        <span>© 2026 Sui-Generis</span>
         <span>Hermes — hermesrelay.dev</span>
         <a href="https://github.com/g1n0mag1k/hermes-echo" className="hover:text-signal transition-colors">Hermes Echo — CLI behavioral contracts</a>
         <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">

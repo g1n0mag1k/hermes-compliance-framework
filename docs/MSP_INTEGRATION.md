@@ -80,7 +80,7 @@ Verify:
 Expected output:
 
     Hermes Relay v1.0.0
-    hermesrelay.dev | Sui-Generis LLC
+    hermesrelay.dev | Sui-Generis
 
 ---
 
@@ -166,7 +166,7 @@ Drata dashboard has not been validated against a live Drata tenant; see
 
 andrew@hermesrelay.dev
 hermesrelay.dev
-Sui-Generis LLC — Rocky Top, Tennessee
+Sui-Generis — Rocky Top, Tennessee
 
 ## Vanta Integration Environment Variables
 

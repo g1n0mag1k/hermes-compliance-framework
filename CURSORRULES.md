@@ -6,7 +6,7 @@ entities, their business associates, and the MSPs that serve them. Includes Drat
 Tests (CCT) export code that is contract-tested against mocks only and
 NOT live-validated (see "Drata Integration — Honest State").
 
-Owner: Andrew Rogers / Sui-Generis LLC  
+Owner: Andrew Rogers / Sui-Generis  
 Target customer: MSPs managing HIPAA compliance for healthtech clients  
 Exit target: Drata or Nightfall acquisition
 

@@ -3,7 +3,7 @@
 
 **Document type:** Business Associate Agreement (BAA)  
 **Product:** Hermes Relay — zero-egress PHI redaction API with hash-chained attestation  
-**Business Associate:** Sui-Generis LLC  
+**Business Associate:** Sui-Generis  
 **Business Associate address:** Rocky Top, Tennessee  
 **Business Associate contact:** Andrew Rogers, Founder — andrew@hermesrelay.dev  
 **Business Associate website:** https://hermesrelay.dev  
@@ -18,7 +18,7 @@
 | Covered Entity email | ________________________ |
 | Related SOW / order reference (if any) | ________________________ |
 
-This Business Associate Agreement (“Agreement”) is entered into by and between the Covered Entity named above and **Sui-Generis LLC** (“Business Associate”). This Agreement is intended to satisfy the requirements of the Health Insurance Portability and Accountability Act of 1996 and its implementing regulations, including the Privacy, Security, and Breach Notification Rules at 45 CFR Parts 160 and 164 (collectively, “HIPAA”), as applicable to the parties’ relationship in connection with Hermes Relay.
+This Business Associate Agreement (“Agreement”) is entered into by and between the Covered Entity named above and **Sui-Generis** (“Business Associate”). This Agreement is intended to satisfy the requirements of the Health Insurance Portability and Accountability Act of 1996 and its implementing regulations, including the Privacy, Security, and Breach Notification Rules at 45 CFR Parts 160 and 164 (collectively, “HIPAA”), as applicable to the parties’ relationship in connection with Hermes Relay.
 
 **Availability:** A BAA is available upon request and is required for HIPAA-covered deployments of Hermes Relay.
 
@@ -54,7 +54,7 @@ Capitalized terms not defined in this Agreement have the meanings set forth in H
 
 ## 3. Zero-Egress Architecture Clause
 
-3.1 **Architectural commitment.** Hermes Relay is designed and documented to run entirely inside Covered Entity’s (or Covered Entity’s MSP customer’s) environment. During scrubbing and attestation operations, PHI is redacted in-flight and is not transmitted to Sui-Generis LLC systems for classification, storage, or processing.
+3.1 **Architectural commitment.** Hermes Relay is designed and documented to run entirely inside Covered Entity’s (or Covered Entity’s MSP customer’s) environment. During scrubbing and attestation operations, PHI is redacted in-flight and is not transmitted to Sui-Generis systems for classification, storage, or processing.
 
 3.2 **PHI never transits Sui-Generis infrastructure.** Under the intended deployment model:
 
@@ -116,7 +116,7 @@ Capitalized terms not defined in this Agreement have the meanings set forth in H
 
 ## 7. Return or Destruction of PHI
 
-7.1 **Not applicable to product data flows — zero retention architecture.** Hermes Relay redacts PHI in-flight inside Covered Entity’s environment and does not store PHI — not even encrypted — on Sui-Generis LLC infrastructure. Attestation receipts retained in Covered Entity’s environment contain metadata about categories detected and redacted, not the PHI itself, and remain under Covered Entity’s control.
+7.1 **Not applicable to product data flows — zero retention architecture.** Hermes Relay redacts PHI in-flight inside Covered Entity’s environment and does not store PHI — not even encrypted — on Sui-Generis infrastructure. Attestation receipts retained in Covered Entity’s environment contain metadata about categories detected and redacted, not the PHI itself, and remain under Covered Entity’s control.
 
 7.2 Accordingly, for routine operation of Hermes Relay there is **no Business Associate-held PHI repository to return or destroy** at end of engagement.
 
@@ -154,7 +154,7 @@ Capitalized terms not defined in this Agreement have the meanings set forth in H
 
 By signing below, each party agrees to be bound by this Business Associate Agreement.
 
-### Sui-Generis LLC (Business Associate)
+### Sui-Generis (Business Associate)
 
 | | |
 | --- | --- |
@@ -177,5 +177,5 @@ By signing below, each party agrees to be bound by this Business Associate Agree
 
 ---
 
-*Sui-Generis LLC · Rocky Top, Tennessee · hermesrelay.dev · andrew@hermesrelay.dev*  
+*Sui-Generis · Rocky Top, Tennessee · hermesrelay.dev · andrew@hermesrelay.dev*  
 *BAA available upon request. Required for HIPAA-covered deployments.*

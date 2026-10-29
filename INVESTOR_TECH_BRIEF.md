@@ -2,7 +2,7 @@
 ## Investor Technical Brief — Confidential
 
 **Classification:** NDA-Protected Pre-Investment Material  
-**Prepared by:** Sui-Generis LLC · Rocky Top, Tennessee  
+**Prepared by:** Sui-Generis · Rocky Top, Tennessee  
 **Contact:** andrew@hermesrelay.dev  
 **GitHub:** github.com/g1n0mag1k (private repo, NDA + term sheet required for access)
 
@@ -212,9 +212,9 @@ Hermes is positioned as the answer to a question MSPs are already asking, ahead 
 
 ---
 
-## About Sui-Generis LLC
+## About Sui-Generis
 
-- **Entity:** Sui-Generis LLC (HUBZone-certified)
+- **Entity:** Sui-Generis (HUBZone-certified)
 - **Location:** Rocky Top, Tennessee (Campbell County — rural Appalachian geography)
 - **SAM.gov UEI:** YK4VNG1STBA1
 - **HUBZone Status:** Designated — Campbell County, TN
