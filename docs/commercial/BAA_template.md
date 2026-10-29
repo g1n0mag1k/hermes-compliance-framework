@@ -3,7 +3,7 @@
 
 **Document type:** Business Associate Agreement (BAA)  
 **Product:** Hermes Relay — zero-egress PHI redaction API with hash-chained attestation  
-**Business Associate:** Sui-Generis  
+**Business Associate:** Andrew Rogers, d/b/a Sui-Generis  
 **Business Associate address:** Rocky Top, Tennessee  
 **Business Associate contact:** Andrew Rogers, Founder — andrew@hermesrelay.dev  
 **Business Associate website:** https://hermesrelay.dev  
@@ -18,7 +18,7 @@
 | Covered Entity email | ________________________ |
 | Related SOW / order reference (if any) | ________________________ |
 
-This Business Associate Agreement (“Agreement”) is entered into by and between the Covered Entity named above and **Sui-Generis** (“Business Associate”). This Agreement is intended to satisfy the requirements of the Health Insurance Portability and Accountability Act of 1996 and its implementing regulations, including the Privacy, Security, and Breach Notification Rules at 45 CFR Parts 160 and 164 (collectively, “HIPAA”), as applicable to the parties’ relationship in connection with Hermes Relay.
+This Business Associate Agreement (“Agreement”) is entered into by and between the Covered Entity named above and **Andrew Rogers, d/b/a Sui-Generis** (“Business Associate”). This Agreement is intended to satisfy the requirements of the Health Insurance Portability and Accountability Act of 1996 and its implementing regulations, including the Privacy, Security, and Breach Notification Rules at 45 CFR Parts 160 and 164 (collectively, “HIPAA”), as applicable to the parties’ relationship in connection with Hermes Relay.
 
 **Availability:** A BAA is available upon request and is required for HIPAA-covered deployments of Hermes Relay.
 
@@ -154,7 +154,7 @@ Capitalized terms not defined in this Agreement have the meanings set forth in H
 
 By signing below, each party agrees to be bound by this Business Associate Agreement.
 
-### Sui-Generis (Business Associate)
+### Andrew Rogers, d/b/a Sui-Generis (Business Associate)
 
 | | |
 | --- | --- |
