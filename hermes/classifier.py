@@ -9,7 +9,7 @@ import spacy
 from presidio_analyzer import AnalyzerEngine
 from pydantic import BaseModel, Field
 
-from hermes.vault import VAULT
+from hermes.vault import VAULT, TokenVault
 
 # -------------------------------------------------------------------------
 # COMPLIANCE INVARIANT: Model must be local. No external API calls permitted.
@@ -781,9 +781,21 @@ def scrub_payload(transaction_id: str, text: str) -> ScrubberResult:
     return _scrub_payload_impl(transaction_id, text, reversible=False)
 
 
-def scrub_payload_reversible(transaction_id: str, text: str) -> ScrubberResult:
-    """Reversible scrub — PHI replaced with vault tokens via VAULT.store()."""
-    return _scrub_payload_impl(transaction_id, text, reversible=True)
+def scrub_payload_reversible(
+    transaction_id: str,
+    text: str,
+    *,
+    vault: TokenVault | None = None,
+) -> ScrubberResult:
+    """Reversible scrub — PHI replaced with vault tokens via vault.store().
+
+    `vault` lets a caller supply a per-workspace TokenVault (see
+    hermes.workspaces.get_vault_for_workspace) so reversible redaction is
+    tenant-isolated in a multi-tenant deployment. Omitted, this defaults to
+    the global, deployment-wide VAULT singleton (legacy single-tenant use —
+    same vault hermes.pseudonymizer and gateway/credentials.py already use
+    in production)."""
+    return _scrub_payload_impl(transaction_id, text, reversible=True, vault=vault)
 
 
 def _scrub_payload_impl(
@@ -791,10 +803,13 @@ def _scrub_payload_impl(
     text: str,
     *,
     reversible: bool = False,
+    vault: TokenVault | None = None,
 ) -> ScrubberResult:
+    _active_vault = vault if vault is not None else VAULT
+
     def _tok(flag_name: str, matched_value: str, placeholder: str) -> str:
         if reversible:
-            return VAULT.store(flag_name, matched_value, transaction_id)
+            return _active_vault.store(flag_name, matched_value, transaction_id)
         return _static_redaction_token(placeholder)
 
     # Unicode normalization — NFKC folds homoglyphs, fullwidth chars,

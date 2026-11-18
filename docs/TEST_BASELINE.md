@@ -12,8 +12,8 @@
 
 | Metric | Count |
 |---|---|
-| **Collected** | 866 |
-| **Passed** | 849 |
+| **Collected** | 881 |
+| **Passed** | 864 |
 | **XFailed (strict, documented findings)** | 17 |
 | **Failed** | 0 |
 | **Skipped** | 0 |
@@ -37,5 +37,5 @@ The 17 `xfail`s are intentional: each documents one open, named bug in `tests/te
 ## Notes
 
 - Do not infer pass counts from `def test_` grep alone — always run pytest collection and execution.
-- Test floor per `CURSORRULES.md` / `AGENTS.md`: **836 passed** (must not decrease). Current count (849 passed, 17 xfailed) is above floor as of this baseline.
+- Test floor per `CURSORRULES.md` / `AGENTS.md`: **836 passed** (must not decrease). Current count (864 passed, 17 xfailed) is above floor as of this baseline — 15 new tests added same-day covering the new reversible-redaction vault wiring (`/v1/scrub-reversible`, `/v1/vault/retrieve`, `hermes/vault_access_log.py`).
 - Previous baseline (2026-09-18): 532 passed. This file had not been refreshed since, despite the floor and test count moving substantially — re-run and update this file whenever the floor in `CURSORRULES.md`/`AGENTS.md` changes, not on a fixed schedule.

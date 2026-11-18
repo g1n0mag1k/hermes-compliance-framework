@@ -2,7 +2,7 @@
 
 Hermes Relay is **not production-ready** as of 2026-11-18 (status re-confirmed; checklist last substantively updated 2026-09-18). This checklist tracks gates required before any claim of production readiness.
 
-An independent code-level audit on 2026-11-18 found gaps this checklist does not yet track as items: the reversible redaction vault is still not called from any production code path (see `README.md` "Reversible (roadmap)" and `hermes/vault.py`); the Drata integration remains contract-tested only, with no live tenant validation; and there is no partner-specific integration or sandbox environment for a compliance-automation partner program (e.g. Secureframe). Treat this checklist's `[x]` marks as "implemented and tested," not as "ready to pitch to a partner program" — see the partner-readiness gap audit for that question.
+An independent code-level audit on 2026-11-18 found gaps this checklist does not yet track as items. As of the same day, one of them has since been closed: the reversible redaction vault is now wired into production via `/v1/scrub-reversible` + `/v1/vault/retrieve` (org_admin-gated, with its own tamper-evident per-workspace access log — see `README.md` "Reversible redaction" and `docs/MULTI_TENANCY.md`), but it is not yet assigned a pricing/plan tier and has had no partner-facing validation. Still open: the Drata integration remains contract-tested only, with no live tenant validation; and there is no partner-specific integration or sandbox environment for a compliance-automation partner program (e.g. Secureframe). Treat this checklist's `[x]` marks as "implemented and tested," not as "ready to pitch to a partner program" — see the partner-readiness gap audit for that question.
 
 ```
 [x] BLOCK policy implemented (HIPAA_PRODUCTION_BLOCK)
@@ -22,8 +22,10 @@ An independent code-level audit on 2026-11-18 found gaps this checklist does not
 [x] upstream failure semantics documented (502 + receipt with forwarded=true)
 [x] bypass paths reviewed (see DOCUMENTATION_AUDIT.md)
 [x] security regression suite passes
-[x] full pytest suite passes (849 passed, 17 strict xfail documenting known findings; 532 as of 2026-09-18, floor is 836 per CURSORRULES.md/AGENTS.md)
+[x] full pytest suite passes (864 passed, 17 strict xfail documenting known findings; 532 as of 2026-09-18, floor is 836 per CURSORRULES.md/AGENTS.md)
 [x] documentation matches implementation
+[x] reversible redaction wired into production (/v1/scrub-reversible, /v1/vault/retrieve), org_admin-gated, tamper-evident per-workspace access log (2026-11-18)
+[ ] reversible redaction assigned a pricing/plan tier (currently available to any org_admin-role workspace regardless of plan)
 [ ] customer claims reviewed (see PRODUCT_CAPABILITY_MATRIX.md)
 ```
 

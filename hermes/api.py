@@ -26,6 +26,7 @@ from hermes.classifier import (
     RedactionAuditLog,
     ScrubberResult,
     scrub_payload,
+    scrub_payload_reversible,
 )
 from hermes.drata_state import (
     DRATA_API_KEY_ENV_VAR,
@@ -89,6 +90,36 @@ class ScrubResponse(BaseModel):
     compliance_receipt: ComplianceReceiptOut
 
 
+class VaultRetrieveRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+    accessed_by: str = Field(
+        ...,
+        min_length=1,
+        description=(
+            "Identity of the human or system retrieving this value — "
+            "recorded in the tamper-evident vault access log, not just "
+            "logged to application logs."
+        ),
+    )
+
+
+class VaultAccessReceiptOut(BaseModel):
+    access_id: str
+    token: str
+    transaction_id: str
+    workspace_id: str
+    accessed_by: str
+    issued_at: str
+    previous_record_hash: str
+    chain_position: int
+    record_hash: str
+
+
+class VaultRetrieveResponse(BaseModel):
+    original_value: str
+    access_receipt: VaultAccessReceiptOut
+
+
 class HumanReviewReceiptOut(BaseModel):
     review_id: str
     transaction_id: str
@@ -149,6 +180,24 @@ def _get_chain(workspace):
         return ATTESTATION_CHAIN
     from hermes.workspaces import get_chain_for_workspace
     return get_chain_for_workspace(workspace)
+
+
+def _get_vault(workspace):
+    """Return the TokenVault for a workspace (or the global legacy vault)."""
+    if isinstance(workspace, _LegacyWorkspace):
+        from hermes.vault import VAULT
+        return VAULT
+    from hermes.workspaces import get_vault_for_workspace
+    return get_vault_for_workspace(workspace)
+
+
+def _get_vault_access_log(workspace):
+    """Return the VaultAccessLog for a workspace (or the global legacy log)."""
+    if isinstance(workspace, _LegacyWorkspace):
+        from hermes.vault_access_log import get_legacy_vault_access_log
+        return get_legacy_vault_access_log()
+    from hermes.workspaces import get_vault_access_log_for_workspace
+    return get_vault_access_log_for_workspace(workspace)
 
 
 def _issue_scrub_attestation(
@@ -429,6 +478,78 @@ def scrub_endpoint(request: ScrubRequest, background_tasks: BackgroundTasks, wor
         clean_text=result.clean_text,
         audit_log=result.audit_log,
         compliance_receipt=ComplianceReceiptOut.model_validate(asdict(receipt)),
+    )
+
+
+@app.post(
+    "/v1/scrub-reversible",
+    response_model=ScrubResponse,
+    tags=["Pipeline"],
+)
+def scrub_reversible_endpoint(
+    request: ScrubRequest,
+    background_tasks: BackgroundTasks,
+    workspace=Depends(require_role(ROLES_OPERATE)),
+):
+    """Same pipeline as /v1/scrub, but detected PHI is replaced with
+    per-workspace vault tokens instead of static placeholders, so an
+    org_admin caller can later resolve a token back to its original value
+    via /v1/vault/retrieve. Issues the same tamper-evident compliance
+    receipt as /v1/scrub — reversibility changes what the redaction token
+    looks like, not what is attested about detection/redaction.
+
+    Does not currently participate in the trial-scan quota gate that
+    /v1/scrub enforces — reversible redaction is not yet assigned a plan
+    tier; treat that as an open product decision, not an oversight."""
+    txn_id = f"txn_api_{uuid.uuid4().hex[:12]}"
+    vault = _get_vault(workspace)
+    result = scrub_payload_reversible(
+        transaction_id=txn_id, text=request.payload, vault=vault
+    )
+    receipt = _issue_scrub_attestation(transaction_id=txn_id, result=result, workspace=workspace)
+    background_tasks.add_task(dispatch_webhook, receipt)
+    background_tasks.add_task(dispatch_drata_cct, receipt)
+    return ScrubResponse(
+        clean_text=result.clean_text,
+        audit_log=result.audit_log,
+        compliance_receipt=ComplianceReceiptOut.model_validate(asdict(receipt)),
+    )
+
+
+@app.post(
+    "/v1/vault/retrieve",
+    response_model=VaultRetrieveResponse,
+    tags=["Pipeline"],
+)
+def vault_retrieve_endpoint(
+    request: VaultRetrieveRequest,
+    workspace=Depends(require_role(["org_admin"])),
+):
+    """Resolve a /v1/scrub-reversible vault token back to its original
+    value. Restricted to org_admin: the operator role that can run a scan
+    is deliberately NOT sufficient to un-redact PHI. Every successful call
+    appends a tamper-evident record to this workspace's vault access log
+    (hermes.vault_access_log) — independent of the compliance-receipt
+    attestation chain — so there is a standing, signed answer to "who
+    looked at the real value, and when"."""
+    vault = _get_vault(workspace)
+    entry = vault.retrieve_entry(request.token)
+    if entry is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Token not found in this workspace's vault (unknown, expired, or purged).",
+        )
+    original_value = vault.retrieve(request.token)
+    access_log = _get_vault_access_log(workspace)
+    record = access_log.log_access(
+        token=request.token,
+        transaction_id=entry.transaction_id,
+        workspace_id=workspace.workspace_id,
+        accessed_by=request.accessed_by,
+    )
+    return VaultRetrieveResponse(
+        original_value=original_value,
+        access_receipt=VaultAccessReceiptOut.model_validate(asdict(record)),
     )
 
 

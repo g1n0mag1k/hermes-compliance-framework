@@ -32,3 +32,10 @@ os.environ.setdefault(
     "HERMES_REGISTRY_DB",
     os.path.join(_TEST_DB_DIR, "workspaces", "registry.db"),
 )
+# Legacy single-tenant vault access log (hermes/vault_access_log.py) — same
+# reasoning as HERMES_DB_PATH above: hermes.vault_access_log.get_legacy_vault_access_log()
+# opens this path the first time any legacy-workspace test calls /v1/vault/retrieve.
+os.environ.setdefault(
+    "HERMES_VAULT_ACCESS_LOG_DB_PATH",
+    os.path.join(_TEST_DB_DIR, "singleton_hermes_vault_access_log.db"),
+)
