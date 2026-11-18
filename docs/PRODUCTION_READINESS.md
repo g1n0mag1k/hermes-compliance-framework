@@ -22,7 +22,7 @@ An independent code-level audit on 2026-11-18 found gaps this checklist does not
 [x] upstream failure semantics documented (502 + receipt with forwarded=true)
 [x] bypass paths reviewed (see DOCUMENTATION_AUDIT.md)
 [x] security regression suite passes
-[x] full pytest suite passes (869 passed, 12 strict xfail documenting known findings; 532 as of 2026-09-18, floor is 836 per CURSORRULES.md/AGENTS.md)
+[x] full pytest suite passes (878 passed, 3 strict xfail documenting known findings; 532 as of 2026-09-18, floor is 836 per CURSORRULES.md/AGENTS.md)
 [x] documentation matches implementation
 [x] reversible redaction wired into production (/v1/scrub-reversible, /v1/vault/retrieve), org_admin-gated, tamper-evident per-workspace access log (2026-11-18)
 [ ] reversible redaction assigned a pricing/plan tier (currently available to any org_admin-role workspace regardless of plan)

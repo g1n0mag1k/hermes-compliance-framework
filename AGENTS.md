@@ -58,7 +58,7 @@ Import smoke check:
 .venv/bin/python -m pytest
 ```
 
-Target: **836+ tests passing, 0 failures**. The test floor must never decrease. 12 strict xfails currently document known, open audit findings (down from 17 — five gateway-surface ones were fixed 2026-11-18); see docs/TEST_BASELINE.md for the authoritative, dated count.
+Target: **836+ tests passing, 0 failures**. The test floor must never decrease. 3 strict xfails currently document known, open audit findings (down from 17 — five gateway-surface fixes and nine receipts-v2/telemetry/webhooks/proxy/auditor fixes landed 2026-11-18; the remaining 3 all touch hermes/classifier.py or hermes/attestation.py, which this file flags as do-not-touch-without-explicit-instruction); see docs/TEST_BASELINE.md for the authoritative, dated count.
 
 Coverage (optional):
 

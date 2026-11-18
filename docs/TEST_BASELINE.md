@@ -13,14 +13,14 @@
 | Metric | Count |
 |---|---|
 | **Collected** | 881 |
-| **Passed** | 869 |
-| **XFailed (strict, documented findings)** | 12 |
+| **Passed** | 878 |
+| **XFailed (strict, documented findings)** | 3 |
 | **Failed** | 0 |
 | **Skipped** | 0 |
 | **Errors** | 0 |
 | **Collection failures** | 0 |
 
-The remaining `xfail`s are intentional: each documents one open, named bug in `tests/test_audit_findings.py` (strict mode, so an accidental fix without removing the marker fails the suite). See `docs/CURRENT_LIMITATIONS.md` and the findings list in that test file for what each one is. Five gateway-surface findings (inspector key/double-count bugs, `validate_path` dot-segment escape, unfiltered request headers, stale `content-encoding` header) were fixed same-day — down from 17.
+The remaining `xfail`s are intentional: each documents one open, named bug in `tests/test_audit_findings.py` (strict mode, so an accidental fix without removing the marker fails the suite). See `docs/CURRENT_LIMITATIONS.md` and the findings list in that test file for what each one is. Down from 17: five gateway-surface findings (inspector key/double-count bugs, `validate_path` dot-segment escape, unfiltered request headers, stale `content-encoding` header) were fixed same-day, then nine more (Merkle root RFC 9162 mismatch, `MerkleTree.append` non-bytes acceptance, `KeyStore.open` leaking raw exceptions, telemetry `schema_version` validation, Sprinto GraphQL-error-as-success, `ProxyRelay` non-JSON crash, `_deep_scrub` field-allowlist leak, canary `occurrence_gaps` wiring). The 3 remaining findings all live in `hermes/classifier.py` (2) or `hermes/attestation.py` (1), both flagged in `CURSORRULES.md`/`AGENTS.md` as do-not-touch-without-explicit-instruction, so they were intentionally left open pending that instruction.
 
 ## Security regression suite
 
@@ -37,5 +37,5 @@ The remaining `xfail`s are intentional: each documents one open, named bug in `t
 ## Notes
 
 - Do not infer pass counts from `def test_` grep alone — always run pytest collection and execution.
-- Test floor per `CURSORRULES.md` / `AGENTS.md`: **836 passed** (must not decrease). Current count (869 passed, 12 xfailed) is above floor as of this baseline — 15 new tests added same-day covering the new reversible-redaction vault wiring (`/v1/scrub-reversible`, `/v1/vault/retrieve`, `hermes/vault_access_log.py`), plus 5 xfail markers removed same-day as their underlying gateway bugs were fixed.
+- Test floor per `CURSORRULES.md` / `AGENTS.md`: **836 passed** (must not decrease). Current count (878 passed, 3 xfailed) is above floor as of this baseline — 15 new tests added same-day covering the new reversible-redaction vault wiring (`/v1/scrub-reversible`, `/v1/vault/retrieve`, `hermes/vault_access_log.py`), plus 14 xfail markers removed same-day (5 gateway-surface, then 9 more) as their underlying bugs were fixed.
 - Previous baseline (2026-09-18): 532 passed. This file had not been refreshed since, despite the floor and test count moving substantially — re-run and update this file whenever the floor in `CURSORRULES.md`/`AGENTS.md` changes, not on a fixed schedule.
