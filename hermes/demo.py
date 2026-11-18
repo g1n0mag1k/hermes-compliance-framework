@@ -38,7 +38,7 @@ def main():
     print()
     print("=" * 60)
     print(" HERMES RELAY — Live PHI Detection Demo")
-    print(" hermesrelay.dev | Sui-Generis LLC")
+    print(" hermesrelay.dev | Sui-Generis")
     print("=" * 60)
     print()
     pause()

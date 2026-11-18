@@ -1,5 +1,15 @@
 """
 hermes/benchmark.py — Competitive Benchmark Suite
+
+STALE as of 2026-11-18: TEST_CORPUS and HERMES_CAPABILITIES below reflect the
+product's state around 2026-07-01 (SSN/PAN/PERSON-DATE-ORG only; vault listed as
+"not wired" with no further qualification). Current coverage is 16 of 18 HIPAA
+Safe Harbor categories — see docs/SCOPE_BOUNDARY.md and
+docs/PRODUCT_CAPABILITY_MATRIX.md for the current, maintained numbers, and
+README.md for the vault's actual current status. Do not run this module to
+generate partner- or customer-facing claims until TEST_CORPUS and the
+"Current Detection Scope" text in generate_report() are rewritten against the
+current DECLARED_SCOPE in hermes/classifier.py.
 """
 import json
 import statistics

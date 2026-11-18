@@ -400,7 +400,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         '<div style="font-size:0.68rem;color:#1e3d57;line-height:1.6;">'
-        'Sui-Generis LLC · Rocky Top, TN<br>'
+        'Sui-Generis · Rocky Top, TN<br>'
         'HIPAA · PCI-DSS · Zero-Trust<br>'
         'hermesrelay.dev</div>',
         unsafe_allow_html=True

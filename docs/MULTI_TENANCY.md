@@ -31,6 +31,7 @@ The legacy single-tenant setup (`HERMES_API_KEY` env var, global chain at
 | V1 attestation chain | Own SQLite DB **and** own HMAC signing key | `<HERMES_DATA_DIR>/<id>/chain.db` |
 | Gateway V2 receipts | Own table rows in the workspace chain DB | same `chain.db` |
 | Token vault | Own SQLite DB **and** own AES-256-GCM / token key | `<HERMES_DATA_DIR>/<id>/vault.db` |
+| Vault access log (un-redaction audit trail) | Own SQLite DB **and** own HMAC signing key, distinct from the vault's own token key | `<HERMES_DATA_DIR>/<id>/vault_access_log.db` |
 | Canary results | Own SQLite DB | `<HERMES_DATA_DIR>/<id>/canary.db` |
 | Trial quota | Own row | `registry.db` |
 | Gateway policy | Own assignment, applied on the next gateway request | `<HERMES_DATA_DIR>/workspace_policies.db` |
@@ -43,10 +44,16 @@ The legacy single-tenant setup (`HERMES_API_KEY` env var, global chain at
 Keys are derived, not stored:
 
 ```
-signing_key(ws)    = HMAC-SHA256(HERMES_SIGNING_KEY, "hermes-relay:attestation:v1:<ws>")
-vault_key(ws)      = HMAC-SHA256(HERMES_VAULT_KEY,   "hermes-relay:vault:v1:<ws>")
-credential_key(ws) = HMAC-SHA256(HERMES_VAULT_KEY,   "hermes-relay:provider-credentials:v1:<ws>")
+signing_key(ws)      = HMAC-SHA256(HERMES_SIGNING_KEY, "hermes-relay:attestation:v1:<ws>")
+vault_key(ws)        = HMAC-SHA256(HERMES_VAULT_KEY,   "hermes-relay:vault:v1:<ws>")
+credential_key(ws)   = HMAC-SHA256(HERMES_VAULT_KEY,   "hermes-relay:provider-credentials:v1:<ws>")
+vault_access_key(ws) = HMAC-SHA256(HERMES_VAULT_KEY,   "hermes-relay:vault-access:v1:<ws>")
 ```
+
+`vault_access_key(ws)` signs the vault access log only — it is derived from
+`HERMES_VAULT_KEY` but with a different purpose label than `vault_key(ws)`, so
+a leaked vault token-encryption key cannot by itself be used to forge entries
+in the un-redaction audit trail.
 
 Consequences:
 

@@ -7,7 +7,7 @@ export default function SecurityPage() {
         <div className="w-full max-w-content mx-auto max-w-[720px]">
           <p className="font-mono text-mono text-signal uppercase tracking-[0.1em]">Trust</p>
           <h1 className="font-display text-h2 text-ink mt-8">Security</h1>
-          <p className="font-mono text-caption text-muted mt-4">Effective: September 2026 · Sui-Generis LLC</p>
+          <p className="font-mono text-caption text-muted mt-4">Effective: September 2026 · Sui-Generis</p>
 
           <div className="mt-12 flex flex-col gap-10 font-body text-body text-muted">
             <div>

@@ -1,5 +1,15 @@
 # Hermes Relay — Competitive Benchmark Report
 
+> **⚠️ STALE — do not use for partner or customer claims.** Generated 2026-07-01 by the
+> early `hermes/benchmark.py` script, before most of the HIPAA Safe Harbor detection work
+> landed. The "Current Detection Scope" section below (SSN + PAN + PERSON/DATE/ORG only)
+> and the "Reversible redaction: Roadmap" row are both **out of date**: current coverage is
+> 16 of 18 Safe Harbor categories (see `docs/SCOPE_BOUNDARY.md` and
+> `docs/PRODUCT_CAPABILITY_MATRIX.md`), and the reversible vault's actual status is detailed
+> in `README.md` and the 2026-11-18 partner-readiness gap audit. This file is kept for
+> historical reference only until `hermes/benchmark.py` is rewritten against current scope
+> and re-run.
+
 _Generated: 2026-07-01 02:02 UTC_
 
 ## Methodology

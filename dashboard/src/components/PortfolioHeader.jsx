@@ -28,7 +28,7 @@ export default function PortfolioHeader({ status, workspaces, onScanComplete }) 
         </div>
         <div className="flex items-center gap-4">
           <span className="text-xs text-slate-400">
-            hermesrelay.dev · Sui-Generis LLC
+            hermesrelay.dev · Sui-Generis
           </span>
           <TrialScanButton onComplete={onScanComplete} />
         </div>

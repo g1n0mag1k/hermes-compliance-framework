@@ -142,7 +142,7 @@ def cmd_status(args):
 def cmd_version(args):
     """Show Hermes Relay version."""
     print(f"Hermes Relay v{VERSION}")
-    print("hermesrelay.dev | Sui-Generis LLC")
+    print("hermesrelay.dev | Sui-Generis")
 
 
 def _keystore_env() -> tuple[Path, bytes]:

@@ -76,7 +76,7 @@ This record is what your OCR investigator reads.
 
 **Gateway enforcement.** Traffic routed through the Hermes Gateway (`:8788`) is inspected before forward. Default dev policy (`HIPAA_STRICT`) **redacts** detected PHI; production design-partner profile (`HIPAA_PRODUCTION_BLOCK`) **blocks** detected PHI with zero upstream bytes on BLOCK decisions.
 
-**Reversible (roadmap).** A token vault module exists (AES-256-GCM) for typed placeholders with key-controlled restoration. Integration with the scrub pipeline is in active development — current redactions use static placeholders (`[REDACTED_SSN]`, `[REDACTED_PAN]`, etc.).
+**Reversible redaction.** `/v1/scrub-reversible` replaces detected PHI with AES-256-GCM-backed vault tokens instead of static placeholders (`[REDACTED_SSN]`, `[REDACTED_PAN]`, etc.); `/v1/vault/retrieve` resolves a token back to its original value, restricted to the `org_admin` role (the `operator` role that can run a scan cannot un-redact). Every retrieval appends a tamper-evident, hash-chained record to a dedicated per-workspace vault access log (`hermes/vault_access_log.py`) — independent of the compliance-receipt attestation chain — so there is a standing, signed answer to who looked at a real value and when. `/v1/scrub` and its static placeholders are unchanged and remain the default. Not yet assigned a pricing/plan tier — see `docs/PRODUCTION_READINESS.md`.
 
 **Multi-tenant.** One deployment serves a parent organization and its child workspaces — an MSP and its clients, a health system and its facilities, a vendor and its customers — as isolated workspaces: each has its own API key, its own attestation chain signed with its own derived key, its own vault key, its own gateway policy and its own AI provider credentials (encrypted at rest). Role-based access (`org_admin`, `operator`, `viewer`) and a parent→child management boundary are enforced on every endpoint. Gateway V2 receipts still share one deployment signing key and Drata export is still global — see [docs/MULTI_TENANCY.md](docs/MULTI_TENANCY.md) for exactly what is and is not isolated.
 
@@ -189,7 +189,7 @@ See `AGENTS.md` and `docs/DEPLOYMENT.md` for full CLI reference and environment 
 
 Hermes is designed for on-premise or private cloud deployment inside the customer environment.
 
-**The sensitive workload never runs on Sui-Generis LLC infrastructure.**
+**The sensitive workload never runs on Sui-Generis infrastructure.**
 
 Supported install: Docker Compose, built from this repository. Follow
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
@@ -203,7 +203,7 @@ hermesrelay.dev
 
 ## Legal
 
-Built and maintained by Sui-Generis LLC  
+Built and maintained by Sui-Generis  
 Rocky Top, Tennessee  
 
 This software is intended for deployment by HIPAA-covered entities, business associates, or qualified IT providers acting on their behalf. A Business Associate Agreement is required prior to production deployment.

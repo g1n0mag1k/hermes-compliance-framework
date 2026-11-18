@@ -66,7 +66,7 @@ immediately usable at the gateway.
 The repository and the GHCR image `ghcr.io/g1n0mag1k/hermes-compliance` are
 **private**. This deployment does not pull any Hermes image; it builds the
 image locally from the repository. You need read access to the repository
-(ask Sui-Generis LLC).
+(ask Sui-Generis).
 
 ```bash
 git clone https://github.com/g1n0mag1k/hermes-compliance-framework.git hermes

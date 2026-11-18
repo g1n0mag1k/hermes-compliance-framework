@@ -540,3 +540,72 @@ def test_create_workspace_with_wrong_admin_token(monkeypatch):
         headers={"X-Admin-Token": "wrong-token"},
     )
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# /v1/scrub-reversible + /v1/vault/retrieve
+# ---------------------------------------------------------------------------
+
+def test_scrub_reversible_uses_vault_tokens_not_static_placeholders():
+    """Reversible scrub replaces PHI with a vault token, not [REDACTED_SSN]."""
+    response = client.post(
+        "/v1/scrub-reversible",
+        headers={"X-API-Key": os.environ["HERMES_API_KEY"]},
+        json={"payload": "Patient SSN is 372-18-5421."},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "372-18-5421" not in data["clean_text"]
+    assert "[REDACTED_SSN]" not in data["clean_text"]
+    assert "[REDACTED_HIPAA_SSN_" in data["clean_text"]
+    # Still issues a normal, verifiable compliance receipt.
+    assert _verify_receipt_dict(data["compliance_receipt"])
+
+
+def test_scrub_reversible_then_retrieve_roundtrips_original_value():
+    scrub_resp = client.post(
+        "/v1/scrub-reversible",
+        headers={"X-API-Key": os.environ["HERMES_API_KEY"]},
+        json={"payload": "Patient SSN is 372-18-5421."},
+    )
+    assert scrub_resp.status_code == 200
+    clean_text = scrub_resp.json()["clean_text"]
+    start = clean_text.index("[REDACTED_HIPAA_SSN_")
+    end = clean_text.index("]", start) + 1
+    token = clean_text[start:end]
+
+    retrieve_resp = client.post(
+        "/v1/vault/retrieve",
+        headers={"X-API-Key": os.environ["HERMES_API_KEY"]},
+        json={"token": token, "accessed_by": "andrew@hermesrelay.dev"},
+    )
+    assert retrieve_resp.status_code == 200
+    data = retrieve_resp.json()
+    assert data["original_value"] == "372-18-5421"
+    assert data["access_receipt"]["token"] == token
+    assert data["access_receipt"]["accessed_by"] == "andrew@hermesrelay.dev"
+    assert data["access_receipt"]["chain_position"] >= 0
+
+
+def test_vault_retrieve_unknown_token_returns_404():
+    response = client.post(
+        "/v1/vault/retrieve",
+        headers={"X-API-Key": os.environ["HERMES_API_KEY"]},
+        json={"token": "[REDACTED_HIPAA_SSN_doesnotexist]", "accessed_by": "andrew@hermesrelay.dev"},
+    )
+    assert response.status_code == 404
+
+
+def test_vault_retrieve_requires_auth():
+    response = client.post(
+        "/v1/vault/retrieve",
+        json={"token": "[REDACTED_HIPAA_SSN_x]", "accessed_by": "andrew@hermesrelay.dev"},
+    )
+    assert response.status_code == 422  # missing X-API-Key header entirely
+
+    response = client.post(
+        "/v1/vault/retrieve",
+        headers={"X-API-Key": "invalid_key"},
+        json={"token": "[REDACTED_HIPAA_SSN_x]", "accessed_by": "andrew@hermesrelay.dev"},
+    )
+    assert response.status_code == 401

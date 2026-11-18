@@ -1,10 +1,10 @@
 # Hermes Compliance Framework
 ## Investor Technical Brief — Confidential
 
-**Classification:** NDA-Protected Pre-Investment Material  
-**Prepared by:** Sui-Generis LLC · Rocky Top, Tennessee  
+**Classification:** Pre-Investment Material  
+**Prepared by:** Sui-Generis · Rocky Top, Tennessee  
 **Contact:** andrew@hermesrelay.dev  
-**GitHub:** github.com/g1n0mag1k (private repo, NDA + term sheet required for access)
+**GitHub:** github.com/g1n0mag1k/hermes-compliance-framework (public repository — source, tests, and docs are openly viewable; no NDA required)
 
 ---
 
@@ -212,16 +212,18 @@ Hermes is positioned as the answer to a question MSPs are already asking, ahead 
 
 ---
 
-## About Sui-Generis LLC
+## About Sui-Generis
 
-- **Entity:** Sui-Generis LLC (HUBZone-certified)
+- **Entity:** Sui-Generis (HUBZone-certified)
 - **Location:** Rocky Top, Tennessee (Campbell County — rural Appalachian geography)
 - **SAM.gov UEI:** YK4VNG1STBA1
 - **HUBZone Status:** Designated — Campbell County, TN
 - **SEDI Eligibility:** Confirmed — rural Appalachian geography qualifies under InvestTN/SSBCI SEDI priority routing
-- **Founder:** Solo technical founder; GMP manufacturing background (3M); systems engineering, cybersecurity, Python/SQL
+- **Founder:** Solo technical founder; hands-on regulatory/manufacturing-adjacent background (commercial/residential drywall installation and subcontracting, 2012–2017; quality inspection at Clayton Homes); self-taught in systems engineering, cybersecurity, Python/SQL
 
 ---
 
-*This document is confidential and intended solely for qualified investors under NDA.  
-Source code access is available only following execution of a mutual NDA and receipt of a term sheet.*
+*This document is prepared for qualified investors. The repository it describes
+(github.com/g1n0mag1k/hermes-compliance-framework) is public — no NDA or term
+sheet gates source code access. Terms discussed with individual investors
+(valuation, allocation, etc.) remain confidential to those discussions.*
