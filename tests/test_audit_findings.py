@@ -113,7 +113,6 @@ def test_url_is_redacted_in_place_without_leaking_path():
 # hermes/auditor.py
 # ---------------------------------------------------------------------------
 
-@_bug("run_canary does not pass flags_missed/occurrence_gaps into the receipt")
 def test_canary_receipt_not_zero_egress_when_flag_missed(monkeypatch):
     from hermes import auditor
     from hermes.classifier import scrub_payload

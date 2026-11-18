@@ -279,6 +279,17 @@ def run_canary(
     flags_triggered = _flags_to_counts(scrub_result.audit_log.flags_triggered)
     flags_redacted = _flags_to_counts(scrub_result.audit_log.flags_redacted)
 
+    # A canary flag that's in the declared scope but wasn't detected this run
+    # is known-ground-truth PHI that survived undetected -- flags_triggered ==
+    # flags_redacted can still hold in that case (both simply omit it), so
+    # without this the receipt would wrongly confirm zero-egress. Surface
+    # each missed flag as an occurrence gap (count = how many corpus entries
+    # carry it) so AttestationChain.issue() correctly flags zero_egress=False.
+    occurrence_gaps = {
+        flag: sum(1 for entry in CANARY_CORPUS if entry["flag"] == flag)
+        for flag in flags_missed
+    }
+
     receipt = ATTESTATION_CHAIN.issue(
         transaction_id=transaction_id,
         flags_triggered=flags_triggered,
@@ -287,6 +298,7 @@ def run_canary(
         char_count_out=scrub_result.audit_log.redacted_char_count,
         downstream_target="hermes-canary",
         detectors_executed=scrub_result.detectors_executed,
+        occurrence_gaps=occurrence_gaps,
     )
 
     report_bytes: bytes | None = None
