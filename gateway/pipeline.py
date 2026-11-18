@@ -436,6 +436,44 @@ class GatewayPipeline:
         # 11. strip_client_auth_headers()
         forward_headers = strip_client_auth_headers(dict(request.headers))
 
+        # 11a. Inspect remaining client-supplied header values for PHI.
+        # Body, query string, and path are all inspected above — a custom
+        # header (e.g. a caller-set "X-Patient-SSN") is exactly as capable
+        # of carrying PHI and was previously forwarded untouched. Scanned
+        # before credential injection below, so this never runs PHI
+        # detection over Hermes's own provider API key.
+        sanitized_headers: dict[str, str] = {}
+        for header_name, header_value in forward_headers.items():
+            try:
+                clean_value, h_trig, h_red, h_det = inspect_string_value(
+                    header_value, transaction_id
+                )
+                _merge(h_trig, h_red, h_det)
+                sanitized_headers[header_name] = clean_value
+            except DetectorFailureError:
+                all_detectors_clean = False
+                detector_error = True
+                decision = self._evaluate_policy(
+                    policy_engine,
+                    flags_triggered,
+                    flags_redacted,
+                    False,
+                    content_type,
+                )
+                return self._block_response(
+                    workspace,
+                    transaction_id,
+                    gateway_request_id,
+                    decision,
+                    request.provider_id,
+                    request.path,
+                    flags_triggered,
+                    flags_redacted,
+                    detectors_executed,
+                    detector_error=True,
+                )
+        forward_headers = sanitized_headers
+
         # 12. Inject provider credentials — the workspace's own stored credential
         #     when configured, else the deployment-wide env var
         #     (inject_provider_credentials). Raises RuntimeError when none exists.

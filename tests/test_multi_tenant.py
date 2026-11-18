@@ -64,6 +64,7 @@ def isolated_env(tmp_path, monkeypatch):
 
     ws_mod._chain_cache.clear()
     ws_mod._vault_cache.clear()
+    ws_mod._vault_access_log_cache.clear()
     monkeypatch.setattr(ws_mod, "_DEFAULT_DATA_DIR", str(data_dir))
     monkeypatch.setattr(ws_mod, "_DEFAULT_REGISTRY_DB", str(data_dir / "registry.db"))
 
@@ -74,6 +75,7 @@ def isolated_env(tmp_path, monkeypatch):
     yield
     ws_mod._chain_cache.clear()
     ws_mod._vault_cache.clear()
+    ws_mod._vault_access_log_cache.clear()
     gateway_policy._workspace_policies.clear()
 
 
@@ -288,6 +290,120 @@ class TestVaultKeys:
             reopened = TokenVault(db_path=path, vault_key=b"\x01" * 32)
         assert reopened.key_scheme == KEY_SCHEME_GLOBAL
         assert reopened.retrieve(token) == "372-18-5421"
+
+
+# ---------------------------------------------------------------------------
+# /v1/scrub-reversible + /v1/vault/retrieve — tenant isolation + role gating
+# ---------------------------------------------------------------------------
+
+
+def _extract_token(clean_text: str) -> str:
+    start = clean_text.index("[REDACTED_HIPAA_SSN_")
+    end = clean_text.index("]", start) + 1
+    return clean_text[start:end]
+
+
+class TestVaultAccessApi:
+    @staticmethod
+    def test_operator_cannot_retrieve_only_org_admin_can(api):
+        key = _create(api, "vaultapi-tech", role="operator")
+        scrub = api.post(
+            "/v1/scrub-reversible",
+            json={"payload": SCRUB_TEXT},
+            headers=_h(key),
+        )
+        # operator role can run the reversible scrub...
+        assert scrub.status_code == 200
+        token = _extract_token(scrub.json()["clean_text"])
+        # ...but cannot un-redact it.
+        assert api.post(
+            "/v1/vault/retrieve",
+            json={"token": token, "accessed_by": "tech@example.com"},
+            headers=_h(key),
+        ).status_code == 403
+
+        admin_key = _create(api, "vaultapi-admin", role="org_admin")
+        retrieve = api.post(
+            "/v1/vault/retrieve",
+            json={"token": token, "accessed_by": "admin@example.com"},
+            headers=_h(admin_key),
+        )
+        assert retrieve.status_code == 404  # different workspace's vault — not found, not leaked
+
+    @staticmethod
+    def test_viewer_cannot_scrub_reversible_or_retrieve(api):
+        key = _create(api, "vaultapi-viewer", role="viewer")
+        assert api.post(
+            "/v1/scrub-reversible", json={"payload": SCRUB_TEXT}, headers=_h(key)
+        ).status_code == 403
+        assert api.post(
+            "/v1/vault/retrieve",
+            json={"token": "x", "accessed_by": "v@example.com"},
+            headers=_h(key),
+        ).status_code == 403
+
+    @staticmethod
+    def test_cross_workspace_token_not_retrievable(api):
+        """A token minted in one workspace's vault must not resolve — not even
+        to 404-vs-value-mismatch info — against a different workspace's vault."""
+        key_a = _create(api, "vault-iso-a", role="org_admin")
+        key_b = _create(api, "vault-iso-b", role="org_admin")
+
+        scrub = api.post(
+            "/v1/scrub-reversible", json={"payload": SCRUB_TEXT}, headers=_h(key_a)
+        )
+        assert scrub.status_code == 200
+        token = _extract_token(scrub.json()["clean_text"])
+
+        same_ws = api.post(
+            "/v1/vault/retrieve",
+            json={"token": token, "accessed_by": "a@example.com"},
+            headers=_h(key_a),
+        )
+        assert same_ws.status_code == 200
+        assert same_ws.json()["original_value"] == "372-18-5421"
+
+        other_ws = api.post(
+            "/v1/vault/retrieve",
+            json={"token": token, "accessed_by": "b@example.com"},
+            headers=_h(key_b),
+        )
+        assert other_ws.status_code == 404
+
+    @staticmethod
+    def test_retrieval_is_logged_in_tamper_evident_access_log(api):
+        from hermes.workspaces import get_vault_access_log_for_workspace, get_workspace
+
+        key = _create(api, "vault-log-a", role="org_admin")
+        scrub = api.post(
+            "/v1/scrub-reversible", json={"payload": SCRUB_TEXT}, headers=_h(key)
+        )
+        token = _extract_token(scrub.json()["clean_text"])
+
+        resp = api.post(
+            "/v1/vault/retrieve",
+            json={"token": token, "accessed_by": "auditor@example.com"},
+            headers=_h(key),
+        )
+        assert resp.status_code == 200
+
+        workspace = get_workspace("vault-log-a")
+        log = get_vault_access_log_for_workspace(workspace)
+        assert log.verify() is True
+        records = log.export_log(workspace_id="vault-log-a")
+        assert len(records) == 1
+        assert records[0].accessed_by == "auditor@example.com"
+        assert records[0].token == token
+
+    @staticmethod
+    def test_unknown_token_is_404(api):
+        key = _create(api, "vault-404", role="org_admin")
+        resp = api.post(
+            "/v1/vault/retrieve",
+            json={"token": "[REDACTED_HIPAA_SSN_ffffffffffffffff]", "accessed_by": "a@example.com"},
+            headers=_h(key),
+        )
+        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------

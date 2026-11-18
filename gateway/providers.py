@@ -71,4 +71,16 @@ def resolve_provider(provider_id: str) -> Provider:
 
 
 def validate_path(provider: Provider, path: str) -> bool:
+    """True iff `path` is a sub-path of one of the provider's allow-listed
+    endpoints, with no `.`/`..` segments. A raw string-prefix check alone is
+    not enough: "/v1/chat/completions/..%2F..%2Ffiles" (URL-decoded to
+    "/v1/chat/completions/../../files" by the time it reaches this
+    function) starts with the allowed prefix as a string, but resolves to
+    "/files" — well outside it — once a client or upstream server
+    normalizes the path. A legitimate request to these endpoints never
+    needs a dot-segment, so reject outright rather than trying to resolve
+    and recheck the normalized path."""
+    segments = path.split("/")
+    if "." in segments or ".." in segments:
+        return False
     return any(path.startswith(p) for p in provider.allowed_path_prefixes)

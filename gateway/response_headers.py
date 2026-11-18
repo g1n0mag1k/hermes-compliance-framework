@@ -34,6 +34,12 @@ STRIP_EXACT = frozenset({
     "upgrade",
     "www-authenticate",
     "content-length",
+    # httpx already transparently decodes the upstream body by the time
+    # we read upstream_response.content (see gateway/pipeline.py step 15),
+    # so by then the body is never actually encoded the way this header
+    # claims. Forwarding it verbatim tells the client to decompress a body
+    # that isn't compressed, which fails or produces garbage.
+    "content-encoding",
 })
 
 

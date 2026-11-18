@@ -26,9 +26,15 @@ import hmac
 PURPOSE_ATTESTATION = "attestation"
 PURPOSE_VAULT = "vault"
 PURPOSE_PROVIDER_CREDENTIALS = "provider-credentials"
+PURPOSE_VAULT_ACCESS = "vault-access"
 
 _VALID_PURPOSES = frozenset(
-    {PURPOSE_ATTESTATION, PURPOSE_VAULT, PURPOSE_PROVIDER_CREDENTIALS}
+    {
+        PURPOSE_ATTESTATION,
+        PURPOSE_VAULT,
+        PURPOSE_PROVIDER_CREDENTIALS,
+        PURPOSE_VAULT_ACCESS,
+    }
 )
 
 # Key scheme markers written into each per-workspace SQLite DB (chain_meta /
@@ -70,6 +76,16 @@ def workspace_credential_key(workspace_id: str) -> bytes:
     return derive_workspace_key(
         VAULT_KEY, PURPOSE_PROVIDER_CREDENTIALS, workspace_id
     )
+
+
+def workspace_vault_access_key(workspace_id: str) -> bytes:
+    """Per-workspace HMAC key for the vault access (un-redaction) audit log
+    in hermes.vault_access_log. Domain-separated from workspace_vault_key
+    even though both derive from VAULT_KEY, so the token-encryption key and
+    the access-log signing key are never the same value."""
+    from hermes.vault import VAULT_KEY
+
+    return derive_workspace_key(VAULT_KEY, PURPOSE_VAULT_ACCESS, workspace_id)
 
 
 # Fixed SQL per (meta_table, data_table) pair. No table names are interpolated

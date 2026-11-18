@@ -55,21 +55,30 @@ def _extract_scrub_result(result) -> tuple[str, dict[str, int], dict[str, int], 
 
 
 def inspect_string_value(text: str, transaction_id: str) -> tuple[str, dict, dict, dict]:
-    """Inspect a single string value for PHI. Raises DetectorFailureError on detector error."""
-    result = scrub_payload(transaction_id=transaction_id, text=text)
-    clean_text, flags_triggered, flags_redacted, detectors_executed = _extract_scrub_result(result)
+    """Inspect a single string value for PHI. Raises DetectorFailureError on detector error.
 
+    When `text` is itself a JSON-encoded object/array (a JSON body that
+    arrived as a string value, e.g. a webhook payload embedded in a log
+    field), it is inspected exactly once: recursively, via
+    inspect_json_recursive(). It is NOT also scanned as raw text first —
+    doing both double-counted every PHI occurrence inside the embedded
+    JSON (once from the raw-text scrub, once from the recursive walk).
+    """
     stripped = text.strip()
     if stripped.startswith(("{", "[")):
         try:
             parsed = json.loads(stripped)
-            parsed_clean, p_trig, p_red, p_det = inspect_json_recursive(parsed, transaction_id)
-            _merge_flags(flags_triggered, flags_redacted, detectors_executed, p_trig, p_red, p_det)
-            clean_text = json.dumps(parsed_clean, separators=(",", ":"), ensure_ascii=False)
         except json.JSONDecodeError:
-            pass
+            parsed = None
+        if parsed is not None:
+            parsed_clean, flags_triggered, flags_redacted, detectors_executed = (
+                inspect_json_recursive(parsed, transaction_id)
+            )
+            clean_text = json.dumps(parsed_clean, separators=(",", ":"), ensure_ascii=False)
+            return clean_text, flags_triggered, flags_redacted, detectors_executed
 
-    return clean_text, flags_triggered, flags_redacted, detectors_executed
+    result = scrub_payload(transaction_id=transaction_id, text=text)
+    return _extract_scrub_result(result)
 
 
 def inspect_json_recursive(
@@ -81,7 +90,14 @@ def inspect_json_recursive(
 
     def _walk(node: Any) -> Any:
         if isinstance(node, dict):
-            return {k: _walk(v) for k, v in node.items()}
+            cleaned: dict[Any, Any] = {}
+            for k, v in node.items():
+                clean_key = k
+                if isinstance(k, str):
+                    clean_key, k_trig, k_red, k_det = inspect_string_value(k, transaction_id)
+                    _merge_flags(flags_triggered, flags_redacted, detectors_executed, k_trig, k_red, k_det)
+                cleaned[clean_key] = _walk(v)
+            return cleaned
         if isinstance(node, list):
             return [_walk(item) for item in node]
         if isinstance(node, str):
