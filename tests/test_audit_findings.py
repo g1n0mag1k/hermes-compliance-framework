@@ -134,7 +134,6 @@ def test_canary_receipt_not_zero_egress_when_flag_missed(monkeypatch):
 # hermes/telemetry_receipts.py
 # ---------------------------------------------------------------------------
 
-@_bug("TelemetryReceiptPayload.schema_version accepts any string")
 def test_telemetry_payload_rejects_unknown_schema_version():
     from hermes.telemetry_receipts import (
         SAFE_HARBOR_SUMMARY_KEYS,

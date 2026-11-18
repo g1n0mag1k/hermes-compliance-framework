@@ -50,6 +50,16 @@ class TelemetryReceiptPayload(BaseModel):
     controls_verified: list[str] = Field(default_factory=list)
     summary: dict[str, Any]
 
+    @field_validator("schema_version")
+    @classmethod
+    def _validate_schema_version(cls, schema_version: str) -> str:
+        if schema_version != RECEIPT_SCHEMA_VERSION:
+            raise ValueError(
+                f"Unsupported schema_version {schema_version!r}; "
+                f"only {RECEIPT_SCHEMA_VERSION!r} is currently accepted."
+            )
+        return schema_version
+
     @field_validator("summary")
     @classmethod
     def _validate_summary_keys(cls, summary: dict[str, Any]) -> dict[str, Any]:
