@@ -65,7 +65,6 @@ def test_merkle_append_rejects_non_bytes():
         MerkleTree().append("x" * 32)
 
 
-@_bug("KeyStore.open leaks KeyError/AttributeError for malformed files")
 @pytest.mark.parametrize("content", [{"format_version": 1}, [1, 2]])
 def test_keystore_open_malformed_file_raises_value_error(tmp_path, content):
     from hermes.receipts.v2.key_store import KeyStore

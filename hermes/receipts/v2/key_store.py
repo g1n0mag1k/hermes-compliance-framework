@@ -28,6 +28,7 @@ Usage:
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import os
 import secrets
@@ -180,17 +181,26 @@ class KeyStore:
         except (json.JSONDecodeError, OSError) as exc:
             raise ValueError(f"Could not read key store at {path}: {exc}") from exc
 
-        if data.get("format_version") != _FORMAT_VERSION:
-            raise ValueError(
-                f"Unsupported key store format version: {data.get('format_version')}"
-            )
+        try:
+            if data.get("format_version") != _FORMAT_VERSION:
+                raise ValueError(
+                    f"Unsupported key store format version: {data.get('format_version')}"
+                )
 
-        algorithm = data["algorithm"]
-        salt = base64.b64decode(data["salt"])
-        nonce = base64.b64decode(data["nonce"])
-        ciphertext = base64.b64decode(data["ciphertext"])
-        iterations = data.get("iterations", _PBKDF2_ITERATIONS)
-        key_id_hex = data["key_id"]
+            algorithm = data["algorithm"]
+            salt = base64.b64decode(data["salt"])
+            nonce = base64.b64decode(data["nonce"])
+            ciphertext = base64.b64decode(data["ciphertext"])
+            iterations = data.get("iterations", _PBKDF2_ITERATIONS)
+            key_id_hex = data["key_id"]
+        except ValueError:
+            raise
+        except (AttributeError, KeyError, TypeError, binascii.Error) as exc:
+            # data isn't a dict (AttributeError on .get/.items), is missing a
+            # required field (KeyError), or a field has the wrong shape for
+            # base64/int decoding (TypeError, binascii.Error) -- all of these
+            # mean "not a valid key store file", not an internal bug.
+            raise ValueError(f"Malformed key store file at {path}: {exc}") from exc
 
         store = cls(
             _path=path,
