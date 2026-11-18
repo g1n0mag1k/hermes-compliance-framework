@@ -332,10 +332,22 @@ def dispatch_sprinto_custom_evidence(receipt, chain_integrity: bool = False) -> 
     )
     try:
         with urllib.request.urlopen(req, timeout=3.0) as resp:  # nosec B310 — URL constructed from operator-supplied config, never user input
-            success = 200 <= resp.status < 300
-            if not success:
+            if not (200 <= resp.status < 300):
                 logger.warning("Sprinto evidence push returned non-2xx: %s", resp.status)
-            return success
+                return False
+            # GraphQL endpoints report mutation errors inside a 200 OK body
+            # (an "errors" array), not via HTTP status -- a 2xx alone does
+            # not mean the mutation succeeded.
+            body = resp.read()
+            try:
+                parsed = json.loads(body)
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.warning("Sprinto evidence push returned unparseable body: %s", exc)
+                return False
+            if isinstance(parsed, dict) and parsed.get("errors"):
+                logger.warning("Sprinto evidence push returned GraphQL errors: %s", parsed["errors"])
+                return False
+            return True
     except urllib.error.URLError as exc:
         logger.warning("Sprinto evidence push failed: %s", exc)
         return False

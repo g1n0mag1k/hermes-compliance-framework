@@ -371,6 +371,7 @@ def test_dispatch_sprinto_posts_graphql_mutation(_sprinto_env):
 
     mock_resp = MagicMock()
     mock_resp.status = 200
+    mock_resp.read.return_value = b'{"data":{"addHermesEvidence":{"success":true}}}'
     mock_resp.__enter__.return_value = mock_resp
 
     with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
@@ -400,6 +401,7 @@ def test_dispatch_sprinto_uses_custom_graphql_url(monkeypatch, _sprinto_env):
 
     mock_resp = MagicMock()
     mock_resp.status = 200
+    mock_resp.read.return_value = b'{"data":{"addHermesEvidence":{"success":true}}}'
     mock_resp.__enter__.return_value = mock_resp
 
     with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:

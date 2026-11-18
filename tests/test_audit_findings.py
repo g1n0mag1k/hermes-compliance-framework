@@ -172,7 +172,6 @@ class _FakeResponse:
         return False
 
 
-@_bug("Sprinto dispatcher treats a GraphQL error body with HTTP 200 as success")
 def test_sprinto_graphql_error_is_not_success(monkeypatch, tmp_path):
     import urllib.request
 
