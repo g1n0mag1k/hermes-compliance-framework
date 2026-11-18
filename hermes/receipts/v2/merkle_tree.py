@@ -56,8 +56,15 @@ class MerkleTree:
             Zero-indexed position (leaf index) of the appended entry.
 
         Raises:
+            TypeError: if receipt_digest is not bytes (e.g. a str of the
+                right length is rejected -- str and bytes are never
+                interchangeable here).
             ValueError: if receipt_digest is not exactly 32 bytes.
         """
+        if not isinstance(receipt_digest, bytes):
+            raise TypeError(
+                f"receipt_digest must be bytes, got {type(receipt_digest).__name__}"
+            )
         if len(receipt_digest) != 32:
             raise ValueError(
                 f"receipt_digest must be 32 bytes, got {len(receipt_digest)}"

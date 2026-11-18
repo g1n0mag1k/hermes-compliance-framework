@@ -58,7 +58,6 @@ def test_build_merkle_root_matches_merkle_tree_root():
     assert build_merkle_root(digests) == t.root()
 
 
-@_bug("MerkleTree.append only checks len(), so a 32-char str is accepted")
 def test_merkle_append_rejects_non_bytes():
     from hermes.receipts.v2.merkle_tree import MerkleTree
 
