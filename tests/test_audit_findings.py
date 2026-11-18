@@ -47,7 +47,6 @@ def test_inclusion_proof_verifies_every_leaf_of_three_leaf_tree():
     assert [t.inclusion_proof(i).verify() for i in range(3)] == [True, True, True]
 
 
-@_bug("canonical.build_merkle_root duplicates the last node instead of RFC 9162 split")
 def test_build_merkle_root_matches_merkle_tree_root():
     from hermes.receipts.v2.canonical import build_merkle_root
     from hermes.receipts.v2.merkle_tree import MerkleTree

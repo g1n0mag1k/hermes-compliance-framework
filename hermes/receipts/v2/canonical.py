@@ -95,8 +95,13 @@ def build_merkle_root(digests: list[bytes]) -> bytes:
     """
     Build a Merkle root over a list of receipt digests.
 
-    Each digest is first wrapped as a leaf, then paired bottom-up.
-    Odd trees duplicate the last node at each level (RFC 6962 §2.1).
+    Each digest is first wrapped as a leaf, then combined via the RFC 9162
+    §2.1.1 Merkle Tree Hash (MTH) definition: unbalanced trees are handled
+    by splitting recursively at the largest power of two strictly less
+    than n, never by duplicating the last node. This matches
+    hermes/receipts/v2/merkle_tree.py's MerkleTree.root() exactly, so a
+    root built here and a root built incrementally via MerkleTree.append()
+    agree for the same digest sequence.
 
     Raises:
         ValueError: if digests is empty
@@ -105,18 +110,25 @@ def build_merkle_root(digests: list[bytes]) -> bytes:
         raise ValueError("Cannot build Merkle root over empty digest list")
 
     leaves = [merkle_leaf(d) for d in digests]
+    return _mth(leaves)
 
-    # Bottom-up reduction
-    level = leaves
-    while len(level) > 1:
-        next_level = []
-        for i in range(0, len(level), 2):
-            left = level[i]
-            right = level[i + 1] if i + 1 < len(level) else level[i]
-            next_level.append(merkle_node(left, right))
-        level = next_level
 
-    return level[0]
+def _mth(leaf_hashes: list[bytes]) -> bytes:
+    """
+    RFC 9162 §2.1.1 Merkle Tree Hash (MTH) — recursive power-of-two split.
+
+    MTH({d(0)}) = d(0)                                   (already leaf-hashed)
+    MTH(D[n])   = SHA-256(0x01 || MTH(D[0:k]) || MTH(D[k:n]))
+    where k is the largest power of two strictly less than n.
+    """
+    n = len(leaf_hashes)
+    if n == 1:
+        return leaf_hashes[0]
+    k = 1
+    while k < n:
+        k <<= 1
+    k >>= 1
+    return merkle_node(_mth(leaf_hashes[:k]), _mth(leaf_hashes[k:]))
 
 
 # ---------------------------------------------------------------------------
