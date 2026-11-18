@@ -1,6 +1,8 @@
 # Production Readiness Checklist
 
-Hermes Relay is **not production-ready** as of 2026-09-18. This checklist tracks gates required before any claim of production readiness.
+Hermes Relay is **not production-ready** as of 2026-11-18 (status re-confirmed; checklist last substantively updated 2026-09-18). This checklist tracks gates required before any claim of production readiness.
+
+An independent code-level audit on 2026-11-18 found gaps this checklist does not yet track as items: the reversible redaction vault is still not called from any production code path (see `README.md` "Reversible (roadmap)" and `hermes/vault.py`); the Drata integration remains contract-tested only, with no live tenant validation; and there is no partner-specific integration or sandbox environment for a compliance-automation partner program (e.g. Secureframe). Treat this checklist's `[x]` marks as "implemented and tested," not as "ready to pitch to a partner program" — see the partner-readiness gap audit for that question.
 
 ```
 [x] BLOCK policy implemented (HIPAA_PRODUCTION_BLOCK)
@@ -20,7 +22,7 @@ Hermes Relay is **not production-ready** as of 2026-09-18. This checklist tracks
 [x] upstream failure semantics documented (502 + receipt with forwarded=true)
 [x] bypass paths reviewed (see DOCUMENTATION_AUDIT.md)
 [x] security regression suite passes
-[x] full pytest suite passes (532)
+[x] full pytest suite passes (849 passed, 17 strict xfail documenting known findings; 532 as of 2026-09-18, floor is 836 per CURSORRULES.md/AGENTS.md)
 [x] documentation matches implementation
 [ ] customer claims reviewed (see PRODUCT_CAPABILITY_MATRIX.md)
 ```

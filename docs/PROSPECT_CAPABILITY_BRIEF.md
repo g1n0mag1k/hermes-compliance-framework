@@ -1,7 +1,7 @@
 # Hermes Relay — Prospect Capability Brief
 
 **Audience:** MSP, MSSP, healthcare AI vendor, AI governance consultant, healthcare technology company  
-**Status:** Controlled design-partner ready (2026-09-18)  
+**Status:** Controlled design-partner ready (content current as of 2026-11-18; originally written 2026-09-18)  
 **Contact:** andrew@hermesrelay.dev · hermesrelay.dev
 
 ---
@@ -151,4 +151,4 @@ Full list: `docs/CURRENT_LIMITATIONS.md`
 
 **Demo:** `.venv/bin/python gateway/demo.py` — four scenarios with visible upstream request counts (synthetic data only).
 
-**Tests:** 532 automated tests; 18 PHI egress security invariant tests (executed 2026-09-18).
+**Tests:** 849 automated tests passing, plus 17 strict `xfail` tests documenting known open findings (`tests/test_audit_findings.py`); 18 PHI egress security invariant tests (re-run 2026-11-18; originally 532 passed on 2026-09-18 — see `docs/TEST_BASELINE.md`).
