@@ -151,4 +151,4 @@ Full list: `docs/CURRENT_LIMITATIONS.md`
 
 **Demo:** `.venv/bin/python gateway/demo.py` — four scenarios with visible upstream request counts (synthetic data only).
 
-**Tests:** 864 automated tests passing, plus 17 strict `xfail` tests documenting known open findings (`tests/test_audit_findings.py`); 18 PHI egress security invariant tests (re-run 2026-11-18; originally 532 passed on 2026-09-18 — see `docs/TEST_BASELINE.md`).
+**Tests:** 869 automated tests passing, plus 12 strict `xfail` tests documenting known open findings (`tests/test_audit_findings.py`); 18 PHI egress security invariant tests (re-run 2026-11-18; originally 532 passed on 2026-09-18 — see `docs/TEST_BASELINE.md`).
