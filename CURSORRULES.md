@@ -13,7 +13,7 @@ Exit target: Drata or Nightfall acquisition
 ---
 
 ## Current State
-- 836 tests passing, 0 failures (17 strict xfails document open audit findings)
+- 869 tests passing, 0 failures (12 strict xfails document open audit findings — floor remains 836, see docs/TEST_BASELINE.md)
 - 16 of 18 HIPAA Safe Harbor categories covered (P and Q are 
   reference_only — binary artifacts, acknowledged)
 - FastAPI /v1/scrub and /v1/review endpoints functional
@@ -97,7 +97,7 @@ scripts/install_workspaces.py — bootstrap workspace installer (moved from repo
 tests/test_gateway.py       — gateway app/pipeline/policy/provider tests
                               (one of several gateway test files)
 
-Current test count: 836 passing
+Current test count: 869 passing (floor is 836 — see docs/TEST_BASELINE.md for the authoritative, dated count)
 Gateway supports: OpenAI, Azure OpenAI, Anthropic
 Auth: Bearer (OpenAI), api-key (Azure), x-api-key (Anthropic)
 Recursive JSON inspection covers tool arguments, nested blocks,

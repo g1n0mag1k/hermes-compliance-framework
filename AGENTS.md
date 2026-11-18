@@ -58,7 +58,7 @@ Import smoke check:
 .venv/bin/python -m pytest
 ```
 
-Target: **836+ tests passing, 0 failures** (17 strict xfails document known audit findings). The test floor must never decrease.
+Target: **836+ tests passing, 0 failures**. The test floor must never decrease. 12 strict xfails currently document known, open audit findings (down from 17 — five gateway-surface ones were fixed 2026-11-18); see docs/TEST_BASELINE.md for the authoritative, dated count.
 
 Coverage (optional):
 

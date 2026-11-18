@@ -448,6 +448,7 @@ def increment_trial_quota(workspace_id: str) -> tuple[int, str]:
 
 _chain_cache: dict[str, object] = {}
 _vault_cache: dict[str, object] = {}
+_vault_access_log_cache: dict[str, object] = {}
 _cache_lock = threading.Lock()
 
 
@@ -492,6 +493,31 @@ def get_vault_for_workspace(workspace: Workspace):
                 vault_key=workspace_vault_key(workspace.workspace_id),
             )
         return _vault_cache[workspace.workspace_id]
+
+
+def get_vault_access_log_for_workspace(workspace: Workspace):
+    """
+    Return the VaultAccessLog for a workspace, creating it if needed.
+    Instances are cached per workspace_id for the lifetime of the process.
+
+    Stored as a sibling file next to the workspace's vault.db (same data
+    directory), signed with a key derived for the dedicated "vault-access"
+    purpose — not the vault's own token-encryption key — so a leaked vault
+    key alone cannot be used to forge access-log entries.
+    """
+    from hermes.tenant_keys import workspace_vault_access_key
+    from hermes.vault_access_log import VaultAccessLog
+    with _cache_lock:
+        if workspace.workspace_id not in _vault_access_log_cache:
+            log_db_path = str(
+                Path(workspace.vault_db_path).with_name("vault_access_log.db")
+            )
+            Path(log_db_path).parent.mkdir(parents=True, exist_ok=True)
+            _vault_access_log_cache[workspace.workspace_id] = VaultAccessLog(
+                db_path=log_db_path,
+                signing_key=workspace_vault_access_key(workspace.workspace_id),
+            )
+        return _vault_access_log_cache[workspace.workspace_id]
 
 
 def _assert_not_shared_path(

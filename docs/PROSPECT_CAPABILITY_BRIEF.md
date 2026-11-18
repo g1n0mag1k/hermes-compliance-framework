@@ -1,7 +1,7 @@
 # Hermes Relay — Prospect Capability Brief
 
 **Audience:** MSP, MSSP, healthcare AI vendor, AI governance consultant, healthcare technology company  
-**Status:** Controlled design-partner ready (2026-09-18)  
+**Status:** Controlled design-partner ready (content current as of 2026-11-18; originally written 2026-09-18)  
 **Contact:** andrew@hermesrelay.dev · hermesrelay.dev
 
 ---
@@ -33,7 +33,7 @@ Application (customer network)
     → OpenAI | Azure OpenAI | Anthropic
 ```
 
-Legacy path: Hermes Relay API (`:8787`) `/v1/scrub` for batch scrubbing — separate from inline gateway enforcement.
+Legacy path: Hermes Relay API (`:8787`) `/v1/scrub` for batch scrubbing — separate from inline gateway enforcement. The same API also offers `/v1/scrub-reversible` + `/v1/vault/retrieve`: PHI replaced with AES-256-GCM-backed vault tokens instead of static placeholders, with un-redaction restricted to the `org_admin` role and every retrieval recorded in a dedicated, tamper-evident, per-workspace access log. Not yet assigned a pricing/plan tier.
 
 All PHI detection runs locally (spaCy, Presidio, regex). No PHI is sent to Hermes infrastructure for classification.
 
@@ -151,4 +151,4 @@ Full list: `docs/CURRENT_LIMITATIONS.md`
 
 **Demo:** `.venv/bin/python gateway/demo.py` — four scenarios with visible upstream request counts (synthetic data only).
 
-**Tests:** 532 automated tests; 18 PHI egress security invariant tests (executed 2026-09-18).
+**Tests:** 869 automated tests passing, plus 12 strict `xfail` tests documenting known open findings (`tests/test_audit_findings.py`); 18 PHI egress security invariant tests (re-run 2026-11-18; originally 532 passed on 2026-09-18 — see `docs/TEST_BASELINE.md`).

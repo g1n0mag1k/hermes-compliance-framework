@@ -230,7 +230,6 @@ def test_workspace_id_with_trailing_newline_is_rejected():
 # gateway/
 # ---------------------------------------------------------------------------
 
-@_bug("inspect_json_recursive never inspects dict keys")
 def test_gateway_inspects_json_keys():
     from gateway.inspector import inspect_json_recursive
 
@@ -239,7 +238,6 @@ def test_gateway_inspects_json_keys():
     assert "HIPAA_SSN" in triggered
 
 
-@_bug("inspect_string_value counts PHI in JSON-in-string payloads twice")
 def test_gateway_json_in_string_counts_once():
     from gateway.inspector import inspect_string_value
 
@@ -285,7 +283,6 @@ def gateway_client(tmp_path, monkeypatch):
     ws_mod._chain_cache.clear()
 
 
-@_bug("validate_path is a raw prefix check; '..' segments escape the allow-list")
 def test_gateway_rejects_dot_segment_path_escape(gateway_client):
     client, headers, state = gateway_client
     response = client.post(
@@ -297,7 +294,6 @@ def test_gateway_rejects_dot_segment_path_escape(gateway_client):
     assert state["requests"] == []
 
 
-@_bug("client request headers are forwarded upstream without PHI inspection")
 def test_gateway_does_not_forward_phi_in_custom_headers(gateway_client):
     client, headers, state = gateway_client
     client.post(
@@ -309,7 +305,6 @@ def test_gateway_does_not_forward_phi_in_custom_headers(gateway_client):
     assert "372-18-5421" not in forwarded
 
 
-@_bug("content-encoding is kept after httpx has already decoded the upstream body")
 def test_gateway_strips_content_encoding_from_decoded_response(gateway_client):
     client, headers, state = gateway_client
     state["gzip"] = True
