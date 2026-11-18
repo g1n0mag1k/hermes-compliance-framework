@@ -192,7 +192,6 @@ def test_sprinto_graphql_error_is_not_success(monkeypatch, tmp_path):
 # hermes/proxy.py
 # ---------------------------------------------------------------------------
 
-@_bug("ProxyRelay reads RedactionAuditLog.detectors_executed, which does not exist")
 def test_proxy_relay_non_json_body_does_not_crash():
     from hermes.proxy import ProxyRelay
 
@@ -202,7 +201,6 @@ def test_proxy_relay_non_json_body_does_not_crash():
     assert response.status_code == 200
 
 
-@_bug("_deep_scrub only scrubs keys in _TEXT_FIELDS; 'system' is forwarded raw")
 def test_proxy_deep_scrub_covers_all_string_fields():
     from hermes.proxy import _deep_scrub
 

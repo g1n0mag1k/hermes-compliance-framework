@@ -18,8 +18,6 @@ PROXY_TARGETS: dict[str, str] = {
     "custom":    os.environ.get("HERMES_CUSTOM_TARGET", ""),
 }
 
-_TEXT_FIELDS = {"content", "text", "prompt", "input", "query", "message", "instructions"}
-
 
 def _scrub_str(
     text: str,
@@ -62,12 +60,14 @@ def _deep_scrub(
         if isinstance(node, dict):
             return {
                 k: (_scrub_str(v, transaction_id, flags_triggered, flags_redacted, detectors_executed)
-                    if isinstance(v, str) and k.lower() in _TEXT_FIELDS
+                    if isinstance(v, str)
                     else _walk(v))
                 for k, v in node.items()
             }
         elif isinstance(node, list):
             return [_walk(item) for item in node]
+        elif isinstance(node, str):
+            return _scrub_str(node, transaction_id, flags_triggered, flags_redacted, detectors_executed)
         return node
 
     return _walk(obj), flags_triggered, flags_redacted, detectors_executed
@@ -117,7 +117,7 @@ class ProxyRelay:
                     k: v.count if isinstance(v, FlagEntry) else v["count"]
                     for k, v in result.audit_log.flags_redacted.items()
                 }
-                detectors_executed = dict(result.audit_log.detectors_executed)  # type: ignore[attr-defined]
+                detectors_executed = dict(result.detectors_executed)
 
         scrubbed_size = len(scrubbed_body) if scrubbed_body else 0
 
