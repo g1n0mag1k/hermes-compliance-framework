@@ -21,7 +21,10 @@ dependencies = [
     "spacy==3.8.18",
     # preshed 3.0.14 breaks spaCy 3.8.16 model loading (OverflowError in
     # Tokenizer._flush_specials). Pin until spaCy ships a compatible release.
-    "preshed==3.0.15",
+    # Also: presidio-analyzer>=2.2.365 requires preshed<3.0.14, so this pin
+    # is a hard floor-and-ceiling, not just a workaround — do not bump past
+    # 3.0.13 without re-checking both constraints.
+    "preshed==3.0.12",
     "presidio-analyzer==2.2.366",
     "cryptography==50.0.2",
     "pydantic==2.14.3",
