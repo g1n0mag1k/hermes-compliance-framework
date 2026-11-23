@@ -9,11 +9,11 @@ spacy==3.8.18
 # Also: presidio-analyzer>=2.2.365 requires preshed<3.0.14, so this pin
 # is a hard floor-and-ceiling, not just a workaround — do not bump past
 # 3.0.13 without re-checking both constraints.
-preshed==3.0.12
+preshed==3.0.15
 presidio-analyzer==2.2.366
 cryptography==50.0.2
-pydantic==2.14.3
-fastapi==0.163.1
+pydantic==2.14.4
+fastapi==0.165.0
 uvicorn==0.54.0
 httpx==0.28.1
 python-dotenv==1.2.4
